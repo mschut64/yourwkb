@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YourWkb — NEN1010 opleverrapport voor elektriciens</title>
+<meta name="description" content="Leg foto's, meetwaarden en materialen vast op je telefoon. Automatisch een professioneel NEN1010 rapport naar je klant. Gratis beginnen.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black:   #0C0D10;
+    --surface: #13151A;
+    --card:    #1A1D24;
+    --border:  #2A2E3A;
+    --yellow:  #F5C518;
+    --yellow2: #E8A800;
+    --green:   #22C55E;
+    --muted:   #6B7080;
+    --text:    #E8EAF0;
+    --white:   #FFFFFF;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--black);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    padding: 0 5vw;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+    background: rgba(12,13,16,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px;
+    color: var(--white); text-decoration: none;
+  }
+  .logo-bolt {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--yellow);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; color: #000;
+  }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .nav-link { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .2s; }
+  .nav-link:hover { color: var(--text); }
+  .btn-nav {
+    background: var(--yellow); color: #000;
+    padding: 8px 20px; border-radius: 8px;
+    font-weight: 600; font-size: 14px;
+    text-decoration: none; transition: background .2s;
+  }
+  .btn-nav:hover { background: var(--yellow2); }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 100px 5vw 60px;
+    position: relative; overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 80% 60% at 60% 40%, rgba(245,197,24,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-grid {
+    position: absolute; inset: 0; z-index: 0; opacity: 0.03;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+  }
+  .hero-inner {
+    max-width: 720px; position: relative; z-index: 1;
+    animation: fadeUp .7s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.3);
+    color: var(--yellow); font-size: 13px; font-weight: 600;
+    padding: 6px 14px; border-radius: 20px; margin-bottom: 28px;
+    letter-spacing: 0.3px;
+  }
+  .hero-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  h1 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(36px, 6vw, 64px);
+    line-height: 1.08; letter-spacing: -1.5px;
+    color: var(--white); margin-bottom: 24px;
+  }
+  h1 span { color: var(--yellow); }
+
+  .hero-sub {
+    font-size: clamp(16px, 2vw, 19px); color: var(--muted);
+    max-width: 520px; margin-bottom: 40px; line-height: 1.65;
+  }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .btn-primary {
+    background: var(--yellow); color: #000;
+    padding: 15px 32px; border-radius: 10px;
+    font-weight: 700; font-size: 16px;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    transition: background .2s, transform .15s;
+  }
+  .btn-primary:hover { background: var(--yellow2); transform: translateY(-1px); }
+  .btn-ghost {
+    color: var(--muted); font-size: 14px; text-decoration: none; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: color .2s;
+  }
+  .btn-ghost:hover { color: var(--text); }
+  .hero-trust {
+    margin-top: 56px; display: flex; gap: 28px; flex-wrap: wrap;
+  }
+  .trust-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .trust-icon { color: var(--green); font-size: 16px; }
+
+  /* ── PHONE MOCKUP ── */
+  .hero-visual {
+    position: absolute; right: 5vw; top: 50%; transform: translateY(-50%);
+    z-index: 1;
+    animation: fadeUp .9s .2s ease both;
+  }
+  .phone {
+    width: 240px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 32px; overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  }
+  .phone-notch {
+    height: 28px; background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phone-notch-pill { width: 60px; height: 8px; background: var(--black); border-radius: 4px; }
+  .phone-screen { padding: 14px; }
+  .phone-hdr {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .phone-logo { width: 24px; height: 24px; border-radius: 6px; background: var(--yellow); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .phone-title { font-size: 12px; font-weight: 700; color: var(--white); }
+  .phone-sub   { font-size: 9px; color: var(--muted); }
+
+  .step-bar { display: flex; gap: 4px; margin-bottom: 14px; }
+  .step-dot { flex: 1; height: 3px; border-radius: 2px; }
+
+  .phone-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px; margin-bottom: 8px;
+  }
+  .phone-card-title { font-size: 10px; font-weight: 700; color: var(--white); margin-bottom: 6px; }
+  .phone-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .phone-check { width: 14px; height: 14px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; }
+  .check-done { background: var(--green); color: #fff; }
+  .check-open { background: var(--border); }
+  .phone-label { font-size: 9px; color: var(--muted); }
+  .phone-label.done { color: var(--text); }
+
+  .measure-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .measure-name { font-size: 9px; color: var(--muted); }
+  .measure-val  { font-size: 10px; font-weight: 700; color: var(--white); }
+  .measure-tag  { font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+  .ok  { background: rgba(34,197,94,0.15); color: var(--green); }
+  .nok { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  .phone-btn {
+    background: var(--yellow); color: #000;
+    border-radius: 7px; padding: 8px; width: 100%;
+    font-size: 10px; font-weight: 700; text-align: center; margin-top: 8px;
+  }
+
+  /* ── HOE WERKT HET ── */
+  .section { padding: 100px 5vw; }
+  .section-label {
+    font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--yellow); margin-bottom: 12px;
+  }
+  h2 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(28px, 4vw, 44px); letter-spacing: -1px;
+    color: var(--white); margin-bottom: 16px; line-height: 1.15;
+  }
+  .section-sub { color: var(--muted); font-size: 17px; max-width: 480px; line-height: 1.65; }
+
+  .steps-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px; margin-top: 56px;
+  }
+  .step-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+    transition: border-color .2s, transform .2s;
+  }
+  .step-card:hover { border-color: rgba(245,197,24,0.4); transform: translateY(-2px); }
+  .step-num {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--yellow); color: #000;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+  }
+  .step-icon { font-size: 28px; margin-bottom: 12px; }
+  .step-title { font-weight: 700; font-size: 16px; color: var(--white); margin-bottom: 6px; }
+  .step-desc  { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+  /* ── VOOR WIE ── */
+  .voor-wie { padding: 0 5vw 100px; }
+  .voor-wie-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 48px;
+    max-width: 860px;
+  }
+  @media (max-width: 600px) { .voor-wie-grid { grid-template-columns: 1fr; } }
+  .check-card {
+    display: flex; align-items: flex-start; gap: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px;
+  }
+  .check-circle {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(34,197,94,0.15); color: var(--green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0; margin-top: 2px;
+  }
+  .check-text { font-size: 15px; color: var(--text); line-height: 1.5; }
+  .check-text strong { color: var(--white); display: block; font-weight: 600; }
+
+  /* ── RAPPORT PREVIEW ── */
+  .rapport-section {
+    padding: 0 5vw 100px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+  }
+  @media (max-width: 768px) { .rapport-section { grid-template-columns: 1fr; } }
+
+  .rapport-card {
+    background: var(--white); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+  }
+  .rapport-hdr {
+    background: #1565C0; padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .rapport-hdr-title { color: #fff; font-weight: 700; font-size: 13px; }
+  .rapport-hdr-sub   { color: rgba(255,255,255,0.7); font-size: 11px; }
+  .rapport-logo-placeholder {
+    width: 48px; height: 28px; background: rgba(255,255,255,0.2);
+    border-radius: 4px; display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: rgba(255,255,255,0.6); font-weight: 600;
+  }
+  .rapport-body { padding: 14px; }
+  .rapport-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .rapport-table td { font-size: 9px; color: #444; padding: 3px 6px; border: 1px solid #e5e7eb; }
+  .rapport-table td:first-child { font-weight: 600; color: #111; background: #f9fafb; width: 40%; }
+  .rapport-section-title { font-size: 9px; font-weight: 700; color: #1565C0; margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .groep-row { display: flex; gap: 2px; margin-bottom: 2px; }
+  .groep-cell {
+    font-size: 8px; padding: 2px 4px; border-radius: 2px;
+    background: #f3f4f6; color: #333; flex: 1; text-align: center;
+  }
+  .groep-cell.grn { background: #dcfce7; color: #166534; }
+  .groep-cell.hdr { background: #1565C0; color: #fff; font-weight: 700; }
+  .rapport-sign { margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 8px; font-size: 8px; color: #666; }
+
+  /* ── PRIJZEN ── */
+  .prijzen { padding: 0 5vw 100px; }
+  .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 48px; }
+  .price-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px;
+  }
+  .price-card.featured {
+    border-color: var(--yellow); position: relative;
+    background: linear-gradient(135deg, rgba(245,197,24,0.05), var(--card));
+  }
+  .featured-badge {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--yellow); color: #000;
+    font-size: 11px; font-weight: 700; padding: 3px 14px; border-radius: 20px;
+    white-space: nowrap;
+  }
+  .price-name { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+  .price-amount {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: 40px; color: var(--white); letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+  .price-amount span { font-size: 16px; color: var(--muted); font-weight: 400; font-family: 'DM Sans', sans-serif; }
+  .price-desc { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+  .price-features { list-style: none; margin-bottom: 28px; }
+  .price-features li {
+    font-size: 14px; color: var(--text); padding: 5px 0;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .price-features li:last-child { border-bottom: none; }
+  .feat-check { color: var(--green); font-size: 14px; }
+  .feat-dash  { color: var(--border); font-size: 14px; }
+  .btn-price-primary {
+    display: block; text-align: center; text-decoration: none;
+    background: var(--yellow); color: #000;
+    padding: 13px; border-radius: 10px; font-weight: 700; font-size: 15px;
+    transition: background .2s;
+  }
+  .btn-price-primary:hover { background: var(--yellow2); }
+  .btn-price-ghost {
+    display: block; text-align: center; text-decoration: none;
+    background: transparent; color: var(--muted);
+    padding: 13px; border-radius: 10px; font-weight: 600; font-size: 15px;
+    border: 1px solid var(--border); transition: border-color .2s, color .2s;
+  }
+  .btn-price-ghost:hover { border-color: var(--text); color: var(--text); }
+
+  /* ── FAQ ── */
+  .faq { padding: 0 5vw 100px; max-width: 720px; }
+  .faq-item { border-bottom: 1px solid var(--border); }
+  .faq-q {
+    width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600;
+    padding: 20px 0; display: flex; justify-content: space-between; align-items: center;
+    gap: 16px;
+  }
+  .faq-q:hover { color: var(--white); }
+  .faq-icon { color: var(--yellow); font-size: 20px; flex-shrink: 0; transition: transform .2s; }
+  .faq-a { font-size: 15px; color: var(--muted); padding-bottom: 20px; display: none; line-height: 1.7; }
+  .faq-item.open .faq-a { display: block; }
+  .faq-item.open .faq-icon { transform: rotate(45deg); }
+
+  /* ── CTA BOTTOM ── */
+  .cta-bottom {
+    margin: 0 5vw 80px;
+    background: linear-gradient(135deg, rgba(245,197,24,0.1), rgba(245,197,24,0.03));
+    border: 1px solid rgba(245,197,24,0.25);
+    border-radius: 24px; padding: 64px 5vw; text-align: center;
+  }
+  .cta-bottom h2 { margin-bottom: 12px; }
+  .cta-bottom p  { color: var(--muted); font-size: 17px; margin-bottom: 36px; }
+
+  /* ── FOOTER ── */
+  footer {
+    padding: 32px 5vw; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;
+  }
+  footer p { font-size: 13px; color: var(--muted); }
+  .footer-links { display: flex; gap: 20px; }
+  .footer-links a { font-size: 13px; color: var(--muted); text-decoration: none; transition: color .2s; }
+  .footer-links a:hover { color: var(--text); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .hero-visual { display: none; }
+    h1 { font-size: clamp(32px, 8vw, 52px); }
+  }
+  @media (max-width: 600px) {
+    nav { padding: 0 4vw; }
+    .section, .voor-wie, .prijzen, .faq { padding-left: 4vw; padding-right: 4vw; }
+    .rapport-section { padding-left: 4vw; padding-right: 4vw; }
+    .rapport-section { grid-template-columns: 1fr; }
+    .price-grid { grid-template-columns: 1fr; }
+    .hero-trust { flex-direction: column; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="logo">
+    <div class="logo-bolt">⚡</div>
+    YourWkb
+  </a>
+  <div class="nav-right">
+    <a href="#hoe-werkt-het" class="nav-link">Hoe werkt het</a>
+    <a href="#prijzen" class="nav-link">Hoe het werkt</a>
+    <a href="#aanmelden" class="btn-nav">Gratis starten</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="hero-badge">
+      <div class="hero-badge-dot"></div>
+      Nu beschikbaar voor elektriciens
+    </div>
+    <h1>NEN1010 rapport.<br><span>In 8 stappen.</span><br>Op je telefoon.</h1>
+    <p class="hero-sub">
+      Leg foto's, meetwaarden en materialen vast terwijl je werkt.
+      Automatisch een professioneel opleverrapport naar je klant.
+      Precies wat de Wkb vereist.
+    </p>
+    <div class="hero-cta">
+      <a href="#aanmelden" class="btn-primary">Gratis beginnen →</a>
+      <a href="#hoe-werkt-het" class="btn-ghost">Bekijk hoe het werkt ↓</a>
+    </div>
+    <div class="hero-trust">
+      <div class="trust-item"><span class="trust-icon">✓</span> Altijd gratis te gebruiken</div>
+      <div class="trust-item"><span class="trust-icon">✓</span> Geen creditcard nodig</div>
+      <div class="trust-item"><span class="trust-icon">✓</span> Geen advertenties</div>
+      <div class="trust-item"><span class="trust-icon">✓</span> Data wordt nooit verkocht</div>
+    </div>
+  </div>
+
+  <!-- Telefoon mockup -->
+  <div class="hero-visual">
+    <div class="phone">
+      <div class="phone-notch"><div class="phone-notch-pill"></div></div>
+      <div class="phone-screen">
+        <div class="phone-hdr">
+          <div class="phone-logo">⚡</div>
+          <div><div class="phone-title">WkbVeld</div><div class="phone-sub">NEN1010 · groepenkast</div></div>
+        </div>
+        <!-- Stap indicator -->
+        <div class="step-bar">
+          <div class="step-dot" style="background:#22C55E"></div>
+          <div class="step-dot" style="background:#22C55E"></div>
+          <div class="step-dot" style="background:#22C55E"></div>
+          <div class="step-dot" style="background:#22C55E"></div>
+          <div class="step-dot" style="background:#F5C518"></div>
+          <div class="step-dot" style="background:#2A2E3A"></div>
+          <div class="step-dot" style="background:#2A2E3A"></div>
+          <div class="step-dot" style="background:#2A2E3A"></div>
+        </div>
+        <!-- Foto checkpoints -->
+        <div class="phone-card">
+          <div class="phone-card-title">Foto's — stap 5 van 8</div>
+          <div class="phone-row"><div class="phone-check check-done">✓</div><div class="phone-label done">Situatie vóór werkzaamheden</div></div>
+          <div class="phone-row"><div class="phone-check check-done">✓</div><div class="phone-label done">Kast gemonteerd (leeg)</div></div>
+          <div class="phone-row"><div class="phone-check check-done">✓</div><div class="phone-label done">Bedrading aangebracht</div></div>
+          <div class="phone-row"><div class="phone-check check-done">✓</div><div class="phone-label done">Aardingsrail + PE-geleiders</div></div>
+          <div class="phone-row"><div class="phone-check check-open"></div><div class="phone-label">Verdeler dicht (afgewerkt)</div></div>
+          <div class="phone-row"><div class="phone-check check-open"></div><div class="phone-label">Groepenbord / schema</div></div>
+        </div>
+        <!-- Meetwaarden -->
+        <div class="phone-card">
+          <div class="phone-card-title">Meetwaarden groep 3</div>
+          <div class="measure-row"><span class="measure-name">ISO</span><div style="display:flex;gap:4px;align-items:center"><span class="measure-val">2.4 MΩ</span><span class="measure-tag ok">OK</span></div></div>
+          <div class="measure-row"><span class="measure-name">ΔT</span><div style="display:flex;gap:4px;align-items:center"><span class="measure-val">18 ms</span><span class="measure-tag ok">OK</span></div></div>
+          <div class="measure-row"><span class="measure-name">Z L-PE</span><div style="display:flex;gap:4px;align-items:center"><span class="measure-val">0.38 Ω</span><span class="measure-tag ok">OK</span></div></div>
+        </div>
+        <div class="phone-btn">📬 Rapport genereren →</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOE WERKT HET -->
+<section class="section" id="hoe-werkt-het">
+  <div class="section-label">Hoe werkt het</div>
+  <h2>Van klus naar rapport<br>in één sessie</h2>
+  <p class="section-sub">Geen papieren formulieren, geen Excel, geen natypen achteraf. Alles direct op de bouwplaats.</p>
+
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-icon">📍</div>
+      <div class="step-num">1</div>
+      <div class="step-title">Klant en locatie invoeren</div>
+      <div class="step-desc">Postcode + huisnummer — dat wordt meteen je projectnummer en bestandsnaam. Geen gedoe.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-icon">🔌</div>
+      <div class="step-num">2</div>
+      <div class="step-title">Materiaal kiezen</div>
+      <div class="step-desc">Tik de fabrikant aan, kies de serie, tik de automaten. Hager, Schneider, ABB, Eaton — alles staat er al in.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-icon">📷</div>
+      <div class="step-num">3</div>
+      <div class="step-title">Foto's per checkpoint</div>
+      <div class="step-desc">Vaste checkpoints: kast leeg, bedrading, aarding, verdeler dicht. Verplichte foto's worden bijgehouden.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-icon">📏</div>
+      <div class="step-num">4</div>
+      <div class="step-title">Meetwaarden invoeren</div>
+      <div class="step-desc">Per groep: ISO, ΔT, ΔI, Z L-PE, spanning. Direct groen of rood op basis van NEN1010 normen.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-icon">📄</div>
+      <div class="step-num">5</div>
+      <div class="step-title">Rapport gegenereerd</div>
+      <div class="step-desc">AI stelt het volledige NEN1010 opleverrapport op. Jij hoeft niks te typen.</div>
+    </div>
+    <div class="step-card">
+      <div class="step-icon">📬</div>
+      <div class="step-num">6</div>
+      <div class="step-title">Naar de klant</div>
+      <div class="step-desc">PDF direct per e-mail naar de opdrachtgever. Project wordt gearchiveerd op de server.</div>
+    </div>
+  </div>
+</section>
+
+<!-- VOOR WIE -->
+<div class="voor-wie">
+  <div class="section-label">Voor wie</div>
+  <h2>Gemaakt voor de ZZP'er<br>op de bouwplaats</h2>
+  <div class="voor-wie-grid">
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>Elektricien ZZP'er</strong>Nieuwe groepenkast plaatsen of vervangen — altijd een compleet dossier.</div>
+    </div>
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>Wkb-plicht vanaf 2024</strong>Aantoonbaar voldoen aan de Wet kwaliteitsborging voor het bouwen.</div>
+    </div>
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>NEN1010 rapport</strong>Automatisch gegenereerd rapport met conformverklaring en handtekeningregel.</div>
+    </div>
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>Dossier tot 20 jaar bewaard</strong>Wkb verplicht aantoonbaarheid bij aansprakelijkheid. Jouw dossier staat veilig.</div>
+    </div>
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>Werkt op je telefoon</strong>Geen laptop nodig. Open yourwkb.nl in Safari of Chrome — en toevoegen aan je homescreen.</div>
+    </div>
+    <div class="check-card">
+      <div class="check-circle">✓</div>
+      <div class="check-text"><strong>Klant krijgt professioneel rapport</strong>PDF per e-mail, meteen na de klus. Ziet er goed uit met jouw naam erop.</div>
+    </div>
+  </div>
+</div>
+
+<!-- RAPPORT PREVIEW -->
+<div class="rapport-section">
+  <div>
+    <div class="section-label">Het rapport</div>
+    <h2>Professioneel rapport.<br>Automatisch.</h2>
+    <p class="section-sub" style="margin-bottom:28px">
+      Het gegenereerde rapport bevat alle verplichte onderdelen van NEN1010 deel 6:
+      NAW-gegevens, meetapparatuur, eindgroepen-meetstaat en conformverklaring.
+    </p>
+    <ul style="list-style:none;display:flex;flex-direction:column;gap:10px">
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> NAW opdrachtgever + installateur</li>
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> Meetapparatuur (tester, multimeter, IR)</li>
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> Impedantie, aarding, spanning per fase</li>
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> Eindgroepen meetstaat (ISO, ΔT, ΔI, KA)</li>
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> Foto's kritieke bouwmomenten</li>
+      <li style="display:flex;gap:10px;font-size:15px;color:var(--text)"><span style="color:var(--green)">✓</span> Conformverklaring NEN1010 + handtekening</li>
+    </ul>
+  </div>
+  <!-- Rapport mockup -->
+  <div class="rapport-card">
+    <div class="rapport-hdr">
+      <div>
+        <div class="rapport-hdr-title">Opleveringsrapport</div>
+        <div class="rapport-hdr-sub">Electrische installatie · NEN1010 deel 6</div>
+      </div>
+      <div class="rapport-logo-placeholder">LOGO</div>
+    </div>
+    <div class="rapport-body">
+      <table class="rapport-table">
+        <tr><td>Naam opdrachtgever</td><td>Fam. De Groot</td></tr>
+        <tr><td>Adres object</td><td>Kerkstraat 22, Utrecht</td></tr>
+        <tr><td>Datum oplevering</td><td>6 juni 2025</td></tr>
+        <tr><td>Installatietester</td><td>Fluke 1664 FC</td></tr>
+      </table>
+      <div class="rapport-section-title">Meetgegevens installatie (AC)</div>
+      <table class="rapport-table">
+        <tr><td>Z L-PE</td><td style="color:#166534;font-weight:700">0.38 Ω ✓</td></tr>
+        <tr><td>Ra aarding</td><td style="color:#166534;font-weight:700">0.6 Ω ✓</td></tr>
+        <tr><td>ISO totaal</td><td style="color:#166534;font-weight:700">2.4 MΩ ✓</td></tr>
+        <tr><td>Spanning L1/N</td><td style="color:#166534;font-weight:700">231 V ✓</td></tr>
+      </table>
+      <div class="rapport-section-title">Eindgroepen meetstaat</div>
+      <div class="groep-row">
+        <div class="groep-cell hdr">Groep</div>
+        <div class="groep-cell hdr">ISO</div>
+        <div class="groep-cell hdr">ΔT ms</div>
+        <div class="groep-cell hdr">ΔI mA</div>
+        <div class="groep-cell hdr">OK</div>
+      </div>
+      <div class="groep-row">
+        <div class="groep-cell">F1 Licht BG</div>
+        <div class="groep-cell">2.4</div>
+        <div class="groep-cell">18</div>
+        <div class="groep-cell">24</div>
+        <div class="groep-cell grn">✓</div>
+      </div>
+      <div class="groep-row">
+        <div class="groep-cell">F2 Licht 1e</div>
+        <div class="groep-cell">3.1</div>
+        <div class="groep-cell">22</div>
+        <div class="groep-cell">26</div>
+        <div class="groep-cell grn">✓</div>
+      </div>
+      <div class="groep-row">
+        <div class="groep-cell">F3 Keuken</div>
+        <div class="groep-cell">1.8</div>
+        <div class="groep-cell">19</div>
+        <div class="groep-cell">28</div>
+        <div class="groep-cell grn">✓</div>
+      </div>
+      <div class="rapport-sign">
+        Naam installateur: K. Elektriks &nbsp;|&nbsp; Erkenning: E-12345<br>
+        De installatie voldoet aan de huidige NEN1010.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PRIJZEN -->
+<div class="prijzen" id="prijzen">
+  <div class="section-label">Hoe het werkt</div>
+  <h2>Altijd gratis.<br>Betaal alleen per rapport.</h2>
+  <p style="color:var(--muted);font-size:17px;max-width:520px;margin-bottom:32px;line-height:1.65">
+    De app is en blijft gratis. Je betaalt alleen wanneer je een definitief rapport wil genereren voor je klant. Geen abonnement, geen verborgen kosten.
+  </p>
+
+  <!-- Testfase banner -->
+  <div style="display:inline-flex;align-items:center;gap:12px;background:rgba(245,197,24,0.08);border:1px solid rgba(245,197,24,0.3);border-radius:12px;padding:14px 20px;margin-bottom:40px">
+    <span style="font-size:22px">🎁</span>
+    <div>
+      <div style="font-weight:700;font-size:15px;color:var(--yellow)">Tijdens de testfase: alles gratis</div>
+      <div style="font-size:13px;color:var(--muted)">Rapporten zijn nu gratis. De €2,50 per rapport gaat in zodra de testfase voorbij is. Je wordt van tevoren op de hoogte gesteld.</div>
+    </div>
+  </div>
+
+  <!-- Twee kolommen: gratis vs rapport -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:700px;margin-bottom:24px">
+    <!-- Gratis altijd -->
+    <div class="price-card">
+      <div style="font-size:32px;margin-bottom:12px">🆓</div>
+      <div class="price-name">App gebruiken</div>
+      <div class="price-amount">€0</div>
+      <div class="price-desc">Voor altijd gratis.</div>
+      <ul class="price-features">
+        <li><span class="feat-check">✓</span> Alle disciplines</li>
+        <li><span class="feat-check">✓</span> Foto's vastleggen</li>
+        <li><span class="feat-check">✓</span> Meetwaarden invoeren</li>
+        <li><span class="feat-check">✓</span> Cross-checks NEN1010</li>
+        <li><span class="feat-check">✓</span> Onbeperkt projecten</li>
+      </ul>
+    </div>
+    <!-- Per rapport -->
+    <div class="price-card featured">
+      <div class="featured-badge">Per rapport</div>
+      <div style="font-size:32px;margin-bottom:12px">📄</div>
+      <div class="price-name">Definitief rapport</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">
+        <div class="price-amount" style="text-decoration:line-through;opacity:0.4">€2<span style="font-size:24px">,50</span></div>
+        <div style="background:var(--yellow);color:#000;font-weight:800;font-size:13px;padding:3px 10px;border-radius:20px">Nu gratis</div>
+      </div>
+      <div class="price-desc">Eenmalig per rapport — gratis tijdens testfase.</div>
+      <ul class="price-features">
+        <li><span class="feat-check">✓</span> PDF zonder watermerk</li>
+        <li><span class="feat-check">✓</span> Direct naar klant</li>
+        <li><span class="feat-check">✓</span> Conform NEN1010</li>
+        <li><span class="feat-check">✓</span> Klaar voor oplevering</li>
+        <li><span class="feat-check">✓</span> Archivering op server</li>
+      </ul>
+      <a href="#aanmelden" class="btn-price-primary">Gratis beginnen →</a>
+    </div>
+  </div>
+
+  <!-- Binnenkort: greyed out opties -->
+  <div style="max-width:700px;margin-bottom:48px">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Binnenkort beschikbaar</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <!-- Server archivering -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;opacity:0.45;position:relative;overflow:hidden">
+        <div style="position:absolute;top:10px;right:10px;background:var(--border);color:var(--muted);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px">BINNENKORT</div>
+        <div style="font-size:22px;margin-bottom:8px">🗄️</div>
+        <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px">Server archivering</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dossiers 10-20 jaar bewaard op beveiligde EU-server. Wkb-proof.</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-decoration:line-through">€X,XX /maand</div>
+      </div>
+      <!-- Eigen logo -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;opacity:0.45;position:relative;overflow:hidden">
+        <div style="position:absolute;top:10px;right:10px;background:var(--border);color:var(--muted);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px">BINNENKORT</div>
+        <div style="font-size:22px;margin-bottom:8px">🏷️</div>
+        <div style="font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px">Eigen logo op rapport</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Jouw huisstijl op elk rapport. Upload eenmalig je logo.</div>
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-decoration:line-through">€X,XX /maand</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Privacy belofte -->
+  <div style="background:#0A1A0A;border:1px solid #22C55E33;border-radius:16px;padding:28px 32px;max-width:700px">
+    <div style="font-size:13px;font-weight:700;color:#22C55E;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px">Onze belofte</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <span style="color:#22C55E;font-size:18px;margin-top:1px">✓</span>
+        <div>
+          <div style="font-weight:600;font-size:15px;color:#fff">Geen advertenties</div>
+          <div style="font-size:13px;color:var(--muted)">Nooit. Nergens. Punt.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <span style="color:#22C55E;font-size:18px;margin-top:1px">✓</span>
+        <div>
+          <div style="font-weight:600;font-size:15px;color:#fff">Data wordt nooit verkocht</div>
+          <div style="font-size:13px;color:var(--muted)">Jouw klantdata is van jou.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <span style="color:#22C55E;font-size:18px;margin-top:1px">✓</span>
+        <div>
+          <div style="font-weight:600;font-size:15px;color:#fff">AVG-proof</div>
+          <div style="font-size:13px;color:var(--muted)">Server staat in de EU.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <span style="color:#22C55E;font-size:18px;margin-top:1px">✓</span>
+        <div>
+          <div style="font-weight:600;font-size:15px;color:#fff">Geen abonnement</div>
+          <div style="font-size:13px;color:var(--muted)">Betaal alleen wat je gebruikt.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="faq">
+  <div class="section-label">Vragen</div>
+  <h2>Veelgestelde vragen</h2>
+  <div style="height:32px"></div>
+
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Moet ik iets installeren?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates handmatig uitvoeren.</div>
+  </div>
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Is het rapport echt NEN1010-compliant?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.</div>
+  </div>
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Hoe lang worden mijn dossiers bewaard?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">Je downloadt de PDF zelf en bent zelf verantwoordelijk voor opslag. Archivering op onze server is inbegrepen bij een definitief rapport (€2,50) en wordt minimaal 10 jaar bewaard — conform de Wkb aansprakelijkheidstermijn.</div>
+  </div>
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Kan ik mijn eigen logo op het rapport zetten?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">Ja, dat is beschikbaar in het Pro-pakket. Je uploadt eenmalig je logo en het verschijnt automatisch op elk rapport dat je genereert.</div>
+  </div>
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Werkt het ook voor andere disciplines?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">De eerste versie is gericht op groepenkast plaatsen/vervangen en zonnepanelen. Combiketel, warmtepomp en thuisbatterij volgen binnenkort. Heb je een specifieke discipline nodig? Stuur een mail naar <a href="mailto:info@yourwkb.nl" style="color:var(--yellow)">info@yourwkb.nl</a>.</div>
+  </div>
+  <div class="faq-item">
+    <button class="faq-q" onclick="toggleFaq(this)">
+      Worden er advertenties getoond of wordt mijn data verkocht?
+      <span class="faq-icon">+</span>
+    </button>
+    <div class="faq-a">Nooit. YourWkb verdient geen geld met advertenties en verkoopt geen data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn van jou. We verdienen alleen aan definitieve rapporten (€2,50 per stuk). Dat is ons volledige verdienmodel.</div>
+  </div>
+</div>
+
+<!-- CTA BOTTOM -->
+<div class="cta-bottom" id="aanmelden">
+  <h2>Klaar om te beginnen?</h2>
+  <p>Altijd gratis te gebruiken. Tijdens de testfase ook rapporten gratis.<br>
+  <span style="font-size:14px">Daarna €2,50 per rapport — je wordt van tevoren op de hoogte gesteld.</span></p>
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center;max-width:400px;margin:0 auto">
+    <input type="email" placeholder="jouw@emailadres.nl" style="
+      width:100%;padding:14px 18px;border-radius:10px;
+      background:rgba(255,255,255,0.07);border:1px solid var(--border);
+      color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;outline:none;
+    ">
+    <a href="#" class="btn-primary" style="width:100%;justify-content:center;font-size:16px">
+      Gratis account aanmaken →
+    </a>
+    <p style="font-size:13px;color:var(--muted);text-align:center">
+      Daarna direct toegang tot de app. Geen wachttijd.
+    </p>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p>© 2025 YourWkb · yourwkb.nl</p>
+  <div class="footer-links">
+    <a href="#">Privacy</a>
+    <a href="#">Voorwaarden</a>
+    <a href="mailto:info@yourwkb.nl">info@yourwkb.nl</a>
+  </div>
+</footer>
+
+<script>
+function toggleFaq(btn) {
+  const item = btn.parentElement;
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+</script>
+</body>
+</html>
