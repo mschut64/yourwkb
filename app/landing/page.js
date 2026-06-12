@@ -42,7 +42,7 @@ export default function LandingPage() {
         .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.3); color: var(--yellow); font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 20px; margin-bottom: 28px; }
         .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-        h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(36px, 6vw, 64px); line-height: 1.08; letter-spacing: -1.5px; color: var(--white); margin-bottom: 24px; }
+        h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(26px, 7.5vw, 64px); line-height: 1.08; letter-spacing: -1.5px; color: var(--white); margin-bottom: 24px; overflow-wrap: break-word; }
         h1 span { color: var(--yellow); }
         .hero-sub { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 520px; margin-bottom: 40px; line-height: 1.65; }
         .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
