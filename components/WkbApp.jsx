@@ -309,37 +309,27 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
     return c&&n ? `${c}-${n}` : "";
   };
 
-  // Postcode API lookup
+  // Postcode lookup via PDOK Locatieserver (gratis overheids-open-data, geen API key nodig)
   const lookupPostcode = async (pc, nr) => {
     const cleanPc = pc.replace(/\s/g,"").toUpperCase();
-    const cleanNr = nr.trim().replace(/\D/g,""); // alleen cijfers voor API
+    const cleanNr = nr.trim().replace(/\D/g,""); // alleen cijfers voor de API
     if (cleanPc.length !== 6 || !cleanNr) return;
     setPcStatus("loading");
     try {
-      const resp = await fetch(`https://postcode.tech/api/v1/postcode/full?postcode=${cleanPc}&number=${cleanNr}`, {
-        headers: { Authorization: "Bearer free" }
-      });
+      const url = `https://api.pdok.nl/bzk/locatieserver/search/v3_1/free?fq=postcode:${cleanPc}&fq=huisnummer:${cleanNr}&fl=straatnaam,woonplaatsnaam&rows=1`;
+      const resp = await fetch(url);
       if (!resp.ok) throw new Error();
       const json = await resp.json();
-      if (json.street && json.city) {
-        onChange("straat", json.street);
-        onChange("plaats", json.city);
+      const doc = json?.response?.docs?.[0];
+      if (doc?.straatnaam && doc?.woonplaatsnaam) {
+        onChange("straat", doc.straatnaam);
+        onChange("plaats", doc.woonplaatsnaam);
         setPcStatus("found");
       } else {
         setPcStatus("error");
       }
     } catch {
-      // Fallback: probeer postcode.nl format
-      try {
-        const r2 = await fetch(`https://geodata.nationaalgeoregister.nl/locatieserver/v3/free?fq=postcode:${cleanPc}&fq=huisnummer:${cleanNr}&fl=straatnaam,woonplaatsnaam&rows=1`);
-        const j2 = await r2.json();
-        const doc = j2?.response?.docs?.[0];
-        if (doc?.straatnaam && doc?.woonplaatsnaam) {
-          onChange("straat", doc.straatnaam);
-          onChange("plaats", doc.woonplaatsnaam);
-          setPcStatus("found");
-        } else setPcStatus("error");
-      } catch { setPcStatus("error"); }
+      setPcStatus("error");
     }
   };
 
