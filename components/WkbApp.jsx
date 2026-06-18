@@ -223,9 +223,11 @@ const WarnBox = ({ warnings }) => {
 // AI technische analyse — redeneert over de combinatie van meetwaarden
 function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
   const [status, setStatus] = useState(analyse ? "done" : "idle");
+  const [errMsg, setErrMsg] = useState("");
 
   const analyseer = async () => {
     setStatus("busy");
+    setErrMsg("");
     try {
       const resp = await fetch("/api/rapport", {
         method:"POST",
@@ -234,9 +236,13 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
       });
       const json = await resp.json();
       if (json.error) throw new Error(json.error);
-      onAnalyse(json.html||"");
+      if (!json.html) throw new Error("Geen antwoord ontvangen van de AI");
+      onAnalyse(json.html);
       setStatus("done");
-    } catch(e) { setStatus("error"); }
+    } catch(e) {
+      setErrMsg(e.message || "Onbekende fout");
+      setStatus("error");
+    }
   };
 
   return (
@@ -254,7 +260,8 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
       )}
       {status==="error" && (
         <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`,marginBottom:0}}>
-          <div style={{fontSize:12,color:K.red,marginBottom:8}}>⚠️ Analyse mislukt — controleer de internetverbinding of probeer later opnieuw.</div>
+          <div style={{fontSize:12,color:K.red,marginBottom:4,fontWeight:600}}>⚠️ Analyse mislukt</div>
+          {errMsg && <div style={{fontSize:11,color:K.red,marginBottom:8,opacity:0.85,fontFamily:"monospace"}}>{errMsg}</div>}
           <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginBottom:0}} onClick={analyseer}>Opnieuw proberen</button>
         </div>
       )}
