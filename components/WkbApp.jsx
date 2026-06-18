@@ -31,7 +31,7 @@ const DISCIPLINES = [
   { id:"groepenkast", label:"Groepenkast",    icon:"⚡", sub:"Plaatsen of vervangen",     color:K.yellow,  colorDim:K.yellowDim, norm:"NEN1010",     available:true  },
   { id:"pv",          label:"Zonnepanelen",   icon:"☀️", sub:"PV installatie",            color:"#F97316", colorDim:"#2A1000",   norm:"NEN1010:712", available:true  },
   { id:"cv",          label:"Combiketel",     icon:"🔥", sub:"Plaatsen of vervangen",     color:"#EF4444", colorDim:"#2A0808",   norm:"BRL6000-25",  available:true  },
-  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water of bodem",     color:"#06B6D4", colorDim:"#042020",   norm:"BRL6000",     available:false },
+  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water of bodem",     color:"#06B6D4", colorDim:"#042020",   norm:"BRL6000-21",  available:true  },
   { id:"batterij",    label:"Thuisbatterij",  icon:"🔋", sub:"Energieopslag",             color:"#8B5CF6", colorDim:"#1A0A30",   norm:"SCIOS S10",   available:false },
 ];
 
@@ -362,6 +362,7 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
     groepenkast: ["Nieuwe groepenkast plaatsen","Groepenkast vervangen","Groepenkast uitbreiden","Groepenkast renoveren"],
     pv:          ["Nieuwe PV installatie","PV uitbreiden","PV + thuisbatterij","PV + omvormer vervangen"],
     cv:          ["Combiketel plaatsen (nieuw)","Combiketel vervangen","Combiketel + warmtepomp","CV renovatie"],
+    wp:          ["Nieuwe warmtepomp plaatsen","Warmtepomp vervangen","Hybride opstelling (CV + warmtepomp)","Warmtepomp uitbreiden"],
   };
 
   return (
@@ -526,6 +527,8 @@ function StapMeetapparatuur({ data, onChange, onNext, onBack, discipline }) {
     ? [{k:"apparTester",l:"Isolatietester / PV-analysator",ph:"Fluke 1664 FC / Amprobe PV-200"},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"},{k:"apparIR",l:"IR camera (optioneel)",ph:"FLIR E6 of n.v.t."}]
     : discipline === "cv"
     ? [{k:"apparAnalyser",l:"Rookgasanalyser (conform EN50379-2)",ph:"Testo 300 / Kane 455"},{k:"apparCO",l:"Persoonlijke CO-meter omgeving",ph:"CO Clip / Dräger X-am"},{k:"apparManometer",l:"Manometer waterdruk",ph:"Sauermann Si-5100"},{k:"apparGasdruk",l:"Gasdrukmanometer",ph:"Testo 510"},{k:"apparMulti",l:"Multimeter / thermometer",ph:"Fluke 179"}]
+    : discipline === "wp"
+    ? [{k:"apparThermo",l:"Thermometer / temperatuurmeter",ph:"Testo 905i"},{k:"apparManometer",l:"Manometer (verwarmingscircuit)",ph:"Sauermann Si-5100"},{k:"apparEnergie",l:"Energiemeter (opgenomen vermogen)",ph:"Fluke 1735 / energiemeter inbouw"},{k:"apparGeluid",l:"Geluidsmeter (optioneel)",ph:"dB-meter app of Testo 816"},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"}]
     : [{k:"apparTester",l:"Installatietester",ph:"Fluke 1664 FC"},{k:"apparTang",l:"Stroomtang",ph:"Fluke 376 FC"},{k:"apparIR",l:"IR camera",ph:"FLIR E6 of n.v.t."},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"}];
   return (
     <div>
@@ -1269,7 +1272,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     pvInstMet, {aantalPanelen:data.aantalPanelen,paneelWp:data.paneelWp,omvormerKw:data.omvormerKw}
   ) : [];
   const cvWarnings = discipline==="cv" ? cvCrossChecks(data.cvMeet||{}) : [];
-  const allWarnings = [...gkWarnings,...pvWarnings,...cvWarnings];
+  const wpWarnings = discipline==="wp" ? wpCrossChecks(data.wpMeet||{}, {geluidOpgave:data.geluidOpgave, groepAmpere:data.groepAmpere}) : [];
+  const allWarnings = [...gkWarnings,...pvWarnings,...cvWarnings,...wpWarnings];
   const redWarnings = allWarnings.filter(w=>w.level==="red");
 
   const genereerRapport = () => {
@@ -1560,6 +1564,71 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         ${waarschuwingHtml()}
         ${fotosHtml(CV_FOTO_CPS)}
         ${signHtml("BRL6000-25","De cv-installatie is geplaatst/vervangen conform de geldende normen en richtlijnen (BRL6000-25, NPR3378, Gasketelwet). De rookgasanalyse en alle meetwaarden voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+        </body></html>`;
+
+    // ── WARMTEPOMP RAPPORT ────────────────────────────────────────
+    } else if (discipline === "wp") {
+      const accentWP = "#06B6D4";
+      const wpMeet = data.wpMeet||{};
+      const statusWP = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
+      const dtWp = (wpMeet.aanvoerTemp&&wpMeet.retourTemp) ? Math.abs(parseFloat(wpMeet.aanvoerTemp)-parseFloat(wpMeet.retourTemp)) : null;
+      html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${data.projectId}-warmtepomp</title>
+        <style>${css(accentWP)}</style></head><body>
+        <h1>Opleveringsrapport</h1>
+        <p style="font-size:11px;color:#555;margin-bottom:12px">Warmtepompinstallatie · BRL6000-21</p>
+        ${nawHtml()}
+        <h2>Meetapparatuur</h2>
+        <table>
+          <tr><td><strong>Thermometer</strong></td><td>${data.apparThermo||"—"}</td>
+              <td><strong>Manometer</strong></td><td>${data.apparManometer||"—"}</td></tr>
+          <tr><td><strong>Energiemeter</strong></td><td>${data.apparEnergie||"—"}</td>
+              <td><strong>Geluidsmeter</strong></td><td>${data.apparGeluid||"—"}</td></tr>
+          <tr><td><strong>Multimeter</strong></td><td colspan="3">${data.apparMulti||"—"}</td></tr>
+        </table>
+        <h2>Installatiespecificaties</h2>
+        <table>
+          <tr><td><strong>Type systeem</strong></td><td>${data.wpType||"—"}</td>
+              <td><strong>Fabrikant</strong></td><td>${data.wpFab||"—"}</td></tr>
+          <tr><td><strong>Model</strong></td><td>${data.wpModel||"—"}</td>
+              <td><strong>Serienummer</strong></td><td>${data.wpSerie||"—"}</td></tr>
+          <tr><td><strong>Vermogen</strong></td><td>${data.wpKw||"—"} kW</td>
+              <td><strong>Geluid (opgave fabrikant)</strong></td><td>${data.geluidOpgave||"—"} dB(A)</td></tr>
+          <tr><td><strong>Koudemiddel</strong></td><td>${data.koudemiddel||"—"}</td>
+              <td><strong>Hoeveelheid</strong></td><td>${data.koudemiddelKg||"—"} kg</td></tr>
+          <tr><td><strong>Boilervat</strong></td><td>${data.boilerL||"—"} L</td>
+              <td><strong>Buffervat</strong></td><td>${data.bufferL||"—"} L</td></tr>
+          <tr><td><strong>Elektrische groep</strong></td><td colspan="3">${data.groepKar||"—"}${data.groepAmpere||"—"}</td></tr>
+        </table>
+        <h2>Meetwaarden verwarmingscircuit</h2>
+        <table>
+          <tr><th>Meetwaarde</th><th>Gemeten</th><th>Norm</th><th>Status</th></tr>
+          <tr><td>Aanvoertemperatuur</td><td>${wpMeet.aanvoerTemp||"—"} °C</td><td>—</td><td>—</td></tr>
+          <tr><td>Retourtemperatuur</td><td>${wpMeet.retourTemp||"—"} °C</td><td>—</td><td>—</td></tr>
+          <tr><td>ΔT verwarmingscircuit</td><td>${dtWp!==null?dtWp.toFixed(1):"—"} K</td><td>5–10K</td>
+              <td ${dtWp!==null?(dtWp>=5&&dtWp<=10?'class="ok"':'class="nok"'):''}>${dtWp!==null?(dtWp>=5&&dtWp<=10?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
+          <tr><td>Werkdruk</td><td>${wpMeet.werkdruk||"—"} bar</td><td>1,5–2,0 bar</td>
+              <td ${statusWP(wpMeet.werkdruk,v=>parseFloat(v)>=1.5&&parseFloat(v)<=2.5)}>${wpMeet.werkdruk&&wpMeet.werkdruk!=="—"?(parseFloat(wpMeet.werkdruk)>=1.5&&parseFloat(wpMeet.werkdruk)<=2.5?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
+          <tr><td>Spanning</td><td>${wpMeet.spanning||"—"} V</td><td>207–253V</td>
+              <td ${statusWP(wpMeet.spanning,v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${wpMeet.spanning&&wpMeet.spanning!=="—"?(parseFloat(wpMeet.spanning)>=207&&parseFloat(wpMeet.spanning)<=253?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
+        </table>
+        <h2>Bron</h2>
+        <table>
+          <tr><td><strong>Brontemperatuur in</strong></td><td>${wpMeet.bronTempIn||"—"} °C</td>
+              <td><strong>Brontemperatuur uit</strong></td><td>${wpMeet.bronTempUit||"—"} °C</td></tr>
+          <tr><td><strong>Glycolconcentratie</strong></td><td>${wpMeet.glycol||"—"} %</td>
+              <td><strong>Luchtdebiet</strong></td><td>${wpMeet.luchtdebiet||"—"} m³/h</td></tr>
+        </table>
+        <h2>Elektrisch &amp; geluid</h2>
+        <table>
+          <tr><td><strong>Stroomopname (opstart)</strong></td><td>${wpMeet.stroomopname||"—"} A</td>
+              <td><strong>Elektrisch opgenomen vermogen</strong></td><td>${wpMeet.vermogenOpgenomen||"—"} kW</td></tr>
+          <tr><td><strong>Geluidsniveau gemeten</strong></td><td>${wpMeet.geluidGemeten||"—"} dB(A)</td>
+              <td><strong>Expansievat voordruk</strong></td><td>${wpMeet.expansieVoordr||"—"} bar</td></tr>
+        </table>
+        ${waarschuwingHtml()}
+        ${fotosHtml(WP_FOTO_CPS)}
+        ${signHtml("BRL6000-21","De warmtepompinstallatie is geplaatst conform de geldende normen en richtlijnen (BRL6000-21). De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
         </body></html>`;
 
     // ── ZONNEPANELEN RAPPORT ──────────────────────────────────────
@@ -2074,6 +2143,233 @@ function CV_StapMateriaal({ data, onChange, onNext, onBack }) {
   );
 }
 
+// ─── WARMTEPOMP DATA ──────────────────────────────────────────────────────────
+const WP_MERK_FABS = ["Daikin","Mitsubishi Electric","Nibe","Itho Daalderop","Vaillant","Bosch","Panasonic","Viessmann","Stiebel Eltron","Atlantic","Toshiba","LG"];
+const WP_KOUDEMIDDEL = ["R32","R290 (propaan)","R454B","R410A"];
+
+const WP_FOTO_CPS = [
+  { id:"voor",        label:"Situatie vóór installatie",         icon:"📦", required:true  },
+  { id:"buitenunit",  label:"Buitenunit gemonteerd",              icon:"🌡️", required:true  },
+  { id:"trilling",    label:"Trillingsdemping / fundatie",        icon:"🔩", required:true  },
+  { id:"binnenunit",  label:"Binnenunit / boiler gemonteerd",     icon:"🏠", required:true  },
+  { id:"leidingen",   label:"Koudemiddelleidingen geïsoleerd",    icon:"🧊", required:true  },
+  { id:"condensafv",  label:"Condensafvoer buitenunit",           icon:"💧", required:true  },
+  { id:"elektrisch",  label:"Elektrische aansluiting + groep",    icon:"🔌", required:true  },
+  { id:"expansie",    label:"Expansievat + veiligheidsventiel",   icon:"⚙️", required:true  },
+  { id:"bedrijf",     label:"Systeem in bedrijf / display",       icon:"✅", required:true  },
+  { id:"label",       label:"Typeplaatje + F-gassen sticker",     icon:"🏷️", required:false },
+];
+
+function wpCrossChecks(meet, materiaal) {
+  const warnings = [];
+  const aanvoer = parseFloat(meet.aanvoerTemp);
+  const retour  = parseFloat(meet.retourTemp);
+  const werkdruk = parseFloat(meet.werkdruk);
+  const geluidGemeten = parseFloat(meet.geluidGemeten);
+  const geluidOpgave  = parseFloat(materiaal.geluidOpgave);
+  const stroom = parseFloat(meet.stroomopname);
+  const groepA = parseFloat((materiaal.groepAmpere||"").replace("A",""));
+
+  if (!isNaN(aanvoer) && !isNaN(retour)) {
+    const dt = aanvoer - retour;
+    if (dt < 5) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1)}K is laag (norm 5-10K) — controleer circulatiedebiet` });
+    if (dt > 10) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1)}K is hoog (norm 5-10K) — debiet mogelijk te laag` });
+  }
+  if (!isNaN(werkdruk)) {
+    if (werkdruk < 1.0) warnings.push({ level:"red", msg:`Werkdruk ${werkdruk} bar te laag — installatie bijvullen vóór ingebruikname` });
+    else if (werkdruk < 1.5) warnings.push({ level:"orange", msg:`Werkdruk ${werkdruk} bar aan de lage kant (norm 1,5-2,0 bar)` });
+    else if (werkdruk > 2.5) warnings.push({ level:"orange", msg:`Werkdruk ${werkdruk} bar te hoog — expansievat controleren` });
+  }
+  if (!isNaN(geluidGemeten) && !isNaN(geluidOpgave) && geluidGemeten > geluidOpgave + 3)
+    warnings.push({ level:"orange", msg:`Gemeten geluidsniveau ${geluidGemeten}dB(A) ligt ${(geluidGemeten-geluidOpgave).toFixed(0)}dB boven fabrieksopgave (${geluidOpgave}dB) — controleer trillingsdemping en montage` });
+  if (!isNaN(stroom) && !isNaN(groepA) && stroom > groepA * 0.9)
+    warnings.push({ level:"orange", msg:`Opstartstroom ${stroom}A nadert de groepswaarde van ${materiaal.groepAmpere} — controleer of de groep voldoende capaciteit heeft` });
+  return warnings;
+}
+
+function WP_StapMateriaal({ data, onChange, onNext, onBack }) {
+  return (
+    <div>
+      <div style={S.hdr}>
+        <button style={S.backBtn} onClick={onBack}>←</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 4 · Warmtepomp</div></div>
+      </div>
+      <div style={S.body}>
+        <div style={S.sTitle}>Type systeem</div>
+        <div style={{...S.card,marginBottom:16}}>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {["Lucht/water","Lucht/lucht (split)","Bodem/water (grond)"].map(t=>(
+              <Pill key={t} active={data.wpType===t} onClick={()=>onChange("wpType",t)}>{t}</Pill>
+            ))}
+          </div>
+        </div>
+
+        <div style={S.sTitle}>Warmtepomp</div>
+        <div style={S.card}>
+          <label style={S.label}>Fabrikant</label>
+          <select style={{...S.select,marginBottom:12}} value={data.wpFab||""} onChange={e=>onChange("wpFab",e.target.value)}>
+            <option value="">Kies fabrikant</option>
+            {WP_MERK_FABS.map(f=><option key={f}>{f}</option>)}
+          </select>
+          {[
+            {k:"wpModel",   l:"Type / model",   ph:"bijv. Altherma 3 H"},
+            {k:"wpSerie",   l:"Serienummer",     ph:"bijv. 1234567890"},
+            {k:"wpBouwjaar",l:"Bouwjaar",        ph:"2024"},
+          ].map(({k,l,ph})=>(
+            <div key={k} style={{marginBottom:12}}>
+              <label style={S.label}>{l}</label>
+              <input style={S.input} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:10,marginBottom:12}}>
+            <div style={{flex:1}}><label style={S.label}>Vermogen kW</label>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="8" value={data.wpKw||""} onChange={e=>onChange("wpKw",e.target.value)}/>
+            </div>
+            <div style={{flex:1}}><label style={S.label}>Geluid opgave (dB(A))</label>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="45" value={data.geluidOpgave||""} onChange={e=>onChange("geluidOpgave",e.target.value)}/>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><label style={S.label}>Koudemiddel type</label>
+              <select style={S.select} value={data.koudemiddel||""} onChange={e=>onChange("koudemiddel",e.target.value)}>
+                <option value="">Kies</option>
+                {WP_KOUDEMIDDEL.map(o=><option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div style={{flex:1}}><label style={S.label}>Hoeveelheid (kg)</label>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="1.8" value={data.koudemiddelKg||""} onChange={e=>onChange("koudemiddelKg",e.target.value)}/>
+            </div>
+          </div>
+        </div>
+
+        <div style={S.sTitle}>Boiler / buffervat</div>
+        <div style={S.card}>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><label style={S.label}>Boilervat (L)</label>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="200" value={data.boilerL||""} onChange={e=>onChange("boilerL",e.target.value)}/>
+            </div>
+            <div style={{flex:1}}><label style={S.label}>Buffervat (L)</label>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="50" value={data.bufferL||""} onChange={e=>onChange("bufferL",e.target.value)}/>
+            </div>
+          </div>
+        </div>
+
+        <div style={S.sTitle}>Elektrische aansluiting</div>
+        <div style={S.card}>
+          <div style={{display:"flex",gap:10}}>
+            <div style={{flex:1}}><label style={S.label}>Groep (ampère)</label>
+              <select style={S.select} value={data.groepAmpere||""} onChange={e=>onChange("groepAmpere",e.target.value)}>
+                <option value="">Kies</option>
+                {GROEP_A.map(a=><option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div style={{flex:1}}><label style={S.label}>Karakteristiek</label>
+              <select style={S.select} value={data.groepKar||""} onChange={e=>onChange("groepKar",e.target.value)}>
+                <option value="">Kies</option>
+                {KAR_TYPE.map(k=><option key={k}>{k}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende →</button>
+      </div>
+    </div>
+  );
+}
+
+function WP_StapMeten({ data, onChange, onNext, onBack }) {
+  const [meet,setMeet] = useState(data.wpMeet||{});
+  const sm = (k,v) => { const u={...meet,[k]:v}; setMeet(u); onChange("wpMeet",u); };
+  const materiaal = { geluidOpgave:data.geluidOpgave, groepAmpere:data.groepAmpere };
+  const warnings = wpCrossChecks(meet, materiaal);
+
+  const tempOk    = v => parseFloat(v) > 0;
+  const werkdrOk  = v => { const n=parseFloat(v); return n>=1.5&&n<=2.5; };
+  const spanOk2   = v => { const n=parseFloat(v); return n>=207&&n<=253; };
+  const geluidOk  = v => {
+    const n = parseFloat(v); const opg = parseFloat(data.geluidOpgave);
+    if (isNaN(opg)) return true;
+    return n <= opg + 3;
+  };
+
+  const MeetVeld = ({k,l,unit,chk,ph}) => {
+    const val=meet[k]||""; const ok=val&&chk(val);
+    return (
+      <div>
+        <label style={S.label}>{l}</label>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+            background:val?(ok?K.greenDim:K.redDim):K.surface,
+            border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
+            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)}/>
+          {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
+          {val&&<StatusTag level={ok?"ok":"red"}/>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={S.hdr}>
+        <button style={S.backBtn} onClick={onBack}>←</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · BRL6000-21</div></div>
+      </div>
+      <div style={S.body}>
+
+        <div style={S.sTitle}>Verwarmingscircuit</div>
+        <div style={S.card}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+            <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur" unit="°C" chk={tempOk}   ph="bijv. 45"/>
+            <MeetVeld k="retourTemp"  l="Retourtemperatuur"  unit="°C" chk={tempOk}   ph="bijv. 38"/>
+            <MeetVeld k="werkdruk"    l="Werkdruk"           unit="bar" chk={werkdrOk} ph="bijv. 1.8"/>
+            <MeetVeld k="spanning"    l="Spanning"           unit="V"   chk={spanOk2}  ph="bijv. 230"/>
+          </div>
+          {meet.aanvoerTemp&&meet.retourTemp&&(()=>{
+            const dt = Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp));
+            const ok = dt>=5&&dt<=10;
+            return (
+              <div style={{padding:"8px 12px",borderRadius:8,background:ok?K.greenDim:K.orangeDim}}>
+                <span style={{fontSize:12,fontWeight:700,color:ok?K.green:K.orange}}>
+                  ΔT = {dt.toFixed(1)}K {ok?"✓ OK (norm 5-10K)":"⚠ buiten norm 5-10K"}
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+
+        <div style={S.sTitle}>Bron {data.wpType==="Bodem/water (grond)"?"(bodem)":data.wpType==="Lucht/lucht (split)"?"(lucht)":"(buitenlucht)"}</div>
+        <div style={S.card}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <MeetVeld k="bronTempIn"  l="Brontemperatuur in"  unit="°C" chk={()=>true} ph="bijv. 8"/>
+            <MeetVeld k="bronTempUit" l="Brontemperatuur uit" unit="°C" chk={()=>true} ph="bijv. 5"/>
+            {data.wpType==="Bodem/water (grond)" && (
+              <MeetVeld k="glycol" l="Glycolconcentratie" unit="%" chk={()=>true} ph="bijv. 25"/>
+            )}
+            {data.wpType!=="Bodem/water (grond)" && (
+              <MeetVeld k="luchtdebiet" l="Luchtdebiet" unit="m³/h" chk={()=>true} ph="bijv. 1800"/>
+            )}
+          </div>
+        </div>
+
+        <div style={S.sTitle}>Elektrisch &amp; geluid</div>
+        <div style={S.card}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <MeetVeld k="stroomopname"   l="Stroomopname (opstart)" unit="A"     chk={()=>true}  ph="bijv. 12"/>
+            <MeetVeld k="vermogenOpgenomen" l="Elektrisch opgenomen vermogen" unit="kW" chk={()=>true} ph="bijv. 2.1"/>
+            <MeetVeld k="geluidGemeten"  l="Geluidsniveau gemeten"  unit="dB(A)" chk={geluidOk} ph="bijv. 44"/>
+            <MeetVeld k="expansieVoordr" l="Expansievat voordruk"   unit="bar"   chk={()=>true}  ph="bijv. 1.5"/>
+          </div>
+        </div>
+
+        <div style={S.sTitle}>Cross-check installatie</div>
+        <WarnBox warnings={warnings}/>
+        <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende: versturen →</button>
+      </div>
+    </div>
+  );
+}
+
 function CV_StapMeten({ data, onChange, onNext, onBack }) {
   const [meet,setMeet] = useState(data.cvMeet||{});
   const sm = (k,v) => { const u={...meet,[k]:v}; setMeet(u); onChange("cvMeet",u); };
@@ -2313,6 +2609,7 @@ export default function App() {
   ];
 
   const CV_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
+  const WP_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
 
   const cvScreens = [
     <StapKlant          key="klant"    data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
@@ -2324,8 +2621,18 @@ export default function App() {
     <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="cv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
-  const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : gkScreens;
-  const stepLabels = discipline==="pv" ? PV_STEPS  : discipline==="cv" ? CV_STEPS  : GK_STEPS;
+  const wpScreens = [
+    <StapKlant          key="klant"    data={job} onChange={upd} discipline="wp" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"     data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"  data={job} onChange={upd} discipline="wp" onNext={next} onBack={prev}/>,
+    <WP_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={WP_FOTO_CPS} onNext={next} onBack={prev}/>,
+    <WP_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="wp" onSend={markeerOpgeleverd} onBack={prev}/>,
+  ];
+
+  const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : discipline==="wp" ? wpScreens : gkScreens;
+  const stepLabels = discipline==="pv" ? PV_STEPS  : discipline==="cv" ? CV_STEPS  : discipline==="wp" ? WP_STEPS  : GK_STEPS;
 
   return (
     <>
