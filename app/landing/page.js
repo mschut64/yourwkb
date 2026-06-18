@@ -38,11 +38,11 @@ export default function LandingPage() {
         .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 100px 5vw 60px; position: relative; overflow: hidden; }
         .hero-bg { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 60% at 60% 40%, rgba(245,197,24,0.07) 0%, transparent 70%); pointer-events: none; }
         .hero-grid { position: absolute; inset: 0; opacity: 0.03; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 48px 48px; pointer-events: none; }
-        .hero-inner { max-width: 720px; position: relative; z-index: 1; }
+        .hero-inner { max-width: 820px; position: relative; z-index: 1; }
         .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(245,197,24,0.1); border: 1px solid rgba(245,197,24,0.3); color: var(--yellow); font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 20px; margin-bottom: 28px; }
         .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-        h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(26px, 7.5vw, 64px); line-height: 1.08; letter-spacing: -1.5px; color: var(--white); margin-bottom: 24px; overflow-wrap: break-word; }
+        h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(30px, 6vw, 54px); line-height: 1.12; letter-spacing: -1px; color: var(--white); margin-bottom: 24px; word-break: keep-all; overflow-wrap: normal; hyphens: none; }
         h1 span { color: var(--yellow); }
         .hero-sub { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 520px; margin-bottom: 40px; line-height: 1.65; }
         .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -130,11 +130,20 @@ export default function LandingPage() {
         .footer-links a { font-size: 13px; color: var(--muted); text-decoration: none; }
 
         @media (max-width: 900px) { .phone-wrap { display: none; } }
+
+        .wkb-explainer { padding: 0 5vw 64px; }
+        .wkb-explainer-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; padding: 32px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(245,197,24,0.04), rgba(255,255,255,0.02)); }
+        .wkb-text { font-size: 15px; line-height: 1.7; color: var(--muted); }
+        .wkb-text strong { color: var(--white); }
+        .wkb-cta-line { text-align: center; margin-top: 20px; font-size: 14px; font-weight: 600; color: var(--yellow); }
+        @media (max-width: 700px) { .wkb-explainer-inner { grid-template-columns: 1fr; } }
+
         @media (max-width: 600px) {
           .check-grid { grid-template-columns: 1fr; }
           .price-grid { grid-template-columns: 1fr; }
           .hero-trust { flex-direction: column; gap: 12px; }
           nav .nav-link { display: none; }
+          h1 { font-size: clamp(26px, 7.8vw, 40px); }
         }
       `}</style>
 
@@ -149,7 +158,7 @@ export default function LandingPage() {
         </a>
         <div className="nav-right">
           <a href="#stappen" className="nav-link">Hoe werkt het</a>
-          <a href="#prijzen" className="nav-link">Hoe het werkt</a>
+          <a href="#prijzen" className="nav-link">Privacy &amp; kosten</a>
           <a href="/app" className="btn-nav">Gratis starten</a>
         </div>
       </nav>
@@ -222,6 +231,21 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* WAAROM DIT BELANGRIJK IS */}
+      <div className="wkb-explainer">
+        <div className="wkb-explainer-inner">
+          <div className="wkb-col">
+            <div className="section-label">⚖️ Wat is de Wkb?</div>
+            <p className="wkb-text">De <strong>Wet kwaliteitsborging voor het bouwen</strong> is sinds 1 januari 2024 van kracht. De wet verplicht aannemers en installateurs om bij oplevering een dossier te overhandigen waarmee aangetoond kan worden dat het werk volgens de geldende normen is uitgevoerd.</p>
+          </div>
+          <div className="wkb-col">
+            <div className="section-label" style={{ color: '#F87171' }}>🔒 Waarom dit jou raakt</div>
+            <p className="wkb-text">Sinds de Wkb ben je als installateur aansprakelijk voor gebreken die <strong>bij oplevering niet zijn ontdekt</strong> — ook verborgen gebreken. Zonder een volledig opleverdossier kun je achteraf niet aantonen dat je werk wél aan de norm voldeed.</p>
+          </div>
+        </div>
+        <div className="wkb-cta-line">YourWkb legt dat bewijs voor je vast — automatisch, bij elke klus.</div>
+      </div>
 
       {/* STAPPEN */}
       <section className="steps" id="stappen">

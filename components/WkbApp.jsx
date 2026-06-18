@@ -1830,20 +1830,46 @@ function DisciplineKiezer({ onKies, onBack }) {
 }
 
 // ─── HOME SCHERM ──────────────────────────────────────────────────────────────
-function HomeScreen({ onNew, onDoorgaan }) {
-  const [lopend, setLopend] = useState(null);
+function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
+  const [projecten, setProjecten] = useState([]);
 
   useEffect(() => {
-    try {
-      const opg = JSON.parse(localStorage.getItem("ywkb_project")||"null");
-      if (opg?.job?.naam && opg?.discipline) setLopend(opg);
-    } catch {}
+    setProjecten(laadProjecten());
   }, []);
 
-  const recents = [
-    {id:"3741BK-22",disc:"groepenkast",icon:"⚡",name:"Fam. De Groot",addr:"Kerkstraat 22, Utrecht",date:"gisteren",done:true},
-    {id:"2984RV-7", disc:"pv",         icon:"☀️",name:"VvE Blokken 3",addr:"Havenweg 7, Rotterdam", date:"3 jun",    done:false},
-  ];
+  const verwijder = (id, e) => {
+    e?.stopPropagation();
+    if (!window.confirm("Dit project verwijderen? Dit kan niet ongedaan worden gemaakt.")) return;
+    onVerwijder(id);
+    setProjecten(laadProjecten());
+  };
+
+  // Alleen projecten met al wat ingevulde data tonen (niet helemaal lege starts)
+  const zinvol = projecten.filter(p => p.job?.naam || p.job?.postcode);
+  const concepten = zinvol.filter(p => p.status !== "opgeleverd").sort((a,b)=>b.updatedAt-a.updatedAt);
+  const opgeleverd = zinvol.filter(p => p.status === "opgeleverd").sort((a,b)=>b.updatedAt-a.updatedAt);
+
+  const ProjectRow = ({ p }) => {
+    const disc = DISCIPLINES.find(d=>d.id===p.discipline);
+    const isDone = p.status === "opgeleverd";
+    return (
+      <div style={{...S.card,display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>onDoorgaan(p)}>
+        <div style={{width:44,height:44,borderRadius:10,flexShrink:0,background:isDone?K.greenDim:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
+          {isDone?"✅":disc?.icon||"📄"}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:800,fontSize:13,color:K.yellow,letterSpacing:0.3}}>{p.job?.projectId||"Nieuw project"}</div>
+          <div style={{fontWeight:500,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.job?.naam||"—"}</div>
+          <div style={{fontSize:11,color:K.muted}}>{disc?.label}{!isDone?` · stap ${(p.step||0)+1}`:""}</div>
+        </div>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <div style={{fontSize:11,color:isDone?K.green:K.yellow,fontWeight:600,marginBottom:6}}>{isDone?"Opgeleverd":"Concept"}</div>
+          <button onClick={e=>verwijder(p.id,e)} style={{background:"transparent",border:`1px solid ${K.border}`,borderRadius:6,color:K.muted,cursor:"pointer",fontSize:11,padding:"3px 8px"}}>✕</button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div>
       <div style={S.hdr}>
@@ -1851,23 +1877,6 @@ function HomeScreen({ onNew, onDoorgaan }) {
         <div><div style={{fontWeight:700,fontSize:16}}>YourWkb</div><div style={{fontSize:11,color:K.muted}}>Installatie opleverrapporten</div></div>
       </div>
       <div style={S.body}>
-
-        {/* Lopend project banner */}
-        {lopend && (
-          <div style={{...S.card,background:`linear-gradient(135deg,#0C2418,${K.greenDim})`,border:`1px solid ${K.green}44`,padding:16,marginBottom:16}}>
-            <div style={{fontSize:11,color:K.green,fontWeight:700,marginBottom:4}}>🔄 LOPEND PROJECT</div>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{lopend.job.projectId||lopend.job.naam}</div>
-            <div style={{fontSize:12,color:K.muted,marginBottom:12}}>{DISCIPLINES.find(d=>d.id===lopend.discipline)?.label} · stap {(lopend.step||0)+1}</div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>onDoorgaan(lopend)} style={{flex:1,padding:"10px",borderRadius:8,border:"none",background:K.green,color:"#fff",fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                ▶ Doorgaan
-              </button>
-              <button onClick={()=>{localStorage.removeItem("ywkb_project");setLopend(null);}} style={{padding:"10px 14px",borderRadius:8,border:`1px solid ${K.border}`,background:"transparent",color:K.muted,fontFamily:"'IBM Plex Sans',sans-serif",fontSize:12,cursor:"pointer"}}>
-                Verwijderen
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Hero */}
         <div style={{...S.card,background:`linear-gradient(135deg,#1A1D10,${K.yellowDim})`,border:`1px solid ${K.yellow}33`,padding:22,marginBottom:20,cursor:"pointer"}} onClick={()=>onNew()}>
@@ -1891,24 +1900,31 @@ function HomeScreen({ onNew, onDoorgaan }) {
           ))}
         </div>
 
-        {/* Recenten */}
-        <div style={S.sTitle}>Recent</div>
-        {recents.map((r,i)=>(
-          <div key={i} style={{...S.card,display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:10,flexShrink:0,background:r.done?K.greenDim:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>
-              {r.done?"✅":r.icon}
-            </div>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:800,fontSize:14,color:K.yellow,letterSpacing:0.5}}>{r.id}</div>
-              <div style={{fontWeight:500,fontSize:13}}>{r.name}</div>
-              <div style={{fontSize:11,color:K.muted}}>{r.addr}</div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:18}}>{r.icon}</div>
-              <div style={{fontSize:11,color:r.done?K.green:K.yellow,fontWeight:600}}>{r.done?"Verstuurd":"Concept"}</div>
-            </div>
+        {/* Concepten */}
+        {concepten.length > 0 && (
+          <>
+            <div style={S.sTitle}>🔄 Concepten ({concepten.length})</div>
+            {concepten.map(p => <ProjectRow key={p.id} p={p}/>)}
+          </>
+        )}
+
+        {/* Opgeleverd */}
+        {opgeleverd.length > 0 && (
+          <>
+            <div style={{...S.sTitle,marginTop:concepten.length?16:0}}>✅ Opgeleverd ({opgeleverd.length})</div>
+            {opgeleverd.map(p => <ProjectRow key={p.id} p={p}/>)}
+          </>
+        )}
+
+        {zinvol.length === 0 && (
+          <div style={{...S.card,textAlign:"center",padding:24}}>
+            <div style={{fontSize:13,color:K.muted}}>Nog geen projecten — start hierboven je eerste registratie.</div>
           </div>
-        ))}
+        )}
+
+        <div style={{fontSize:11,color:K.muted,textAlign:"center",marginTop:16,lineHeight:1.6}}>
+          🔒 Projecten staan alleen op dit toestel opgeslagen.<br/>Wij bewaren niets op een server.
+        </div>
       </div>
     </div>
   );
@@ -2162,51 +2178,106 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
   );
 }
 
+// ─── PROJECT OPSLAG HELPERS ───────────────────────────────────────────────────
+// Alle projecten staan lokaal op de telefoon van de installateur (geen server, geen AVG-risico).
+const PROJ_KEY = "ywkb_projecten";
+const ACTIEF_KEY = "ywkb_actief_id";
+
+function laadProjecten() {
+  try { return JSON.parse(localStorage.getItem(PROJ_KEY)||"[]"); } catch { return []; }
+}
+function bewaarProjecten(lijst) {
+  try { localStorage.setItem(PROJ_KEY, JSON.stringify(lijst)); } catch {}
+}
+function upsertProject(lijst, proj) {
+  const i = lijst.findIndex(p=>p.id===proj.id);
+  if (i>=0) { const u=[...lijst]; u[i]=proj; return u; }
+  return [proj, ...lijst];
+}
+
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [screen,     setScreen]     = useState("home");
   const [discipline, setDiscipline] = useState(null);
   const [step,       setStep]       = useState(0);
   const [job,        setJob]        = useState({});
+  const [actiefId,   setActiefId]   = useState(null);
 
-  // Sla project automatisch op bij elke wijziging
+  // Schrijf de huidige staat van het actieve project terug naar de projectenlijst
+  const persist = (jobData, disc, st, status) => {
+    if (!actiefId) return;
+    const lijst = laadProjecten();
+    const bestaand = lijst.find(p=>p.id===actiefId);
+    const proj = {
+      id: actiefId,
+      discipline: disc,
+      job: jobData,
+      step: st,
+      status: status || bestaand?.status || "concept",
+      updatedAt: Date.now(),
+    };
+    bewaarProjecten(upsertProject(lijst, proj));
+  };
+
   const upd = (k,v) => setJob(d => {
     const nieuw = {...d,[k]:v};
-    try { localStorage.setItem("ywkb_project", JSON.stringify({job:nieuw,discipline,step})); } catch {}
+    persist(nieuw, discipline, step);
     return nieuw;
   });
 
   const next = () => {
     const nieuwStep = step + 1;
     setStep(nieuwStep);
-    try { localStorage.setItem("ywkb_project", JSON.stringify({job,discipline,step:nieuwStep})); } catch {}
+    persist(job, discipline, nieuwStep);
   };
   const prev = () => {
     const nieuwStep = step - 1;
     setStep(nieuwStep);
-    try { localStorage.setItem("ywkb_project", JSON.stringify({job,discipline,step:nieuwStep})); } catch {}
+    persist(job, discipline, nieuwStep);
   };
 
   const startNew = (discId=null) => {
-    try { localStorage.removeItem("ywkb_project"); } catch {}
+    const nieuwId = "p" + Date.now();
+    setActiefId(nieuwId);
     setJob({});
     setStep(0);
-    if (discId) { setDiscipline(discId); setScreen("job"); }
-    else setScreen("kiezen");
+    try { localStorage.setItem(ACTIEF_KEY, nieuwId); } catch {}
+    if (discId) {
+      setDiscipline(discId);
+      setScreen("job");
+      const lijst = laadProjecten();
+      bewaarProjecten(upsertProject(lijst, {id:nieuwId,discipline:discId,job:{},step:0,status:"concept",updatedAt:Date.now()}));
+    } else {
+      setScreen("kiezen");
+    }
   };
 
-  const doorgaan = (opg) => {
-    setJob(opg.job);
-    setDiscipline(opg.discipline);
-    setStep(opg.step||0);
+  // Open een bestaand project (concept of opgeleverd) om verder te werken of te bekijken
+  const doorgaan = (proj) => {
+    setActiefId(proj.id);
+    setJob(proj.job);
+    setDiscipline(proj.discipline);
+    setStep(proj.step||0);
+    try { localStorage.setItem(ACTIEF_KEY, proj.id); } catch {}
     setScreen("job");
+  };
+
+  const verwijderProject = (id) => {
+    bewaarProjecten(laadProjecten().filter(p=>p.id!==id));
   };
 
   const kiesDiscipline = (d) => {
     setDiscipline(d);
     setStep(0);
     setScreen("job");
-    try { localStorage.setItem("ywkb_project", JSON.stringify({job,discipline:d,step:0})); } catch {}
+    persist(job, d, 0);
+  };
+
+  // Bij oplevering: status van het project op 'opgeleverd' zetten, data blijft bewaard zodat
+  // de installateur het later nog kan inzien of het rapport opnieuw kan genereren.
+  const markeerOpgeleverd = () => {
+    persist(job, discipline, step, "opgeleverd");
+    setScreen("klaar");
   };
 
   // Stappen per discipline
@@ -2221,7 +2292,7 @@ export default function App() {
     <GK_StapGroepen     key="groepen"  data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={GK_FOTO_CPS} onNext={next} onBack={prev}/>,
     <GK_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="groepenkast" onSend={()=>setScreen("klaar")} onBack={prev}/>,
+    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const pvScreens = [
@@ -2231,7 +2302,7 @@ export default function App() {
     <PV_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={PV_FOTO_CPS} onNext={next} onBack={prev}/>,
     <PV_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="pv" onSend={()=>setScreen("klaar")} onBack={prev}/>,
+    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="pv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const CV_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
@@ -2243,7 +2314,7 @@ export default function App() {
     <CV_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={CV_FOTO_CPS} onNext={next} onBack={prev}/>,
     <CV_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="cv" onSend={()=>setScreen("klaar")} onBack={prev}/>,
+    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="cv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : gkScreens;
@@ -2253,7 +2324,7 @@ export default function App() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
-        {screen==="home"   && <HomeScreen onNew={startNew} onDoorgaan={doorgaan}/>}
+        {screen==="home"   && <HomeScreen onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {screen==="job"    && (
           <div>
