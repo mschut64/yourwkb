@@ -1,6 +1,14 @@
 'use client'
 import { useState, useEffect, useRef } from "react";
 
+// Robuuste numerieke parser — accepteert zowel komma als punt als decimaalteken.
+// Zonder deze fix leest parseFloat("1,9") als 1 (stopt bij de komma) — dat veroorzaakte
+// foutieve "Afwijking" meldingen bij correct ingevoerde waarden.
+const toNum = (v) => {
+  if (v === null || v === undefined || v === "") return NaN;
+  return parseFloat(String(v).replace(",", "."));
+};
+
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const K = {
   bg:"#111318", surface:"#1A1D25", card:"#20242F", border:"#2E3347",
@@ -42,23 +50,26 @@ const GK_FABRIKANTEN = {
   "ABB":       { "System pro M": ["B10","B16","B20","B25","C10","C16","C20"], "S200": ["B10","B16","B20","B25"] },
   "Eaton":     { "PL7": ["B10","B16","B20","B25","C10","C16"], "FAZ": ["B10","B16","B20","B32"] },
 };
-const ALS_FABS  = ["Hager","Schneider","ABB","Eaton","Siemens","Doepke"];
+const ALS_FABS  = ["Hager","Schneider","ABB","Eaton","Siemens","Doepke","Anders"];
 const ALS_TYPES = ["40A/2p/30mA type-A","40A/4p/30mA type-A","63A/2p/30mA type-A","63A/4p/30mA type-A","25A/2p/10mA type-A (bad)","40A/2p/30mA type-B","63A/4p/30mA type-B"];
 const RCD_MA = ["10","30","100","300","500"];
 const RCD_TYPE = ["AC","A","B","F"];
 const KAR_TYPE = ["B","C","D"];
 const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
 
-const GK_FOTO_CPS = [
-  { id:"voor",      label:"Situatie vóór werkzaamheden",  icon:"📦", required:true  },
-  { id:"leeg",      label:"Kast gemonteerd (leeg)",       icon:"🔲", required:true  },
-  { id:"bedrading", label:"Bedrading aangebracht",        icon:"🔌", required:true  },
-  { id:"aarding",   label:"Aardingsrail + PE-geleiders",  icon:"⚡", required:true  },
-  { id:"har",       label:"Hoofd AardRail (HAR)",         icon:"🟡", required:true  },
-  { id:"hoofdzek",  label:"Hoofdzekering",                icon:"🔴", required:true  },
-  { id:"dicht",     label:"Verdeler dicht (afgewerkt)",   icon:"✅", required:true  },
-  { id:"label",     label:"Groepenbordje / schema",       icon:"🏷️", required:false },
+// Foto's vóór de werkzaamheden (bestaande situatie)
+const GK_FOTO_CPS_VOOR = [
+  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true  },
+  { id:"voor_open",  label:"Bestaande situatie — kast open",  icon:"🔓", required:true  },
 ];
+// Foto's ná de werkzaamheden (nieuwe situatie)
+const GK_FOTO_CPS_NA = [
+  { id:"na_open",  label:"Nieuwe situatie — kast open (bedrading)", icon:"🔌", required:true  },
+  { id:"na_dicht", label:"Nieuwe situatie — kast dicht (afgewerkt)",icon:"✅", required:true  },
+  { id:"label",    label:"Groepenbordje / schema",                  icon:"🏷️", required:false },
+];
+// Voor het rapport: alle GK foto checkpoints samen
+const GK_FOTO_CPS = [...GK_FOTO_CPS_VOOR, ...GK_FOTO_CPS_NA];
 
 // ─── ZONNEPANELEN DATA ────────────────────────────────────────────────────────
 const PV_OMVORMER_FABS = ["SMA","Fronius","Enphase","Huawei","Growatt","Solis","GoodWe","ABB/FIMER","Victron"];
@@ -81,50 +92,60 @@ const PV_FOTO_CPS = [
 
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
-// Groepenkast cross-checks
-function gkCrossChecks(groepen, grpMeet, instMet) {
+// Groepenkast cross-checks — werkt op aardlekgroepen (RCD-clusters), elk met 1+ eindgroepen.
+// Norm is altijd de "bestaande installatie" norm (1000Ω/V): 0,23 MΩ bij 230V / 0,40 MΩ bij 400V.
+// ΔT-norm is afhankelijk van het stelsel (TN of TT) — zie NEN1010 tabel 41.1:
+//   TN-eindgroep ≤ 400ms · TT-eindgroep ≤ 200ms
+function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const warnings = [];
-  const isNieuw = (instMet.typeInstallatie||"nieuwbouw")==="nieuwbouw";
-  groepen.forEach(g => {
-    const norm = isNieuw ? 1 : (g.fase==="3" ? 0.40 : 0.23);
-    const isoKeys = g.fase==="3"
+  const stelsel = instMet.stelsel || "TN-C-S";
+  const isTT = stelsel === "TT";
+  const dtNorm = isTT ? 200 : 400;
+
+  (aardlekgroepen||[]).forEach(ag => {
+    const geenRcd = ag.rcdType === "geen";
+    const hoogst = (ag.eindgroepen||[]).find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
+    const norm = ag.fase==="3" ? 0.40 : 0.23;
+    const isoKeys = ag.fase==="3"
       ? [["iso_l1a","L1→Aarde"],["iso_l2a","L2→Aarde"],["iso_l3a","L3→Aarde"],["iso_na","N→Aarde"]]
       : [["iso_fa","Fase→Aarde"],["iso_na","Nul→Aarde"]];
-    // ISO checks per meting
     isoKeys.forEach(([k,label]) => {
-      const iso = parseFloat(grpMeet[`${g.id}_${k}`]);
+      const iso = toNum(grpMeet[`${ag.id}_${k}`]);
       if (!isNaN(iso)) {
         if (iso < norm)
-          warnings.push({ level:"red", msg:`${g.naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
+          warnings.push({ level:"red", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
         else if (iso < norm * 1.5)
-          warnings.push({ level:"orange", msg:`${g.naam} (${label}): ISO ${iso} MΩ — net boven minimum (≥${norm} MΩ), controleer bedrading` });
+          warnings.push({ level:"orange", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — net boven minimum (≥${norm} MΩ), controleer bedrading` });
       }
     });
-    const di  = parseFloat(grpMeet[`${g.id}_di`]);
-    const mA  = parseFloat(g.rcdMa);
-    // ΔI te hoog voor RCD waarde
-    if (!isNaN(di) && !isNaN(mA) && di > mA * 1.5)
-      warnings.push({ level:"orange", msg:`${g.naam}: ΔI ${di}mA nadert limiet voor ${mA}mA RCD` });
-    // Z impedantie vs zekering grootte
-    const z = parseFloat(grpMeet[`${g.id}_z_imp`]);
-    const amp = parseFloat((g.ampere||"").replace("A",""));
-    if (!isNaN(z) && !isNaN(amp)) {
-      const icc = 230 / z;
-      const minIcc = amp * 5; // vuistregel: Icc moet min. 5× nominale stroom zijn voor B-kar
-      if (icc < minIcc)
-        warnings.push({ level:"orange", msg:`${g.naam}: Icc ${icc.toFixed(0)}A bij Z ${z}Ω is laag voor ${g.ampere} automaat (richtwaarde ≥${minIcc}A) — controleer aansluiting` });
+    if (!geenRcd) {
+      const dt = toNum(grpMeet[`${ag.id}_dt`]);
+      if (!isNaN(dt) && dt > dtNorm)
+        warnings.push({ level:"red", msg:`${ag.naam}: ΔT ${dt}ms boven norm (≤${dtNorm}ms voor ${stelsel})` });
+      const di  = toNum(grpMeet[`${ag.id}_di`]);
+      const mA  = toNum(ag.rcdMa);
+      if (!isNaN(di) && !isNaN(mA) && di > mA * 1.5)
+        warnings.push({ level:"orange", msg:`${ag.naam}: ΔI ${di}mA nadert limiet voor ${mA}mA RCD` });
+    }
+    // Hoogst afgaande groep moet de hoogst beschikbare ampèrewaarde in de cluster zijn
+    if (hoogst && ag.eindgroepen?.length > 1) {
+      const hoogsteAmp = Math.max(...ag.eindgroepen.map(e=>toNum((e.ampere||"").replace("A",""))||0));
+      const gekozenAmp = toNum((hoogst.ampere||"").replace("A",""))||0;
+      if (gekozenAmp < hoogsteAmp)
+        warnings.push({ level:"orange", msg:`${ag.naam}: gemeten op "${hoogst.naam}" maar er zit een hoger belaste eindgroep in dit cluster — meet op de hoogst afgaande groep` });
     }
   });
+
   // Spanning asymmetrie
-  const l1 = parseFloat(instMet["span_L1/N"]);
-  const l2 = parseFloat(instMet["span_L2/N"]);
-  const l3 = parseFloat(instMet["span_L3/N"]);
+  const l1 = toNum(instMet["span_L1/N"]);
+  const l2 = toNum(instMet["span_L2/N"]);
+  const l3 = toNum(instMet["span_L3/N"]);
   if (!isNaN(l1) && !isNaN(l2) && !isNaN(l3)) {
     const diff = Math.max(l1,l2,l3) - Math.min(l1,l2,l3);
     if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
   }
   // Z L-PE hoog maar net OK
-  const zlpe = parseFloat(instMet.zlpe);
+  const zlpe = toNum(instMet.zlpe);
   if (!isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
     warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum (0.5Ω) — bij uitbreiding opnieuw meten` });
   return warnings;
@@ -134,7 +155,7 @@ function gkCrossChecks(groepen, grpMeet, instMet) {
 function pvCrossChecks(strings, instMet, materiaal) {
   const warnings = [];
   // String spanning vergelijken
-  const spanningen = strings.map(s => parseFloat(s.spanning)).filter(v => !isNaN(v));
+  const spanningen = strings.map(s => toNum(s.spanning)).filter(v => !isNaN(v));
   if (spanningen.length > 1) {
     const max = Math.max(...spanningen);
     const min = Math.min(...spanningen);
@@ -142,7 +163,7 @@ function pvCrossChecks(strings, instMet, materiaal) {
   }
   // ISO per string
   strings.forEach((s,i) => {
-    const iso = parseFloat(s.iso);
+    const iso = toNum(s.iso);
     if (!isNaN(iso) && iso > 1 && iso < 1.5)
       warnings.push({ level:"orange", msg:`String ${i+1}: ISO ${iso} MΩ — net boven minimum, controleer aansluitingen` });
     if (!isNaN(iso) && iso <= 1)
@@ -151,7 +172,7 @@ function pvCrossChecks(strings, instMet, materiaal) {
   // Totaalvermogen vs omvormer
   const aantalPanelen = parseInt(materiaal.aantalPanelen);
   const paneelWp      = parseInt(materiaal.paneelWp);
-  const omvormerKw    = parseFloat(materiaal.omvormerKw);
+  const omvormerKw    = toNum(materiaal.omvormerKw);
   if (!isNaN(aantalPanelen) && !isNaN(paneelWp) && !isNaN(omvormerKw)) {
     const totaalWp = aantalPanelen * paneelWp;
     const ratio    = totaalWp / (omvormerKw * 1000);
@@ -513,6 +534,7 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
 }
 
 function StapMeetapparatuur({ data, onChange, onNext, onBack, discipline }) {
+  const [opgeslagen, setOpgeslagen] = useState(false);
   const velden = discipline === "pv"
     ? [{k:"apparTester",l:"Isolatietester / PV-analysator",ph:"Fluke 1664 FC / Amprobe PV-200"},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"},{k:"apparIR",l:"IR camera (optioneel)",ph:"FLIR E6 of n.v.t."}]
     : discipline === "cv"
@@ -520,19 +542,49 @@ function StapMeetapparatuur({ data, onChange, onNext, onBack, discipline }) {
     : discipline === "wp"
     ? [{k:"apparThermo",l:"Thermometer / temperatuurmeter",ph:"Testo 905i"},{k:"apparManometer",l:"Manometer (verwarmingscircuit)",ph:"Sauermann Si-5100"},{k:"apparEnergie",l:"Energiemeter (opgenomen vermogen)",ph:"Fluke 1735 / energiemeter inbouw"},{k:"apparGeluid",l:"Geluidsmeter (optioneel)",ph:"dB-meter app of Testo 816"},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"}]
     : [{k:"apparTester",l:"Installatietester",ph:"Fluke 1664 FC"},{k:"apparTang",l:"Stroomtang",ph:"Fluke 376 FC"},{k:"apparIR",l:"IR camera",ph:"FLIR E6 of n.v.t."},{k:"apparMulti",l:"Multimeter",ph:"Fluke 179"}];
+
+  // Laad eerder opgeslagen meetapparatuur (per discipline) bij eerste render
+  useEffect(() => {
+    try {
+      const opg = JSON.parse(localStorage.getItem(`ywkb_apparatuur_${discipline}`)||"{}");
+      Object.entries(opg).forEach(([k,v]) => { if (v && !data[k]) onChange(k,v); });
+    } catch {}
+  }, []);
+
+  const slaApparatuurOp = () => {
+    try {
+      const obj = {};
+      velden.forEach(({k}) => { obj[k]=data[k]||""; obj[`${k}_cal`]=data[`${k}_cal`]||""; });
+      localStorage.setItem(`ywkb_apparatuur_${discipline}`, JSON.stringify(obj));
+      setOpgeslagen(true);
+      setTimeout(()=>setOpgeslagen(false), 2500);
+    } catch {}
+  };
+
   return (
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{ fontWeight:700, fontSize:15 }}>Meetapparatuur</div><div style={{ fontSize:11, color:K.muted }}>Stap 3</div></div>
+        <div style={{flex:1}}><div style={{ fontWeight:700, fontSize:15 }}>Meetapparatuur</div><div style={{ fontSize:11, color:K.muted }}>Stap 3 · met kalibratiedatum</div></div>
+        <button onClick={slaApparatuurOp} style={{
+          padding:"6px 12px", borderRadius:8,
+          border:`1px solid ${opgeslagen?K.green:K.border}`,
+          background: opgeslagen?K.greenDim:"transparent",
+          color: opgeslagen?K.green:K.muted,
+          fontFamily:"'IBM Plex Sans',sans-serif", fontSize:12, fontWeight:600, cursor:"pointer",
+        }}>
+          {opgeslagen ? "✓ Opgeslagen" : "💾 Onthouden"}
+        </button>
       </div>
       <div style={S.body}>
-        <div style={{ fontSize:12, color:K.muted, marginBottom:14 }}>Verplicht te vermelden in het rapport.</div>
+        <div style={{ fontSize:12, color:K.muted, marginBottom:14 }}>Verplicht te vermelden in het rapport. Tik "Onthouden" om dezelfde apparatuur volgende keer automatisch in te vullen.</div>
         <div style={S.card}>
           {velden.map(({k,l,ph})=>(
-            <div key={k} style={{ marginBottom:12 }}>
+            <div key={k} style={{ marginBottom:16, paddingBottom:14, borderBottom:`1px solid ${K.border}` }}>
               <label style={S.label}>{l}</label>
-              <input style={S.input} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
+              <input style={{...S.input,marginBottom:8}} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
+              <label style={{...S.label,fontSize:10}}>Kalibratiedatum</label>
+              <input style={S.input} type="date" value={data[`${k}_cal`]||""} onChange={e=>onChange(`${k}_cal`,e.target.value)}/>
             </div>
           ))}
         </div>
@@ -548,35 +600,70 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
   const [fab,setFab]     = useState(data.fab||"");
   const [serie,setSerie] = useState(data.serie||"");
   const [automaten,setAut] = useState(data.automaten||[]);
-  const [alsFab,setAlsFab] = useState(data.alsFab||"");
-  const [alsType,setAlsType] = useState(data.alsType||"");
-  const series = fab ? Object.keys(GK_FABRIKANTEN[fab]||{}) : [];
+  const [fabAnders,setFabAnders] = useState(data.fabAnders||"");
+  const series = fab && fab!=="Anders" ? Object.keys(GK_FABRIKANTEN[fab]||{}) : [];
   const types  = serie ? GK_FABRIKANTEN[fab]?.[serie]||[] : [];
   const addAut = (type) => {
-    const ex = automaten.find(a=>a.type===type&&a.serie===serie&&a.fab===fab);
-    const u = ex ? automaten.map(a=>a.type===type&&a.serie===serie&&a.fab===fab?{...a,aantal:a.aantal+1}:a) : [...automaten,{fab,serie,type,aantal:1}];
+    const merkNaam = fab==="Anders" ? (fabAnders||"Anders") : fab;
+    const ex = automaten.find(a=>a.type===type&&a.serie===serie&&a.fab===merkNaam);
+    const u = ex ? automaten.map(a=>a.type===type&&a.serie===serie&&a.fab===merkNaam?{...a,aantal:a.aantal+1}:a) : [...automaten,{fab:merkNaam,serie,type,aantal:1}];
+    setAut(u); onChange("automaten",u);
+  };
+  const addAutHandmatig = () => {
+    const merkNaam = fabAnders||"Anders";
+    const u = [...automaten,{fab:merkNaam,serie:"",type:"handmatig",aantal:1}];
     setAut(u); onChange("automaten",u);
   };
   const remAut = (i) => { const u=automaten.filter((_,j)=>j!==i); setAut(u); onChange("automaten",u); };
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal</div><div style={{fontSize:11,color:K.muted}}>Stap 4 · Groepenkast</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Groepenkast</div></div>
       </div>
       <div style={S.body}>
+
+        {/* Stelsel + kasttype — bepaalt later de normen en metingen */}
+        <div style={S.sTitle}>Stelsel &amp; kastuitvoering</div>
+        <div style={{...S.card,marginBottom:16}}>
+          <label style={S.label}>Stelsel</label>
+          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            {["TN-C-S","TN-S","TT"].map(s=>(
+              <Pill key={s} active={(data.stelsel||"TN-C-S")===s} onClick={()=>onChange("stelsel",s)}>{s}</Pill>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14}}>
+            {data.stelsel==="TT"
+              ? "TT-stelsel: max. uitschakeltijd eindgroep ≤ 200ms (NEN1010 tabel 41.1)"
+              : "TN-stelsel: max. uitschakeltijd eindgroep ≤ 400ms (NEN1010 tabel 41.1)"}
+          </div>
+          <label style={S.label}>Kastuitvoering</label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            <Pill active={(data.kastType||"kunststof")==="kunststof"} onClick={()=>onChange("kastType","kunststof")}>Kunststof (dubbel geïsoleerd)</Pill>
+            <Pill active={data.kastType==="metaal"} onClick={()=>onChange("kastType","metaal")}>Metaal</Pill>
+          </div>
+        </div>
+
         <div style={S.card}>
           <label style={S.label}>Kastmodel</label>
           <input style={{...S.input,marginBottom:12}} placeholder="Hager Volta 3-fase 24 gr." value={data.kast||""} onChange={e=>onChange("kast",e.target.value)}/>
           <label style={S.label}>Bouwjaar installatie</label>
           <input style={S.input} placeholder="2024" value={data.bouwjaar||""} onChange={e=>onChange("bouwjaar",e.target.value)} maxLength={4}/>
         </div>
+
         <div style={{...S.sTitle,marginTop:8}}>Automaten</div>
         <div style={S.card}>
           <label style={S.label}>Fabrikant</label>
           <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
-            {Object.keys(GK_FABRIKANTEN).map(f=><Pill key={f} active={fab===f} onClick={()=>{setFab(f);setSerie("");onChange("fab",f);}}>{f}</Pill>)}
+            {[...Object.keys(GK_FABRIKANTEN),"Anders"].map(f=><Pill key={f} active={fab===f} onClick={()=>{setFab(f);setSerie("");onChange("fab",f);}}>{f}</Pill>)}
           </div>
-          {fab && <><label style={S.label}>Serie</label>
+          {fab==="Anders" && (
+            <div style={{marginBottom:12}}>
+              <label style={S.label}>Merknaam</label>
+              <input style={{...S.input,marginBottom:8}} placeholder="bijv. Legrand" value={fabAnders} onChange={e=>{setFabAnders(e.target.value);onChange("fabAnders",e.target.value);}}/>
+              <button onClick={addAutHandmatig} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Automaat toevoegen</button>
+            </div>
+          )}
+          {fab && fab!=="Anders" && <><label style={S.label}>Serie</label>
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
               {series.map(s=><Pill key={s} active={serie===s} onClick={()=>{setSerie(s);onChange("serie",s);}}>{s}</Pill>)}
             </div></>}
@@ -592,76 +679,148 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           {automaten.map((a,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${K.border}`}}>
               <div style={{width:34,height:34,borderRadius:8,background:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,color:K.yellow}}>{a.aantal}×</div>
-              <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{a.fab} {a.type}</div><div style={{fontSize:11,color:K.muted}}>{a.serie}</div></div>
+              <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{a.fab} {a.type!=="handmatig"?a.type:""}</div><div style={{fontSize:11,color:K.muted}}>{a.serie}</div></div>
               <button onClick={()=>remAut(i)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
             </div>
           ))}
         </div>}
-        <div style={{...S.sTitle,marginTop:4}}>Aardlekschakelaar (RCD)</div>
-        <div style={S.card}>
-          <label style={S.label}>Fabrikant</label>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
-            {ALS_FABS.map(f=><Pill key={f} active={alsFab===f} onClick={()=>{setAlsFab(f);onChange("alsFab",f);}}>{f}</Pill>)}
-          </div>
-          <label style={S.label}>Type</label>
-          <select style={S.select} value={alsType} onChange={e=>{setAlsType(e.target.value);onChange("alsType",e.target.value);}}>
-            <option value="">Kies type</option>
-            {ALS_TYPES.map(t=><option key={t}>{t}</option>)}
-          </select>
-        </div>
         <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={()=>{onChange("automaten",automaten);onNext();}}>Volgende →</button>
       </div>
     </div>
   );
 }
 
+// Aardlekgroep (RCD-cluster) — bevat 1 of meer eindgroepen (automaten).
+// Er wordt 1× gemeten per aardlekgroep, op de hoogst afgaande eindgroep (NEN1010-praktijk).
 function GK_StapGroepen({ data, onChange, onNext, onBack }) {
-  const [groepen,setG] = useState(data.groepen||[
-    {id:1,naam:"Licht BG",kar:"B",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"},
-    {id:2,naam:"Licht 1e verd.",kar:"B",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"},
-    {id:3,naam:"Stopcontacten woonkamer",kar:"B",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"},
-    {id:4,naam:"Keuken",kar:"C",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"},
-    {id:5,naam:"Wasmachine",kar:"C",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"},
+  const nieuweEindgroep = (naam="Nieuwe eindgroep") => ({ id:Date.now()+Math.random(), naam, kar:"B", ampere:"16A" });
+  const [aardlekgroepen,setAG] = useState(data.aardlekgroepen || [
+    { id:1, naam:"Aardlek A", rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null,
+      eindgroepen:[ nieuweEindgroep("Licht BG"), nieuweEindgroep("Stopcontacten woonkamer") ] },
+    { id:2, naam:"Aardlek B", rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null,
+      eindgroepen:[ nieuweEindgroep("Keuken") ] },
   ]);
   const [editId,setEditId] = useState(null);
-  const add = () => { const g=[...groepen,{id:Date.now(),naam:`Groep ${groepen.length+1}`,kar:"B",ampere:"16A",rcdMa:"30",rcdType:"A",fase:"1"}]; setG(g); onChange("groepen",g); setEditId(g[g.length-1].id); };
-  const upd = (id,k,v) => { const g=groepen.map(x=>x.id===id?{...x,[k]:v}:x); setG(g); onChange("groepen",g); };
-  const rem = (id) => { const g=groepen.filter(x=>x.id!==id); setG(g); onChange("groepen",g); };
+
+  const sync = (u) => { setAG(u); onChange("aardlekgroepen",u); };
+
+  const addAG = () => {
+    const u=[...aardlekgroepen,{ id:Date.now(), naam:`Aardlek ${String.fromCharCode(65+aardlekgroepen.length)}`, rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null, eindgroepen:[nieuweEindgroep()] }];
+    sync(u); setEditId(u[u.length-1].id);
+  };
+  const updAG = (id,k,v) => sync(aardlekgroepen.map(a=>a.id===id?{...a,[k]:v}:a));
+  const remAG = (id) => sync(aardlekgroepen.filter(a=>a.id!==id));
+
+  const addEind = (agId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:[...a.eindgroepen,nieuweEindgroep()]}:a));
+  const updEind = (agId,eindId,k,v) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.map(e=>e.id===eindId?{...e,[k]:v}:e)}:a));
+  const remEind = (agId,eindId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.filter(e=>e.id!==eindId)}:a));
+
+  // Automatisch de hoogst belaste eindgroep bepalen (vuistregel: hoogste ampèrewaarde)
+  const autoHoogst = (ag) => {
+    if (!ag.eindgroepen.length) return null;
+    return ag.eindgroepen.reduce((best,e)=> (toNum((e.ampere||"").replace("A",""))||0) > (toNum((best.ampere||"").replace("A",""))||0) ? e : best, ag.eindgroepen[0]).id;
+  };
+
   return (
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>Groepen ({groepen.length})</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Groepenkast</div></div>
-        <button onClick={add} style={{padding:"7px 12px",borderRadius:8,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Groep</button>
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>Aardlekgroepen ({aardlekgroepen.length})</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · gemeten per RCD-cluster</div></div>
+        <button onClick={addAG} style={{padding:"7px 12px",borderRadius:8,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Aardlek</button>
       </div>
       <div style={S.body}>
-        {groepen.map((g,i)=>(
-          <div key={g.id} style={S.card}>
-            {editId===g.id ? (
+        <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
+          Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. Je meet straks 1× per aardlekgroep — op de <strong>hoogst afgaande groep</strong> (de zwaarst belaste eindgroep in dat cluster).
+        </div>
+        {aardlekgroepen.map((ag,i)=>{
+          const hoogstId = ag.hoogstId || autoHoogst(ag);
+          return (
+          <div key={ag.id} style={S.card}>
+            {editId===ag.id ? (
               <div>
-                <input style={{...S.input,marginBottom:10,fontWeight:700}} value={g.naam} autoFocus onChange={e=>upd(g.id,"naam",e.target.value)} onBlur={()=>setEditId(null)}/>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-                  <div><label style={S.label}>Kar.</label><MiniSelect value={g.kar} onChange={v=>upd(g.id,"kar",v)} options={KAR_TYPE} width={70}/></div>
-                  <div><label style={S.label}>Ampere</label><MiniSelect value={g.ampere} onChange={v=>upd(g.id,"ampere",v)} options={GROEP_A} width={80}/></div>
-                  <div><label style={S.label}>RCD mA</label><MiniSelect value={g.rcdMa} onChange={v=>upd(g.id,"rcdMa",v)} options={RCD_MA} width={80}/></div>
-                  <div><label style={S.label}>RCD type</label><MiniSelect value={g.rcdType} onChange={v=>upd(g.id,"rcdType",v)} options={RCD_TYPE} width={80}/></div>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+                  <input style={{...S.input,fontWeight:700,flex:1}} value={ag.naam} autoFocus onChange={e=>updAG(ag.id,"naam",e.target.value)}/>
+                  <button onClick={()=>setEditId(null)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:K.yellow,color:"#000",fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>Klaar</button>
                 </div>
+
+                <label style={S.label}>RCD type</label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                  {[...RCD_TYPE,"geen"].map(t=>(
+                    <Pill key={t} small active={ag.rcdType===t} onClick={()=>updAG(ag.id,"rcdType",t)}>{t==="geen"?"Geen RCD":`type-${t}`}</Pill>
+                  ))}
+                </div>
+
+                {ag.rcdType!=="geen" && (
+                  <>
+                    <label style={S.label}>RCD mA</label>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                      {RCD_MA.map(m=><Pill key={m} small active={ag.rcdMa===m} onClick={()=>updAG(ag.id,"rcdMa",m)}>{m}mA</Pill>)}
+                    </div>
+                  </>
+                )}
+
                 <label style={S.label}>Fasetype</label>
-                <div style={{display:"flex",gap:8}}>
-                  <Pill small active={g.fase==="1"} onClick={()=>upd(g.id,"fase","1")}>⚡ 1-fase 230V</Pill>
-                  <Pill small active={g.fase==="3"} onClick={()=>upd(g.id,"fase","3")}>⚡⚡⚡ 3-fase 400V (kracht)</Pill>
+                <div style={{display:"flex",gap:8,marginBottom:14}}>
+                  <Pill small active={ag.fase==="1"} onClick={()=>updAG(ag.id,"fase","1")}>⚡ 1-fase 230V</Pill>
+                  <Pill small active={ag.fase==="3"} onClick={()=>updAG(ag.id,"fase","3")}>⚡⚡⚡ 3-fase 400V</Pill>
                 </div>
+
+                <div style={{height:1,background:K.border,margin:"4px 0 12px"}}/>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <label style={{...S.label,marginBottom:0}}>Eindgroepen ({ag.eindgroepen.length})</label>
+                  <button onClick={()=>addEind(ag.id)} style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:11,cursor:"pointer"}}>+ Eindgroep</button>
+                </div>
+                {ag.eindgroepen.map(eg=>(
+                  <div key={eg.id} style={{background:K.surface,borderRadius:10,padding:10,marginBottom:8}}>
+                    <div style={{display:"flex",gap:6,marginBottom:8}}>
+                      <input style={{...S.input,fontSize:13,flex:1}} value={eg.naam} onChange={e=>updEind(ag.id,eg.id,"naam",e.target.value)}/>
+                      <button onClick={()=>remEind(ag.id,eg.id)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <MiniSelect value={eg.kar} onChange={v=>updEind(ag.id,eg.id,"kar",v)} options={KAR_TYPE} width={56}/>
+                      <MiniSelect value={eg.ampere} onChange={v=>updEind(ag.id,eg.id,"ampere",v)} options={GROEP_A} width={72}/>
+                      {ag.eindgroepen.length>1 && (
+                        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:hoogstId===eg.id?K.yellow:K.muted,cursor:"pointer",marginLeft:"auto"}}>
+                          <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId===eg.id} onChange={()=>updAG(ag.id,"hoogstId",eg.id)}/>
+                          hoogst afgaand
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div style={{display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>setEditId(g.id)}>
-                <div style={{width:36,height:36,borderRadius:8,background:K.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,color:K.yellow,flexShrink:0}}>{g.kar}{g.ampere?.replace("A","")}</div>
-                <div style={{flex:1}}><div style={{fontWeight:600,fontSize:14}}>{g.naam}</div><div style={{fontSize:11,color:K.muted}}>RCD {g.rcdMa}mA type-{g.rcdType} · {g.fase==="3"?"3-fase 400V":"1-fase 230V"} · groep {i+1}</div></div>
-                <button onClick={e=>{e.stopPropagation();rem(g.id);}} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
+              <div style={{cursor:"pointer"}} onClick={()=>setEditId(ag.id)}>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:ag.eindgroepen.length?10:0}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:K.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                    {ag.rcdType==="geen"?"⭕":"🛡️"}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:600,fontSize:14}}>{ag.naam}</div>
+                    <div style={{fontSize:11,color:K.muted}}>
+                      {ag.rcdType==="geen"?"Geen RCD":`RCD ${ag.rcdMa}mA type-${ag.rcdType}`} · {ag.fase==="3"?"3-fase 400V":"1-fase 230V"} · {ag.eindgroepen.length} eindgroep{ag.eindgroepen.length!==1?"en":""}
+                    </div>
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();remAG(ag.id);}} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
+                </div>
+                {ag.eindgroepen.length>0 && (
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingLeft:48}}>
+                    {ag.eindgroepen.map(eg=>(
+                      <span key={eg.id} style={{fontSize:10,padding:"3px 8px",borderRadius:20,background:hoogstId===eg.id?K.yellowDim:K.surface,color:hoogstId===eg.id?K.yellow:K.muted,fontWeight:hoogstId===eg.id?700:400}}>
+                        {hoogstId===eg.id?"⭐ ":""}{eg.naam} ({eg.kar}{eg.ampere?.replace("A","")})
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        ))}
-        <button style={{...S.btn,background:K.yellow,color:"#000",marginTop:8}} onClick={()=>{onChange("groepen",groepen);onNext();}}>Volgende →</button>
+        )})}
+        <button style={{...S.btn,background:K.yellow,color:"#000",marginTop:8}} onClick={()=>{
+          // Zorg dat elke aardlekgroep een hoogstId heeft vóór doorgaan
+          const u = aardlekgroepen.map(a=>({...a, hoogstId: a.hoogstId||autoHoogst(a)}));
+          sync(u); onNext();
+        }}>Volgende →</button>
       </div>
     </div>
   );
@@ -772,50 +931,42 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
 function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const [inst,setInst] = useState(data.instMetingen||{});
   const [grpMeet,setGrpMeet] = useState(data.grpMeet||{});
-  const groepen = data.groepen||[];
-  const [activeGroep,setActiveGroep] = useState(groepen[0]?.id||null);
-  const si = (k,v) => { const u={...inst,[k]:v}; setInst(u); onChange("instMetingen",u); };
+  const aardlekgroepen = data.aardlekgroepen||[];
+  const stelsel = data.stelsel || "TN-C-S";
+  const isTT = stelsel === "TT";
+  const dtNorm = isTT ? 200 : 400;
+  const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
+  const si = (k,v) => { const u={...inst,[k]:v,stelsel}; setInst(u); onChange("instMetingen",u); };
   const sg = (gId,k,v) => { const u={...grpMeet,[`${gId}_${k}`]:v}; setGrpMeet(u); onChange("grpMeet",u); };
   const gv = (gId,k) => grpMeet[`${gId}_${k}`]||"";
-  const isoOk  = v => parseFloat(v)>1;
-  const dtOk   = v => parseFloat(v)<300;
-  const spanOk = v => parseFloat(v)>=207&&parseFloat(v)<=253;
-  const zOk    = v => parseFloat(v)<0.5;
-  const raOk   = v => parseFloat(v)<1;
-  const cg = groepen.find(g=>g.id===activeGroep);
-  const warnings = gkCrossChecks(groepen, grpMeet, inst);
+  const isoOk  = v => toNum(v)>=1;
+  const dtOk   = v => toNum(v)<=dtNorm;
+  const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
+  const zOk    = v => toNum(v)<0.5;
+  const cag = aardlekgroepen.find(a=>a.id===activeAG);
+  const heeft3fase = aardlekgroepen.some(a=>a.fase==="3");
+  // Zorg dat stelsel altijd gesynchroniseerd is naar instMetingen (voor cross-checks/rapport)
+  useEffect(()=>{ if (inst.stelsel!==stelsel) si("stelsel",stelsel); }, [stelsel]);
+  const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel});
 
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden NEN1010</div><div style={{fontSize:11,color:K.muted}}>Stap 7 · Groepenkast</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden NEN1010</div><div style={{fontSize:11,color:K.muted}}>Stap 7 · {stelsel}-stelsel · 250V</div></div>
       </div>
       <div style={S.body}>
-        {/* Type installatie — bepaalt ISO norm */}
-        <div style={S.sTitle}>Type meting</div>
-        <div style={{...S.card,marginBottom:16}}>
-          <label style={S.label}>Type installatie</label>
-          <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <Pill active={(inst.typeInstallatie||"nieuwbouw")==="nieuwbouw"} onClick={()=>si("typeInstallatie","nieuwbouw")}>🏗️ Nieuwbouw / oplevering</Pill>
-            <Pill active={inst.typeInstallatie==="bestaand"} onClick={()=>si("typeInstallatie","bestaand")}>🔧 Bestaande installatie</Pill>
-          </div>
-          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8}}>
-            {(inst.typeInstallatie||"nieuwbouw")==="nieuwbouw"
-              ? "Meetspanning 1000V · ISO norm ≥ 1 MΩ"
-              : "Meetspanning 250V · ISO norm ≥ 0,23 MΩ (230V) / ≥ 0,40 MΩ (400V) — 1000Ω per volt nominaal"}
-          </div>
-        </div>
-
         {/* Installatie algemeen */}
         <div style={S.sTitle}>Installatie algemeen</div>
         <div style={S.card}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
             <div><label style={S.label}>Voorzekering</label><MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/></div>
-            <div><label style={S.label}>Stelsel</label><MiniSelect value={inst.stelsel} onChange={v=>si("stelsel",v)} options={["TN-C-S","TN-S","TT","IT"]} width={100}/></div>
+            <div><label style={S.label}>Stelsel</label>
+              <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
+            </div>
           </div>
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {[["Z L-PE","zlpe","Ω",zOk],["Z L-N","zln","Ω",zOk],["Ra aarding","ra","Ω",raOk]].map(([l,k,u,chk])=>(
+            {[["Z L-N","zln","Ω",zOk],["Z L-PE","zlpe","Ω",zOk]].map(([l,k,u,chk])=>(
               <div key={k}><label style={S.label}>{l}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
@@ -825,8 +976,12 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             ))}
           </div>
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
+          <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
+            <input type="checkbox" checked={inst.toon3fase ?? heeft3fase} onChange={e=>si("toon3fase",e.target.checked)}/>
+            <span style={{fontSize:12,color:K.muted}}>Ook L2/N, L3/N en N/PE meten (3-fase aansluiting aanwezig)</span>
+          </label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {["L1/N","L2/N","L3/N","N/PE"].map(f=>(
+            {(["L1/N"].concat((inst.toon3fase ?? heeft3fase) ? ["L2/N","L3/N","N/PE"] : [])).map(f=>(
               <div key={f}><label style={S.label}>{f}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
@@ -835,75 +990,67 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal</label>
+          <label style={S.label}>ISO totaal — norm ≥ 1 MΩ</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
           </div>
         </div>
 
-        {/* Per groep */}
-        <div style={S.sTitle}>Per eindgroep</div>
+        {/* Per aardlekgroep */}
+        <div style={S.sTitle}>Per aardlekgroep — meten op 250V</div>
         <div style={{overflowX:"auto",display:"flex",gap:8,marginBottom:14,paddingBottom:4}}>
-          {groepen.map(g=>{
-            const isNieuw = (inst.typeInstallatie||"nieuwbouw")==="nieuwbouw";
-            const norm = isNieuw ? 1 : (g.fase==="3" ? 0.40 : 0.23);
-            const isoKeys = g.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
-            const isoIngevuld = isoKeys.every(k=>gv(g.id,k));
-            const isoOke = isoIngevuld && isoKeys.every(k=>parseFloat(gv(g.id,k))>=norm);
-            const gd = isoIngevuld && gv(g.id,"dt");
-            const gOk = gd && isoOke && dtOk(gv(g.id,"dt"));
+          {aardlekgroepen.map(ag=>{
+            const norm = ag.fase==="3" ? 0.40 : 0.23;
+            const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
+            const isoIngevuld = isoKeys.every(k=>gv(ag.id,k));
+            const isoOke = isoIngevuld && isoKeys.every(k=>toNum(gv(ag.id,k))>=norm);
+            const gd = isoIngevuld && (ag.rcdType==="geen" || gv(ag.id,"dt"));
+            const gOk = gd && isoOke && (ag.rcdType==="geen" || dtOk(gv(ag.id,"dt")));
             return (
-              <button key={g.id} onClick={()=>setActiveGroep(g.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeGroep===g.id?K.yellow:K.border}`,background:activeGroep===g.id?K.yellowDim:K.card,color:activeGroep===g.id?K.yellow:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
-                {gd?(gOk?"✅":"⚠️"):"○"} {g.naam.length>12?g.naam.slice(0,12)+"…":g.naam}
+              <button key={ag.id} onClick={()=>setActiveAG(ag.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeAG===ag.id?K.yellow:K.border}`,background:activeAG===ag.id?K.yellowDim:K.card,color:activeAG===ag.id?K.yellow:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+                {gd?(gOk?"✅":"⚠️"):"○"} {ag.naam.length>14?ag.naam.slice(0,14)+"…":ag.naam}
               </button>
             );
           })}
         </div>
-        {cg && (() => {
-          const isNieuw = (inst.typeInstallatie||"nieuwbouw")==="nieuwbouw";
-          const is3fase = cg.fase==="3";
-          const isoNorm = isNieuw ? 1 : (is3fase ? 0.40 : 0.23);
-          const isoNormLabel = isNieuw ? "≥ 1 MΩ" : (is3fase ? "≥ 0,40 MΩ" : "≥ 0,23 MΩ");
-          const standMeetspan = isNieuw ? "1000V" : "250V";
+        {cag && (() => {
+          const is3fase = cag.fase==="3";
+          const isoNorm = is3fase ? 0.40 : 0.23;
+          const isoNormLabel = is3fase ? "≥ 0,40 MΩ" : "≥ 0,23 MΩ";
           const isoVelden = is3fase
             ? [{k:"iso_l1a",l:"L1 → Aarde"},{k:"iso_l2a",l:"L2 → Aarde"},{k:"iso_l3a",l:"L3 → Aarde"},{k:"iso_na",l:"N → Aarde"}]
             : [{k:"iso_fa",l:"Fase → Aarde"},{k:"iso_na",l:"Nul → Aarde"}];
-          const isoChk = v => parseFloat(v) >= isoNorm;
-          const meetspan = gv(cg.id,"meetspan") || standMeetspan;
+          const isoChk = v => toNum(v) >= isoNorm;
+          const hoogst = cag.eindgroepen?.find(e=>e.id===cag.hoogstId) || cag.eindgroepen?.[0];
 
           return (
           <div style={S.card}>
-            <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{cg.naam}</div>
-            <div style={{fontSize:11,color:K.muted,marginBottom:14}}>
-              Kar. {cg.kar} · {cg.ampere} · RCD {cg.rcdMa}mA type-{cg.rcdType} · {is3fase?"3-fase 400V":"1-fase 230V"}
+            <div style={{fontWeight:700,fontSize:15,marginBottom:2}}>{cag.naam}</div>
+            <div style={{fontSize:11,color:K.muted,marginBottom:6}}>
+              {cag.rcdType==="geen"?"Geen RCD":`RCD ${cag.rcdMa}mA type-${cag.rcdType}`} · {is3fase?"3-fase 400V":"1-fase 230V"}
             </div>
-
-            {/* Meetspanning */}
-            <div style={{marginBottom:12}}>
-              <label style={S.label}>Meetspanning ISO (standaard: {standMeetspan})</label>
-              <div style={{display:"flex",gap:8}}>
-                {["250V","500V","1000V"].map(v=>(
-                  <Pill key={v} small active={meetspan===v} onClick={()=>sg(cg.id,"meetspan",v)}>{v}</Pill>
-                ))}
+            {hoogst && (
+              <div style={{fontSize:11,color:K.yellow,marginBottom:14,padding:"6px 10px",background:K.yellowDim,borderRadius:8}}>
+                ⭐ Gemeten op hoogst afgaande groep: <strong>{hoogst.naam}</strong> ({hoogst.kar}{hoogst.ampere})
               </div>
-            </div>
+            )}
 
             {/* ISO velden per fase type */}
             <div style={{marginBottom:12}}>
-              <label style={S.label}>Isolatieweerstand (MΩ) — norm {isoNormLabel}</label>
+              <label style={S.label}>Isolatieweerstand (MΩ) — 250V — norm {isoNormLabel}</label>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {isoVelden.map(({k,l})=>{
-                  const val = gv(cg.id,k);
-                  const ok  = val && val!=="—" && isoChk(val);
+                  const val = gv(cag.id,k);
+                  const ok  = val && isoChk(val);
                   return (
                     <div key={k}>
                       <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
                       <input style={{...S.input,fontSize:15,fontWeight:700,
                         background:val?(ok?K.greenDim:K.redDim):K.surface,
                         border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-                        type="text" inputMode="decimal" placeholder={isNieuw?"1.5":"0.5"}
-                        value={val} onChange={e=>sg(cg.id,k,e.target.value)}/>
+                        type="text" inputMode="decimal" placeholder="0,5"
+                        value={val} onChange={e=>sg(cag.id,k,e.target.value)}/>
                     </div>
                   );
                 })}
@@ -914,49 +1061,44 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
             {/* Overige meetwaarden */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              {[
-                {l:"ΔT ms — norm ≤300ms (1×In)",k:"dt",ph:"180",chk:v=>parseFloat(v)<=300},
-                {l:`ΔI mA — norm <${parseFloat(cg.rcdMa)*2}mA`,k:"di",ph:String(parseFloat(cg.rcdMa)*0.8),chk:v=>parseFloat(v)<parseFloat(cg.rcdMa)*2},
-                {l:"Spanning V — norm 207–253V",k:"spanning",ph:"230",chk:v=>spanOk(v)},
-              ].map(({l,k,chk,ph})=>{
-                const val = gv(cg.id,k);
-                const isOk = val && val!=="—" && chk(val);
-                return (
-                  <div key={k}>
-                    <label style={S.label}>{l}</label>
+              <div>
+                <label style={S.label}>Spanning V — norm 207–253V</label>
+                <input style={{...S.input,fontSize:15,fontWeight:700,
+                  background:gv(cag.id,"spanning")?(spanOk(gv(cag.id,"spanning"))?K.greenDim:K.redDim):K.surface,
+                  border:`1px solid ${gv(cag.id,"spanning")?(spanOk(gv(cag.id,"spanning"))?K.green:K.red):K.border}`}}
+                  type="text" inputMode="decimal" placeholder="230" value={gv(cag.id,"spanning")} onChange={e=>sg(cag.id,"spanning",e.target.value)}/>
+              </div>
+
+              {cag.rcdType!=="geen" && (
+                <>
+                  <div>
+                    <label style={S.label}>ΔT ms — norm ≤{dtNorm}ms ({stelsel})</label>
                     <input style={{...S.input,fontSize:15,fontWeight:700,
-                      background:val?(isOk?K.greenDim:K.redDim):K.surface,
-                      border:`1px solid ${val?(isOk?K.green:K.red):K.border}`}}
-                      type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sg(cg.id,k,e.target.value)}/>
+                      background:gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.greenDim:K.redDim):K.surface,
+                      border:`1px solid ${gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.green:K.red):K.border}`}}
+                      type="text" inputMode="decimal" placeholder={String(dtNorm-50)} value={gv(cag.id,"dt")} onChange={e=>sg(cag.id,"dt",e.target.value)}/>
                   </div>
-                );
-              })}
-
-              {/* Testknop */}
-              <div>
-                <label style={S.label}>Testknop RCD</label>
-                <div style={{display:"flex",gap:8,marginTop:2}}>
-                  {["OK","NOK"].map(v=><Pill key={v} small active={gv(cg.id,"testknop")===v} onClick={()=>sg(cg.id,"testknop",v)}>{v}</Pill>)}
-                </div>
-              </div>
-
-              {/* Impedantie Z */}
-              <div>
-                <label style={S.label}>Z lijnimpedantie (Ω)</label>
-                <input style={{...S.input,fontSize:15}} type="text" inputMode="decimal" placeholder="bijv. 2.88"
-                  value={gv(cg.id,"z_imp")} onChange={e=>sg(cg.id,"z_imp",e.target.value)}/>
-                {gv(cg.id,"z_imp") && gv(cg.id,"z_imp")!=="—" && (
-                  <div style={{fontSize:10,color:K.muted,marginTop:3}}>
-                    Icc = {(230/parseFloat(gv(cg.id,"z_imp"))).toFixed(0)} A kortsluitstroom
+                  <div>
+                    <label style={S.label}>ΔI mA — norm &lt;{toNum(cag.rcdMa)*2}mA</label>
+                    <input style={{...S.input,fontSize:15,fontWeight:700,
+                      background:gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.greenDim:K.redDim):K.surface,
+                      border:`1px solid ${gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.green:K.red):K.border}`}}
+                      type="text" inputMode="decimal" placeholder={String(toNum(cag.rcdMa)*0.8)} value={gv(cag.id,"di")} onChange={e=>sg(cag.id,"di",e.target.value)}/>
                   </div>
-                )}
-              </div>
+                  <div>
+                    <label style={S.label}>Testknop RCD</label>
+                    <div style={{display:"flex",gap:8,marginTop:2}}>
+                      {["OK","NOK"].map(v=><Pill key={v} small active={gv(cag.id,"testknop")===v} onClick={()=>sg(cag.id,"testknop",v)}>{v}</Pill>)}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {groepen.findIndex(g=>g.id===cg.id)<groepen.length-1 &&
+            {aardlekgroepen.findIndex(a=>a.id===cag.id)<aardlekgroepen.length-1 &&
               <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginTop:14,marginBottom:0}}
-                onClick={()=>{const idx=groepen.findIndex(g=>g.id===cg.id);setActiveGroep(groepen[idx+1].id);}}>
-                Volgende groep →
+                onClick={()=>{const idx=aardlekgroepen.findIndex(a=>a.id===cag.id);setActiveAG(aardlekgroepen[idx+1].id);}}>
+                Volgende aardlekgroep →
               </button>}
           </div>
           );
@@ -971,17 +1113,19 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <AIAnalyseBox
           analyse={data.aiAnalyse}
           onAnalyse={(t)=>onChange("aiAnalyse",t)}
-          prompt={`Je bent een ervaren elektrotechnisch inspecteur (NEN1010). Analyseer onderstaande meetwaarden van een elektrische installatie als geheel. Let op combinaties van waarden die samen een risico vormen, ook als ze individueel binnen de norm vallen (bijv. Z lijnimpedantie vs. zekeringgrootte, ISO net boven minimum bij meerdere groepen, spanningsasymmetrie). Geef een korte professionele beoordeling in het Nederlands: max 6 zinnen, gevolgd door maximaal 3 concrete aanbevelingen, elk op een nieuwe regel beginnend met "- ". Geen inleiding, geen disclaimer, alleen platte tekst (geen markdown opmaak, geen HTML).
+          prompt={`Je bent een ervaren elektrotechnisch inspecteur (NEN1010). Analyseer onderstaande meetwaarden van een elektrische installatie als geheel. Let op combinaties van waarden die samen een risico vormen, ook als ze individueel binnen de norm vallen (bijv. ISO net boven minimum bij meerdere aardlekgroepen, spanningsasymmetrie, ΔT dicht tegen de norm voor het gekozen stelsel). Geef een korte professionele beoordeling in het Nederlands: max 6 zinnen, gevolgd door maximaal 3 concrete aanbevelingen, elk op een nieuwe regel beginnend met "- ". Geen inleiding, geen disclaimer, alleen platte tekst (geen markdown opmaak, geen HTML).
 
-TYPE: ${(inst.typeInstallatie||"nieuwbouw")==="nieuwbouw"?"Nieuwbouw/oplevering (ISO norm >=1 MOhm)":"Bestaande installatie (ISO norm 1000 Ohm/V: 0,23 MOhm bij 230V / 0,40 MOhm bij 400V)"}
-VOORZEKERING: ${inst.voorzekering||"—"}A | STELSEL: ${inst.stelsel||"—"}
-Z L-PE: ${inst.zlpe||"—"} Ohm | Z L-N: ${inst.zln||"—"} Ohm | Ra: ${inst.ra||"—"} Ohm | ISO totaal: ${inst.isoTot||"—"} MOhm
+STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
+VOORZEKERING: ${inst.voorzekering||"—"}A
+Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal: ${inst.isoTot||"—"} MOhm
 SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V / N-PE ${inst["span_N/PE"]||"—"}V
-EINDGROEPEN:
-${groepen.map((g,i)=>{
-  const isoKeys = g.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
-  const isoStr = isoKeys.map(k=>`${k.replace("iso_","").toUpperCase()}: ${gv(g.id,k)||"—"}`).join(" / ");
-  return `${i+1}. ${g.naam} | ${g.fase==="3"?"3F 400V":"1F 230V"} | ${g.kar}${g.ampere} | RCD ${g.rcdMa}mA-${g.rcdType} | ISO(MOhm): ${isoStr} | dT: ${gv(g.id,"dt")||"—"}ms | dI: ${gv(g.id,"di")||"—"}mA | Z: ${gv(g.id,"z_imp")||"—"} Ohm | Testknop: ${gv(g.id,"testknop")||"—"}`;
+AARDLEKGROEPEN:
+${aardlekgroepen.map((ag,i)=>{
+  const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
+  const isoStr = isoKeys.map(k=>`${k.replace("iso_","").toUpperCase()}: ${gv(ag.id,k)||"—"}`).join(" / ");
+  const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
+  const eindStr = (ag.eindgroepen||[]).map(e=>`${e.naam}(${e.kar}${e.ampere})`).join(", ");
+  return `${i+1}. ${ag.naam} | ${ag.rcdType==="geen"?"geen RCD":`RCD ${ag.rcdMa}mA-${ag.rcdType}`} | ${ag.fase==="3"?"3F 400V":"1F 230V"} | eindgroepen: ${eindStr} | gemeten op: ${hoogst?.naam||"—"} | ISO(MOhm): ${isoStr} | dT: ${gv(ag.id,"dt")||"—"}ms | dI: ${gv(ag.id,"di")||"—"}mA | Testknop: ${gv(ag.id,"testknop")||"—"}`;
 }).join("\n")}
 CROSS-CHECK SIGNALEN: ${warnings.length>0?warnings.map(w=>w.msg).join("; "):"geen"}`}
         />
@@ -1044,7 +1188,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
           </div>
           {/* DC/AC ratio check */}
           {data.aantalPanelen && data.paneelWp && data.omvormerKw && (() => {
-            const ratio = (parseInt(data.aantalPanelen)*parseInt(data.paneelWp)) / (parseFloat(data.omvormerKw)*1000);
+            const ratio = (parseInt(data.aantalPanelen)*parseInt(data.paneelWp)) / (toNum(data.omvormerKw)*1000);
             const ok = ratio >= 0.8 && ratio <= 1.35;
             return (
               <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:ok?K.greenDim:K.orangeDim,border:`1px solid ${ok?K.green:K.orange}44`}}>
@@ -1111,8 +1255,8 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
   const ss = (sId,k,v) => { const u={...strMeet,[`${sId}_${k}`]:v}; setStrMeet(u); onChange("pvMeet",u); };
   const gv = (sId,k) => strMeet[`${sId}_${k}`]||"";
 
-  const isoOk  = v => parseFloat(v) > 1;
-  const spanOk = v => { const n = parseFloat(v); return n > 50 && n < 1500; };
+  const isoOk  = v => toNum(v) > 1;
+  const spanOk = v => { const n = toNum(v); return n > 50 && n < 1500; };
 
   const warnings = pvCrossChecks(
     strings.map(s=>({...s, iso:gv(s.id,"iso"), spanning:gv(s.id,"spanning")})),
@@ -1161,7 +1305,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>AC installatie meetwaarden</div>
         <div style={S.card}>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-            {[["Spanning AC","spanAC","V",v=>parseFloat(v)>=207&&parseFloat(v)<=253],["Z L-PE","zlpe","Ω",v=>parseFloat(v)<0.5],["ISO totaal AC","isoAC","MΩ",v=>parseFloat(v)>1]].map(([l,k,u,chk])=>(
+            {[["Spanning AC","spanAC","V",v=>toNum(v)>=207&&toNum(v)<=253],["Z L-PE","zlpe","Ω",v=>toNum(v)<0.5],["ISO totaal AC","isoAC","MΩ",v=>toNum(v)>1]].map(([l,k,u,chk])=>(
               <div key={k} style={{flex:1,minWidth:80}}>
                 <label style={S.label}>{l}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -1246,9 +1390,11 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const [status, setStatus] = useState("idle");
   const [pdfHtml, setPdfHtml] = useState("");
+  const [mailStatus, setMailStatus] = useState("idle"); // idle | sending | sent | error
+  const [mailError, setMailError] = useState("");
   const disc = DISCIPLINES.find(d=>d.id===discipline);
 
-  const groepen  = data.groepen||[];
+  const aardlekgroepen = data.aardlekgroepen||[];
   const strings  = data.pvStrings||[];
   const automaten = data.automaten||[];
   const grpMeet  = data.grpMeet||{};
@@ -1256,7 +1402,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const instMet  = data.instMetingen||{};
   const pvInstMet = data.pvInstMet||{};
 
-  const gkWarnings = discipline==="groepenkast" ? gkCrossChecks(groepen, grpMeet, instMet) : [];
+  const gkWarnings = discipline==="groepenkast" ? gkCrossChecks(aardlekgroepen, grpMeet, instMet) : [];
   const pvWarnings = discipline==="pv" ? pvCrossChecks(
     strings.map(s=>({...s,iso:pvMeet[`${s.id}_iso`],spanning:pvMeet[`${s.id}_spanning`]})),
     pvInstMet, {aantalPanelen:data.aantalPanelen,paneelWp:data.paneelWp,omvormerKw:data.omvormerKw}
@@ -1394,73 +1540,72 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table>
           <tr><td><strong>Kastmodel</strong></td><td>${data.kast||"—"}</td>
               <td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td></tr>
-          <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type} (${a.serie})`).join(", ")||"—"}</td></tr>
-          <tr><td><strong>ALS / RCD</strong></td><td colspan="3">${data.alsFab||"—"} ${data.alsType||""}</td></tr>
+          <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||"—"}</td></tr>
+          <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${ag.naam}: geen RCD`:`${ag.naam}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
         </table>
         <h2>Meetgegevens installatie (AC)</h2>
         <table>
           <tr>
             <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A</td>
-            <td><strong>Stelsel</strong></td><td>${instMet.stelsel||"—"}</td>
+            <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}</td>
           </tr>
           <tr>
-            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>parseFloat(v)<0.5)}>${instMet.zlpe||"—"} Ω</td>
-            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>parseFloat(v)<0.5)}>${instMet.zln||"—"} Ω</td>
+            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<0.5)}>${instMet.zln||"—"} Ω</td>
+            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<0.5)}>${instMet.zlpe||"—"} Ω</td>
           </tr>
           <tr>
-            <td><strong>Ra aarding</strong></td><td ${statusGK(instMet.ra, v=>parseFloat(v)<1)}>${instMet.ra||"—"} Ω</td>
-            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>parseFloat(v)>1)}>${instMet.isoTot||"—"} MΩ</td>
+            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=1)}>${instMet.isoTot||"—"} MΩ</td>
+            <td><strong>Kastuitvoering</strong></td><td>${data.kastType==="metaal"?"Metaal":"Kunststof (dubbel geïsoleerd)"}</td>
           </tr>
           <tr>
-            <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
-            <td><strong>L2/N</strong></td><td ${statusGK(instMet["span_L2/N"], v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${instMet["span_L2/N"]||"—"} V</td>
+            <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
+            <td><strong>L2/N</strong></td><td ${statusGK(instMet["span_L2/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L2/N"]||"—"} V</td>
           </tr>
           <tr>
-            <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
+            <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
             <td><strong>N/PE</strong></td><td>${instMet["span_N/PE"]||"—"} V</td>
           </tr>
         </table>
-        <h2>Eindgroepen meetstaat</h2>
+        <h2>Aardlekgroepen — meetstaat</h2>
         <p style="font-size:8px;color:#666;margin-bottom:4px">
-          Type meting: ${(instMet.typeInstallatie||"nieuwbouw")==="nieuwbouw" ? "Nieuwbouw/oplevering — norm ISO ≥ 1 MΩ" : "Bestaande installatie — norm 1000Ω/V nominaal (230V: ≥0,23 MΩ · 400V: ≥0,40 MΩ)"}
+          Gemeten op 250V, per aardlekgroep op de hoogst afgaande eindgroep. Norm 1000Ω/V nominaal: 1-fase ≥0,23 MΩ · 3-fase ≥0,40 MΩ. ΔT-norm voor ${instMet.stelsel||data.stelsel||"TN"}-stelsel: ≤${(instMet.stelsel||data.stelsel)==="TT"?200:400}ms.
         </p>
         <table>
           <tr>
-            <th>Groep</th><th>Fase</th><th>Kar.</th><th>A</th><th>RCD</th>
-            <th>ISO metingen MΩ (Vtest)</th><th>ΔT ms</th><th>ΔI mA</th><th>Test</th><th>U (V)</th><th>Z / Icc</th><th>Status</th>
+            <th>Aardlekgroep</th><th>Eindgroepen (kar·A)</th><th>Fase</th><th>RCD</th>
+            <th>ISO metingen MΩ</th><th>U (V)</th><th>ΔT ms</th><th>ΔI mA</th><th>Test</th><th>Status</th>
           </tr>
-          ${groepen.map((g,i)=>{
-            const isNieuw = (instMet.typeInstallatie||"nieuwbouw")==="nieuwbouw";
-            const norm = isNieuw ? 1 : (g.fase==="3" ? 0.40 : 0.23);
-            const isoKeys = g.fase==="3"
+          ${aardlekgroepen.map((ag)=>{
+            const norm = ag.fase==="3" ? 0.40 : 0.23;
+            const dtNormRap = (instMet.stelsel||data.stelsel)==="TT" ? 200 : 400;
+            const isoKeys = ag.fase==="3"
               ? [["iso_l1a","L1-A"],["iso_l2a","L2-A"],["iso_l3a","L3-A"],["iso_na","N-A"]]
               : [["iso_fa","F-A"],["iso_na","N-A"]];
-            const meetspan = gv(g.id,"meetspan") || (isNieuw ? "1000V" : "250V");
             const isoCells = isoKeys.map(([k,label])=>{
-              const v = gv(g.id,k);
-              const ok = v!=="—" && parseFloat(v)>=norm;
-              return `<span style="display:inline-block;margin-right:6px;padding:1px 4px;border-radius:2px" class="${v!=="—"?(ok?"ok":"nok"):""}">${label}: ${v}</span>`;
+              const v = gv(ag.id,k);
+              const ok = v!=="—" && toNum(v)>=norm;
+              return `<span style="display:inline-block;margin-right:4px;padding:1px 4px;border-radius:2px" class="${v!=="—"?(ok?"ok":"nok"):""}">${label}:${v}</span>`;
             }).join("");
-            const isoAllOk = isoKeys.every(([k])=>{const v=gv(g.id,k);return v!=="—"&&parseFloat(v)>=norm;});
-            const dt = gv(g.id,"dt"); const di = gv(g.id,"di");
-            const span = gv(g.id,"spanning"); const tk = gv(g.id,"testknop");
-            const z_imp = gv(g.id,"z_imp");
-            const dtOk2 = dt!=="—"&&parseFloat(dt)<=300;
-            const diOk = di!=="—"&&parseFloat(di)<parseFloat(g.rcdMa)*2;
-            const spOk = span!=="—"&&parseFloat(span)>=207&&parseFloat(span)<=253;
-            const icc = z_imp&&z_imp!=="—" ? `${(230/parseFloat(z_imp)).toFixed(0)}A` : "—";
-            const allOk = isoAllOk&&dtOk2&&diOk&&spOk&&tk==="OK";
+            const isoAllOk = isoKeys.every(([k])=>{const v=gv(ag.id,k);return v!=="—"&&toNum(v)>=norm;});
+            const span = gv(ag.id,"spanning"); const spOk = span!=="—"&&toNum(span)>=207&&toNum(span)<=253;
+            const geenRcd = ag.rcdType==="geen";
+            const dt = geenRcd?"n.v.t.":gv(ag.id,"dt"); const di = geenRcd?"n.v.t.":gv(ag.id,"di"); const tk = geenRcd?"n.v.t.":gv(ag.id,"testknop");
+            const dtOk2 = geenRcd || (dt!=="—"&&toNum(dt)<=dtNormRap);
+            const diOk = geenRcd || (di!=="—"&&toNum(di)<toNum(ag.rcdMa)*2);
+            const tkOk = geenRcd || tk==="OK";
+            const allOk = isoAllOk&&dtOk2&&diOk&&spOk&&tkOk;
+            const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
+            const eindLijst = (ag.eindgroepen||[]).map(e=>`${e.id===hoogst?.id?"⭐ ":""}${e.naam} (${e.kar}${e.ampere})`).join("<br>");
             return `<tr>
-              <td>${g.naam}</td>
-              <td>${g.fase==="3"?"3F 400V":"1F 230V"}</td>
-              <td>${g.kar}</td><td>${g.ampere}</td>
-              <td>${g.rcdMa}mA ${g.rcdType}</td>
-              <td style="font-size:8px">${isoCells} <em>(${meetspan})</em></td>
+              <td><strong>${ag.naam}</strong></td>
+              <td style="font-size:8px">${eindLijst}</td>
+              <td>${ag.fase==="3"?"3F 400V":"1F 230V"}</td>
+              <td>${geenRcd?"Geen":`${ag.rcdMa}mA ${ag.rcdType}`}</td>
+              <td style="font-size:8px">${isoCells}</td>
+              <td ${spOk?'class="ok"':'class="nok"'}>${span}</td>
               <td ${dtOk2?'class="ok"':'class="nok"'}>${dt}</td>
               <td ${diOk?'class="ok"':'class="nok"'}>${di}</td>
               <td ${tk==="OK"?'class="ok"':tk==="NOK"?'class="nok"':''}>${tk}</td>
-              <td ${spOk?'class="ok"':'class="nok"'}>${span}</td>
-              <td>${z_imp!=="—"?z_imp+"Ω":"—"} / ${icc}</td>
               <td ${allOk?'class="ok"':'class="nok"'}>${allOk?"✓":"✗"}</td>
             </tr>`;
           }).join("")}
@@ -1511,24 +1656,24 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td>Vóór aanvang werkzaamheden</td>
             <td>${cvMeet.coVoor||"—"} ppm</td>
             <td>&lt; 10 ppm</td>
-            <td ${statusCV(cvMeet.coVoor, v=>parseFloat(v)<10)}>${cvMeet.coVoor&&cvMeet.coVoor!=="—"?(parseFloat(cvMeet.coVoor)<10?"✓ OK":"✗ Te hoog"):"—"}</td>
+            <td ${statusCV(cvMeet.coVoor, v=>toNum(v)<10)}>${cvMeet.coVoor&&cvMeet.coVoor!=="—"?(toNum(cvMeet.coVoor)<10?"✓ OK":"✗ Te hoog"):"—"}</td>
           </tr>
           <tr>
             <td>Ná werkzaamheden</td>
             <td>${cvMeet.coNa||"—"} ppm</td>
             <td>&lt; 10 ppm</td>
-            <td ${statusCV(cvMeet.coNa, v=>parseFloat(v)<10)}>${cvMeet.coNa&&cvMeet.coNa!=="—"?(parseFloat(cvMeet.coNa)<10?"✓ OK":"✗ Te hoog"):"—"}</td>
+            <td ${statusCV(cvMeet.coNa, v=>toNum(v)<10)}>${cvMeet.coNa&&cvMeet.coNa!=="—"?(toNum(cvMeet.coNa)<10?"✓ OK":"✗ Te hoog"):"—"}</td>
           </tr>
         </table>
         <h2>Rookgasanalyse</h2>
         <table>
           <tr><th>Meetwaarde</th><th>Gemeten</th><th>Norm</th><th>Status</th></tr>
           ${[
-            ["CO in rookgassen", cvMeet.coRookgas, "ppm", "< 200 ppm", v=>parseFloat(v)<200],
-            ["CO₂", cvMeet.co2, "%", "8–12%", v=>parseFloat(v)>=8&&parseFloat(v)<=12],
-            ["O₂", cvMeet.o2, "%", "3–6%", v=>parseFloat(v)>=3&&parseFloat(v)<=6],
-            ["Rookgastemperatuur", cvMeet.rookgasTemp, "°C", "< 200°C", v=>parseFloat(v)<200],
-            ["Rendement", cvMeet.rendement, "%", "> 90%", v=>parseFloat(v)>90],
+            ["CO in rookgassen", cvMeet.coRookgas, "ppm", "< 200 ppm", v=>toNum(v)<200],
+            ["CO₂", cvMeet.co2, "%", "8–12%", v=>toNum(v)>=8&&toNum(v)<=12],
+            ["O₂", cvMeet.o2, "%", "3–6%", v=>toNum(v)>=3&&toNum(v)<=6],
+            ["Rookgastemperatuur", cvMeet.rookgasTemp, "°C", "< 200°C", v=>toNum(v)<200],
+            ["Rendement", cvMeet.rendement, "%", "> 90%", v=>toNum(v)>90],
           ].map(([l,v,u,n,chk])=>`<tr>
             <td>${l}</td>
             <td>${v||"—"} ${v&&v!=="—"?u:""}</td>
@@ -1540,10 +1685,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table>
           <tr><th>Meetwaarde</th><th>Gemeten</th><th>Norm</th><th>Status</th></tr>
           ${[
-            ["Waterdruk (koud/statisch)", cvMeet.waterdruk, "bar", "1,5–2,0 bar", v=>parseFloat(v)>=1.5&&parseFloat(v)<=2.0],
-            ["Gasdruk netwerk", cvMeet.gasdruk, "mbar", "20–25 mbar", v=>parseFloat(v)>=18&&parseFloat(v)<=27],
-            ["Aanvoertemperatuur", cvMeet.aanvoerTemp, "°C", "< 90°C", v=>parseFloat(v)<90],
-            ["Retourtemperatuur", cvMeet.retourTemp, "°C", "< 80°C", v=>parseFloat(v)<80],
+            ["Waterdruk (koud/statisch)", cvMeet.waterdruk, "bar", "1,5–2,0 bar", v=>toNum(v)>=1.5&&toNum(v)<=2.0],
+            ["Gasdruk netwerk", cvMeet.gasdruk, "mbar", "20–25 mbar", v=>toNum(v)>=18&&toNum(v)<=27],
+            ["Aanvoertemperatuur", cvMeet.aanvoerTemp, "°C", "< 90°C", v=>toNum(v)<90],
+            ["Retourtemperatuur", cvMeet.retourTemp, "°C", "< 80°C", v=>toNum(v)<80],
           ].map(([l,v,u,n,chk])=>`<tr>
             <td>${l}</td>
             <td>${v||"—"} ${v&&v!=="—"?u:""}</td>
@@ -1561,7 +1706,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const accentWP = "#06B6D4";
       const wpMeet = data.wpMeet||{};
       const statusWP = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
-      const dtWp = (wpMeet.aanvoerTemp&&wpMeet.retourTemp) ? Math.abs(parseFloat(wpMeet.aanvoerTemp)-parseFloat(wpMeet.retourTemp)) : null;
+      const dtWp = (wpMeet.aanvoerTemp&&wpMeet.retourTemp) ? Math.abs(toNum(wpMeet.aanvoerTemp)-toNum(wpMeet.retourTemp)) : null;
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-warmtepomp</title>
         <style>${css(accentWP)}</style></head><body>
@@ -1598,9 +1743,9 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><td>ΔT verwarmingscircuit</td><td>${dtWp!==null?dtWp.toFixed(1):"—"} K</td><td>5–10K</td>
               <td ${dtWp!==null?(dtWp>=5&&dtWp<=10?'class="ok"':'class="nok"'):''}>${dtWp!==null?(dtWp>=5&&dtWp<=10?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
           <tr><td>Werkdruk</td><td>${wpMeet.werkdruk||"—"} bar</td><td>1,5–2,0 bar</td>
-              <td ${statusWP(wpMeet.werkdruk,v=>parseFloat(v)>=1.5&&parseFloat(v)<=2.5)}>${wpMeet.werkdruk&&wpMeet.werkdruk!=="—"?(parseFloat(wpMeet.werkdruk)>=1.5&&parseFloat(wpMeet.werkdruk)<=2.5?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
+              <td ${statusWP(wpMeet.werkdruk,v=>toNum(v)>=1.5&&toNum(v)<=2.5)}>${wpMeet.werkdruk&&wpMeet.werkdruk!=="—"?(toNum(wpMeet.werkdruk)>=1.5&&toNum(wpMeet.werkdruk)<=2.5?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
           <tr><td>Spanning</td><td>${wpMeet.spanning||"—"} V</td><td>207–253V</td>
-              <td ${statusWP(wpMeet.spanning,v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${wpMeet.spanning&&wpMeet.spanning!=="—"?(parseFloat(wpMeet.spanning)>=207&&parseFloat(wpMeet.spanning)<=253?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
+              <td ${statusWP(wpMeet.spanning,v=>toNum(v)>=207&&toNum(v)<=253)}>${wpMeet.spanning&&wpMeet.spanning!=="—"?(toNum(wpMeet.spanning)>=207&&toNum(wpMeet.spanning)<=253?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
         </table>
         <h2>Bron</h2>
         <table>
@@ -1662,13 +1807,13 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table>
           <tr>
             <td><strong>Spanning AC</strong></td>
-            <td ${statusPV(pvInstMet.spanAC, v=>parseFloat(v)>=207&&parseFloat(v)<=253)}>${pvInstMet.spanAC||"—"} V</td>
+            <td ${statusPV(pvInstMet.spanAC, v=>toNum(v)>=207&&toNum(v)<=253)}>${pvInstMet.spanAC||"—"} V</td>
             <td><strong>Z L-PE</strong></td>
-            <td ${statusPV(pvInstMet.zlpe, v=>parseFloat(v)<0.5)}>${pvInstMet.zlpe||"—"} Ω</td>
+            <td ${statusPV(pvInstMet.zlpe, v=>toNum(v)<0.5)}>${pvInstMet.zlpe||"—"} Ω</td>
           </tr>
           <tr>
             <td><strong>ISO totaal AC</strong></td>
-            <td ${statusPV(pvInstMet.isoAC, v=>parseFloat(v)>1)}>${pvInstMet.isoAC||"—"} MΩ</td>
+            <td ${statusPV(pvInstMet.isoAC, v=>toNum(v)>1)}>${pvInstMet.isoAC||"—"} MΩ</td>
             <td></td><td></td>
           </tr>
         </table>
@@ -1677,7 +1822,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><th>String</th><th>Panelen</th><th>Oriëntatie</th><th>ISO MΩ</th><th>Voc (V)</th><th>Isc (A)</th><th>Lengte (m)</th><th>MC4</th><th>Status</th></tr>
           ${strings.map((s,i)=>{
             const iso=pv(s.id,"iso"); const span=pv(s.id,"spanning"); const isc=pv(s.id,"isc"); const len=pv(s.id,"lengte"); const mc4=pv(s.id,"mc4");
-            const isoOk=iso!=="—"&&parseFloat(iso)>1;
+            const isoOk=iso!=="—"&&toNum(iso)>1;
             const allOk=isoOk&&mc4==="OK";
             return `<tr>
               <td>String ${i+1}</td>
@@ -1731,6 +1876,42 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     win.document.close();
   };
 
+  const verstuurEmail = async () => {
+    if (!data.email) {
+      setMailStatus("error");
+      setMailError("Geen e-mailadres van de klant bekend — vul dit in bij stap 1.");
+      return;
+    }
+    setMailStatus("sending");
+    setMailError("");
+    try {
+      // Persoonlijke aanhef toevoegen vóór de inhoud van het rapport
+      const introHtml = pdfHtml.replace(
+        "<body>",
+        `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
+          <p>Beste ${data.naam||""},</p>
+          <p>Hierbij ontvangt u het opleverrapport van de werkzaamheden uitgevoerd door ${data.instNaam||"uw installateur"}. Dit rapport voldoet aan de geldende normen en is automatisch gegenereerd via YourWkb.</p>
+        </div>`
+      );
+      const resp = await fetch("/api/verstuur-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: data.email,
+          replyTo: data.instEmail || undefined,
+          subject: `Opleverrapport ${data.projectId||""} – ${data.straat||""} ${data.huisnummer||""}`.trim(),
+          html: introHtml,
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || json.error) throw new Error(json.error || "Versturen mislukt");
+      setMailStatus("sent");
+    } catch (e) {
+      setMailStatus("error");
+      setMailError(e.message || "Onbekende fout");
+    }
+  };
+
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
@@ -1752,7 +1933,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <div style={{fontSize:13,color:K.muted,marginBottom:12}}>{data.straat} {data.huisnummer}, {data.postcode} {data.plaats}</div>
           <div style={{display:"flex",gap:20}}>
             {discipline==="groepenkast" && <>
-              <div><div style={{fontSize:20,fontWeight:800}}>{groepen.length}</div><div style={{fontSize:11,color:K.muted}}>Groepen</div></div>
+              <div><div style={{fontSize:20,fontWeight:800}}>{aardlekgroepen.length}</div><div style={{fontSize:11,color:K.muted}}>Aardlekgroepen</div></div>
               <div><div style={{fontSize:20,fontWeight:800}}>{automaten.reduce((s,a)=>s+a.aantal,0)}</div><div style={{fontSize:11,color:K.muted}}>Automaten</div></div>
             </>}
             {discipline==="cv" && <>
@@ -1821,8 +2002,33 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <button style={{...S.btn,background:K.green,color:"#fff"}} onClick={download}>
               🖨️ Openen &amp; opslaan als PDF
             </button>
+
+            {/* Mail rapport naar klant — via Resend */}
+            {mailStatus==="idle" && (
+              <button style={{...S.btn,background:K.blue,color:"#fff"}} onClick={verstuurEmail}>
+                📧 Mail rapport naar klant{data.email?` (${data.email})`:""}
+              </button>
+            )}
+            {mailStatus==="sending" && (
+              <div style={{...S.card,background:K.blueDim,border:`1px solid ${K.blue}44`,textAlign:"center",padding:16}}>
+                <div style={{fontSize:13,color:K.blue,fontWeight:600}}>📧 Bezig met versturen…</div>
+              </div>
+            )}
+            {mailStatus==="sent" && (
+              <div style={{...S.card,background:K.greenDim,border:`1px solid ${K.green}44`,textAlign:"center",padding:16}}>
+                <div style={{fontSize:13,color:K.green,fontWeight:700}}>✅ Verstuurd naar {data.email}</div>
+              </div>
+            )}
+            {mailStatus==="error" && (
+              <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
+                <div style={{fontSize:12,color:K.red,fontWeight:600,marginBottom:4}}>⚠️ Versturen mislukt</div>
+                {mailError && <div style={{fontSize:11,color:K.red,opacity:0.85,fontFamily:"monospace",marginBottom:8}}>{mailError}</div>}
+                <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginBottom:0}} onClick={verstuurEmail}>Opnieuw proberen</button>
+              </div>
+            )}
+
             <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onSend}>
-              📬 Versturen & archiveren
+              ✅ Markeren als opgeleverd
             </button>
           </>
         )}
@@ -2016,14 +2222,14 @@ const CV_FOTO_CPS = [
 
 function cvCrossChecks(meet) {
   const warnings = [];
-  const coVoor  = parseFloat(meet.coVoor);
-  const coNa    = parseFloat(meet.coNa);
-  const coRook  = parseFloat(meet.coRookgas);
-  const o2      = parseFloat(meet.o2);
-  const co2     = parseFloat(meet.co2);
-  const waterdr = parseFloat(meet.waterdruk);
-  const gasdr   = parseFloat(meet.gasdruk);
-  const rendement = parseFloat(meet.rendement);
+  const coVoor  = toNum(meet.coVoor);
+  const coNa    = toNum(meet.coNa);
+  const coRook  = toNum(meet.coRookgas);
+  const o2      = toNum(meet.o2);
+  const co2     = toNum(meet.co2);
+  const waterdr = toNum(meet.waterdruk);
+  const gasdr   = toNum(meet.gasdruk);
+  const rendement = toNum(meet.rendement);
 
   if (!isNaN(coVoor) && !isNaN(coNa) && coNa > coVoor + 3)
     warnings.push({ level:"red", msg:`CO omgeving stijgt van ${coVoor} naar ${coNa} ppm — mogelijke lekkage, installatie NIET in gebruik nemen` });
@@ -2152,13 +2358,13 @@ const WP_FOTO_CPS = [
 
 function wpCrossChecks(meet, materiaal) {
   const warnings = [];
-  const aanvoer = parseFloat(meet.aanvoerTemp);
-  const retour  = parseFloat(meet.retourTemp);
-  const werkdruk = parseFloat(meet.werkdruk);
-  const geluidGemeten = parseFloat(meet.geluidGemeten);
-  const geluidOpgave  = parseFloat(materiaal.geluidOpgave);
-  const stroom = parseFloat(meet.stroomopname);
-  const groepA = parseFloat((materiaal.groepAmpere||"").replace("A",""));
+  const aanvoer = toNum(meet.aanvoerTemp);
+  const retour  = toNum(meet.retourTemp);
+  const werkdruk = toNum(meet.werkdruk);
+  const geluidGemeten = toNum(meet.geluidGemeten);
+  const geluidOpgave  = toNum(materiaal.geluidOpgave);
+  const stroom = toNum(meet.stroomopname);
+  const groepA = toNum((materiaal.groepAmpere||"").replace("A",""));
 
   if (!isNaN(aanvoer) && !isNaN(retour)) {
     const dt = aanvoer - retour;
@@ -2273,11 +2479,11 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
   const materiaal = { geluidOpgave:data.geluidOpgave, groepAmpere:data.groepAmpere };
   const warnings = wpCrossChecks(meet, materiaal);
 
-  const tempOk    = v => parseFloat(v) > 0;
-  const werkdrOk  = v => { const n=parseFloat(v); return n>=1.5&&n<=2.5; };
-  const spanOk2   = v => { const n=parseFloat(v); return n>=207&&n<=253; };
+  const tempOk    = v => toNum(v) > 0;
+  const werkdrOk  = v => { const n=toNum(v); return n>=1.5&&n<=2.5; };
+  const spanOk2   = v => { const n=toNum(v); return n>=207&&n<=253; };
   const geluidOk  = v => {
-    const n = parseFloat(v); const opg = parseFloat(data.geluidOpgave);
+    const n = toNum(v); const opg = toNum(data.geluidOpgave);
     if (isNaN(opg)) return true;
     return n <= opg + 3;
   };
@@ -2316,7 +2522,7 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
             <MeetVeld k="spanning"    l="Spanning"           unit="V"   chk={spanOk2}  ph="bijv. 230"/>
           </div>
           {meet.aanvoerTemp&&meet.retourTemp&&(()=>{
-            const dt = Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp));
+            const dt = Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp));
             const ok = dt>=5&&dt<=10;
             return (
               <div style={{padding:"8px 12px",borderRadius:8,background:ok?K.greenDim:K.orangeDim}}>
@@ -2365,14 +2571,14 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
   const sm = (k,v) => { const u={...meet,[k]:v}; setMeet(u); onChange("cvMeet",u); };
   const warnings = cvCrossChecks(meet);
 
-  const coOmgOk  = v => parseFloat(v)<10;
-  const coRookOk = v => parseFloat(v)<200;
-  const o2Ok     = v => { const n=parseFloat(v); return n>=3&&n<=6; };
-  const co2Ok    = v => { const n=parseFloat(v); return n>=8&&n<=12; };
-  const waterOk  = v => { const n=parseFloat(v); return n>=1.5&&n<=2.5; };
-  const gasOk    = v => { const n=parseFloat(v); return n>=18&&n<=28; };
-  const rendOk   = v => parseFloat(v)>=90;
-  const tempOk   = v => parseFloat(v)>0;
+  const coOmgOk  = v => toNum(v)<10;
+  const coRookOk = v => toNum(v)<200;
+  const o2Ok     = v => { const n=toNum(v); return n>=3&&n<=6; };
+  const co2Ok    = v => { const n=toNum(v); return n>=8&&n<=12; };
+  const waterOk  = v => { const n=toNum(v); return n>=1.5&&n<=2.5; };
+  const gasOk    = v => { const n=toNum(v); return n>=18&&n<=28; };
+  const rendOk   = v => toNum(v)>=90;
+  const tempOk   = v => toNum(v)>0;
 
   const MeetVeld = ({k,l,unit,chk,ph}) => {
     const val=meet[k]||""; const ok=val&&chk(val); const err=val&&!chk(val);
@@ -2410,11 +2616,11 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
           {meet.coVoor&&meet.coNa&&(
             <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
-              background:parseFloat(meet.coNa)>parseFloat(meet.coVoor)+3?K.redDim:K.greenDim,
-              border:`1px solid ${parseFloat(meet.coNa)>parseFloat(meet.coVoor)+3?K.red:K.green}44`}}>
-              <span style={{fontSize:12,fontWeight:700,color:parseFloat(meet.coNa)>parseFloat(meet.coVoor)+3?K.red:K.green}}>
-                {parseFloat(meet.coNa)>parseFloat(meet.coVoor)+3
-                  ?`🔴 CO stijgt ${(parseFloat(meet.coNa)-parseFloat(meet.coVoor)).toFixed(0)} ppm — NIET in gebruik nemen`
+              background:toNum(meet.coNa)>toNum(meet.coVoor)+3?K.redDim:K.greenDim,
+              border:`1px solid ${toNum(meet.coNa)>toNum(meet.coVoor)+3?K.red:K.green}44`}}>
+              <span style={{fontSize:12,fontWeight:700,color:toNum(meet.coNa)>toNum(meet.coVoor)+3?K.red:K.green}}>
+                {toNum(meet.coNa)>toNum(meet.coVoor)+3
+                  ?`🔴 CO stijgt ${(toNum(meet.coNa)-toNum(meet.coVoor)).toFixed(0)} ppm — NIET in gebruik nemen`
                   :`✅ CO stabiel — geen lekkage geconstateerd`}
               </span>
             </div>
@@ -2454,10 +2660,10 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
           {meet.aanvoerTemp&&meet.retourTemp&&(
             <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
-              background:Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp))>=10?K.greenDim:K.orangeDim}}>
-              <span style={{fontSize:12,fontWeight:700,color:Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp))>=10?K.green:K.orange}}>
-                ΔT = {Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp)).toFixed(0)}K
-                {Math.abs(parseFloat(meet.aanvoerTemp)-parseFloat(meet.retourTemp))>=10?" ✓ OK":" ⚠ Controleer circulatie"}
+              background:Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp))>=10?K.greenDim:K.orangeDim}}>
+              <span style={{fontSize:12,fontWeight:700,color:Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp))>=10?K.green:K.orange}}>
+                ΔT = {Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp)).toFixed(0)}K
+                {Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp))>=10?" ✓ OK":" ⚠ Controleer circulatie"}
               </span>
             </div>
           )}
@@ -2574,18 +2780,19 @@ export default function App() {
   };
 
   // Stappen per discipline
-  const GK_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Groepen","Foto's","Meten","Versturen"];
+  const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Foto's (nieuw)","Versturen"];
   const PV_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
 
   const gkScreens = [
-    <StapKlant          key="klant"    data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("kiezen")}/>,
-    <StapInstallateur   key="inst"     data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapMeetapparatuur key="apparat"  data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={prev}/>,
-    <GK_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <GK_StapGroepen     key="groepen"  data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={GK_FOTO_CPS} onNext={next} onBack={prev}/>,
-    <GK_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <GK_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <GK_StapGroepen     key="groepen"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={GK_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const pvScreens = [
