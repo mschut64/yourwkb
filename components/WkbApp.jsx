@@ -148,6 +148,23 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const zlpe = toNum(instMet.zlpe);
   if (!isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
     warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum (0.5Ω) — bij uitbreiding opnieuw meten` });
+
+  // Visuele inspectiepunten — bij NOK is dit een directe afwijking
+  const inspectieLabels = {
+    beschermingscontacten: "Beschermingscontacten wandcontactdozen/metalen gestellen",
+    potentiaalvereffening: "Hoofd- en aanvullende potentiaalvereffening",
+    leidingberekeningen:   "Leidingberekeningen",
+    beveiligingen:         "Beveiligingen (incl. selectiviteit)",
+  };
+  Object.entries(inspectieLabels).forEach(([k,label]) => {
+    if (instMet[k] === "NOK")
+      warnings.push({ level:"red", msg:`${label}: NIET in orde bevonden — herstel vereist vóór ingebruikname` });
+  });
+  if (instMet.badkamerCAP === "Nee")
+    warnings.push({ level:"orange", msg:`Badkamer niet voorzien van Centraal Aardpunt — controleer of dit vereist is` });
+  if (instMet.rookmelder === "Ja" && instMet.rookmelderProjectie === "Nee")
+    warnings.push({ level:"orange", msg:`Rookmelder niet juist geprojecteerd volgens NEN2555` });
+
   return warnings;
 }
 
@@ -997,6 +1014,57 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
         </div>
 
+        {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
+        <div style={S.sTitle}>Visuele inspectie &amp; overige controles</div>
+        <div style={S.card}>
+          {[
+            {k:"beschermingscontacten", l:"Beschermingscontacten wandcontactdozen + metalen gestellen gecontroleerd door meting"},
+            {k:"potentiaalvereffening", l:"Hoofd- en aanvullende potentiaalvereffening gecontroleerd"},
+            {k:"leidingberekeningen",   l:"Leidingberekeningen op alle punten gecontroleerd"},
+            {k:"beveiligingen",         l:"Beveiligingen (incl. selectiviteit) op alle punten gecontroleerd"},
+          ].map(({k,l})=>(
+            <div key={k} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${K.border}`,cursor:"pointer"}}
+              onClick={()=>si(k, inst[k]==="OK"?"NOK":inst[k]==="NOK"?"":inst[k]||"OK")}>
+              <div style={{width:30,height:30,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,
+                background: inst[k]==="OK" ? K.greenDim : inst[k]==="NOK" ? K.redDim : K.surface,
+                border: `1px solid ${inst[k]==="OK"?K.green:inst[k]==="NOK"?K.red:K.border}`,
+                color: inst[k]==="OK" ? K.green : inst[k]==="NOK" ? K.red : K.muted,
+              }}>{inst[k]==="OK"?"✓":inst[k]==="NOK"?"✗":"?"}</div>
+              <div style={{flex:1,fontSize:12.5}}>{l}</div>
+            </div>
+          ))}
+          <div style={{fontSize:10,color:K.muted,marginTop:8}}>Tik om te wisselen: ? → ✓ OK → ✗ NOK → ?</div>
+
+          <div style={{height:1,background:K.border,margin:"14px 0"}}/>
+
+          <label style={S.label}>Badkamer voorzien van Centraal Aardpunt</label>
+          <div style={{display:"flex",gap:8,marginBottom:14}}>
+            <Pill small active={inst.badkamerCAP==="Ja"} onClick={()=>si("badkamerCAP","Ja")}>Ja</Pill>
+            <Pill small active={inst.badkamerCAP==="Nee"} onClick={()=>si("badkamerCAP","Nee")}>Nee</Pill>
+            <Pill small active={inst.badkamerCAP==="n.v.t."} onClick={()=>si("badkamerCAP","n.v.t.")}>n.v.t.</Pill>
+          </div>
+
+          <label style={S.label}>Rookmelder aanwezig</label>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <Pill small active={inst.rookmelder==="Ja"} onClick={()=>si("rookmelder","Ja")}>Ja</Pill>
+            <Pill small active={inst.rookmelder==="Nee"} onClick={()=>si("rookmelder","Nee")}>Nee</Pill>
+          </div>
+          {inst.rookmelder==="Ja" && (
+            <>
+              <label style={S.label}>Voeding rookmelder</label>
+              <div style={{display:"flex",gap:8,marginBottom:10}}>
+                <Pill small active={inst.rookmelderVoeding==="Batterij"} onClick={()=>si("rookmelderVoeding","Batterij")}>Batterij</Pill>
+                <Pill small active={inst.rookmelderVoeding==="230V"} onClick={()=>si("rookmelderVoeding","230V")}>230V</Pill>
+              </div>
+              <label style={S.label}>Juist geprojecteerd</label>
+              <div style={{display:"flex",gap:8}}>
+                <Pill small active={inst.rookmelderProjectie==="Ja"} onClick={()=>si("rookmelderProjectie","Ja")}>Ja</Pill>
+                <Pill small active={inst.rookmelderProjectie==="Nee"} onClick={()=>si("rookmelderProjectie","Nee")}>Nee</Pill>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Per aardlekgroep */}
         <div style={S.sTitle}>Per aardlekgroep — meten op 250V</div>
         <div style={{overflowX:"auto",display:"flex",gap:8,marginBottom:14,paddingBottom:4}}>
@@ -1504,7 +1572,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <h2>Conformverklaring</h2>
       <p style="font-size:9px;margin-bottom:12px">${verklaring}</p>
       <div style="border:1px solid #ddd;border-radius:4px;padding:12px;font-size:9px;background:#fafafa">
-        <p style="margin-bottom:8px">Ondergetekende verklaart dat bovenstaande gegevens en meetwaarden naar waarheid zijn ingevuld en dat de werkzaamheden zijn uitgevoerd conform ${norm}.</p>
+        <p style="margin-bottom:8px">Ondergetekende verklaart dat bovenstaande gegevens en meetwaarden naar waarheid zijn ingevuld.</p>
         <table style="border:none;margin-bottom:0">
           <tr>
             <td style="border:none;padding:2px 0;width:33%"><strong>Naam installateur</strong><br>${data.instNaam||"—"}</td>
@@ -1610,9 +1678,23 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             </tr>`;
           }).join("")}
         </table>
+        <h2>Visuele inspectie &amp; overige controles</h2>
+        <table>
+          <tr><th>Controlepunt</th><th>Resultaat</th></tr>
+          <tr><td>Beschermingscontacten wandcontactdozen + metalen gestellen gecontroleerd door meting</td>
+              <td ${instMet.beschermingscontacten==="OK"?'class="ok"':instMet.beschermingscontacten==="NOK"?'class="nok"':''}>${instMet.beschermingscontacten==="OK"?"✓ OK":instMet.beschermingscontacten==="NOK"?"✗ NOK":"—"}</td></tr>
+          <tr><td>Hoofd- en aanvullende potentiaalvereffening gecontroleerd</td>
+              <td ${instMet.potentiaalvereffening==="OK"?'class="ok"':instMet.potentiaalvereffening==="NOK"?'class="nok"':''}>${instMet.potentiaalvereffening==="OK"?"✓ OK":instMet.potentiaalvereffening==="NOK"?"✗ NOK":"—"}</td></tr>
+          <tr><td>Leidingberekeningen op alle punten gecontroleerd</td>
+              <td ${instMet.leidingberekeningen==="OK"?'class="ok"':instMet.leidingberekeningen==="NOK"?'class="nok"':''}>${instMet.leidingberekeningen==="OK"?"✓ OK":instMet.leidingberekeningen==="NOK"?"✗ NOK":"—"}</td></tr>
+          <tr><td>Beveiligingen (incl. selectiviteit) op alle punten gecontroleerd</td>
+              <td ${instMet.beveiligingen==="OK"?'class="ok"':instMet.beveiligingen==="NOK"?'class="nok"':''}>${instMet.beveiligingen==="OK"?"✓ OK":instMet.beveiligingen==="NOK"?"✗ NOK":"—"}</td></tr>
+          <tr><td>Badkamer voorzien van Centraal Aardpunt</td><td>${instMet.badkamerCAP||"—"}</td></tr>
+          <tr><td>Rookmelder aanwezig</td><td>${instMet.rookmelder||"—"}${instMet.rookmelder==="Ja"?` (voeding: ${instMet.rookmelderVoeding||"—"}, juist geprojecteerd: ${instMet.rookmelderProjectie||"—"})`:""}</td></tr>
+        </table>
         ${waarschuwingHtml()}
         ${fotosHtml(GK_FOTO_CPS)}
-        ${signHtml("NEN1010","De installatie is aangelegd conform de huidige NEN1010. De visuele controle en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
+        ${signHtml("NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 §4.1, §4.2 en §4.3","De installatie is aangelegd conform de huidige NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 hoofdstuk §4.1, §4.2 en §4.3. De visuele controle en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
         </body></html>`;
 
     // ── COMBIKETEL RAPPORT ────────────────────────────────────────
