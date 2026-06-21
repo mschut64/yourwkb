@@ -1633,6 +1633,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const metFoto = (checkpoints||[]).filter(cp => fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image"));
       if (metFoto.length === 0) return "";
       return `
+      <!--FOTOSECTIE-START-->
       <h2 style="page-break-before:always">Fotodocumentatie</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${metFoto.map(cp=>`
@@ -1640,7 +1641,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <img src="${fotos[cp.id]}" style="width:100%;height:auto;display:block"/>
             <div style="padding:5px 8px;font-size:8px;font-weight:bold;background:#f5f5f5">${cp.icon} ${cp.label}</div>
           </div>`).join("")}
-      </div>`;
+      </div>
+      <!--FOTOSECTIE-EINDE-->`;
     };
 
     const signHtml = (norm, verklaring) => `
@@ -2044,8 +2046,18 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     setMailStatus("sending");
     setMailError("");
     try {
+      // Foto's worden NIET meegestuurd in de e-mail zelf — bij disciplines met
+      // veel verplichte foto's (PV/CV/WP) maakt dat de payload te groot voor
+      // de server (>4,5MB wordt door Vercel geweigerd, nog vóórdat onze eigen
+      // code het ziet). Foto's blijven gewoon in de PDF-versie staan.
+      const fotoNotitie = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:10px;margin:10px 0;font-size:9px;color:#92400e">📷 De foto's bij dit rapport staan niet in deze e-mail (i.v.m. bestandsgrootte). Vraag de installateur naar de PDF-versie met foto's, of laat deze nasturen.</div>`;
+      const htmlZonderFotos = pdfHtml.replace(
+        /<!--FOTOSECTIE-START-->[\s\S]*?<!--FOTOSECTIE-EINDE-->/,
+        fotoNotitie
+      );
+
       // Persoonlijke aanhef toevoegen vóór de inhoud van het rapport
-      const introHtml = pdfHtml.replace(
+      const introHtml = htmlZonderFotos.replace(
         "<body>",
         `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
           <p>Beste ${data.naam||""},</p>
@@ -2062,8 +2074,16 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           html: introHtml,
         }),
       });
-      const json = await resp.json();
-      if (!resp.ok || json.error) throw new Error(json.error || "Versturen mislukt");
+
+      // Veilig parsen: lees eerst als tekst, probeer dan als JSON te lezen.
+      // Voorkomt een crash als de server een lege/HTML-foutpagina teruggeeft
+      // (bijv. bij een payload die alsnog te groot is, of een timeout).
+      const raw = await resp.text();
+      let json = {};
+      try { json = raw ? JSON.parse(raw) : {}; }
+      catch { throw new Error(`Onverwachte serverfout (status ${resp.status}) — probeer het later opnieuw.`); }
+
+      if (!resp.ok || json.error) throw new Error(json.error || `Versturen mislukt (status ${resp.status})`);
       setMailStatus("sent");
     } catch (e) {
       setMailStatus("error");
