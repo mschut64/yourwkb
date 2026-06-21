@@ -1620,6 +1620,17 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         ${allWarnings.map(w=>`<p>${w.level==="red"?"🔴":"⚠️"} ${w.msg}</p>`).join("")}
       </div>` : "";
 
+    // YourWkb-logo als inline SVG (geen externe afbeelding — werkt ook in
+    // e-mailclients die externe afbeeldingen standaard blokkeren).
+    const logoHtml = () => `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <svg width="34" height="34" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+          <rect width="34" height="34" rx="8" fill="#F5C518"/>
+          <path d="M19.5 6 L11 18.5 H16 L14.5 28 L23.5 15 H18 L19.5 6 Z" fill="#111318"/>
+        </svg>
+        <span style="font-family:Arial,sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.3px;color:#111318">YourWkb</span>
+      </div>`;
+
     const aiHtml = () => data.aiAnalyse ? `
       <h2>Technische beoordeling</h2>
       <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap;background:#fafaff">${data.aiAnalyse}</div>` : "";
@@ -1673,6 +1684,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">Elektrische installatie · NEN1010 deel 6</p>
         ${nawHtml()}
@@ -1783,6 +1795,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-combiketel</title>
         <style>${css(accentCV)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">CV-installatie · BRL6000-25 · Gasketelwet</p>
         ${nawHtml()}
@@ -1871,6 +1884,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-warmtepomp</title>
         <style>${css(accentWP)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">Warmtepompinstallatie · BRL6000-21</p>
         ${nawHtml()}
@@ -1935,6 +1949,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-zonnepanelen</title>
         <style>${css(accentPV)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">PV-installatie · NEN1010:712 · SCIOS Scope 12</p>
         ${nawHtml()}
