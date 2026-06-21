@@ -1489,26 +1489,41 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
 
     // ── Gedeelde CSS ──────────────────────────────────────────────
     const css = (accent) => `
-      * { box-sizing:border-box; margin:0; padding:0; }
+      * { box-sizing:border-box; margin:0; padding:0;
+          -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
       body { font-family: Arial, sans-serif; font-size:10px; color:#222; background:#fff; padding:16px; }
       h1 { font-size:18px; color:${accent}; margin-bottom:2px; }
-      h2 { font-size:11px; color:${accent}; text-transform:uppercase; letter-spacing:0.5px; margin:12px 0 4px; border-bottom:2px solid ${accent}; padding-bottom:2px; }
-      table { width:100%; border-collapse:collapse; margin-bottom:8px; }
+      h2 { font-size:11px; color:${accent}; text-transform:uppercase; letter-spacing:0.5px; margin:12px 0 4px; border-bottom:2px solid ${accent}; padding-bottom:2px; page-break-after:avoid; }
+      table { width:100%; border-collapse:collapse; margin-bottom:8px; page-break-inside:avoid; }
       td, th { border:1px solid #ddd; padding:4px 6px; font-size:9px; }
       th { background:${accent}; color:#fff; font-weight:bold; text-align:left; }
       tr:nth-child(even) td { background:#f9f9f9; }
       .ok  { color:#166534; font-weight:bold; background:#dcfce7; }
       .nok { color:#991b1b; font-weight:bold; background:#fee2e2; }
       .warn{ color:#92400e; font-weight:bold; background:#fef3c7; }
-      .naw { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+      .naw { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; page-break-inside:avoid; }
       .naw-box { border:1px solid #ddd; padding:8px; border-radius:4px; }
       .naw-box strong { display:block; color:${accent}; font-size:9px; text-transform:uppercase; margin-bottom:4px; }
       .naw-box p { margin:1px 0; font-size:9px; }
-      .sign { margin-top:32px; border-top:1px solid #ddd; padding-top:12px; font-size:9px; }
+      .sign { margin-top:32px; border-top:1px solid #ddd; padding-top:12px; font-size:9px; page-break-inside:avoid; }
       .sign-line { display:inline-block; width:200px; border-bottom:1px solid #333; margin-right:32px; height:24px; }
-      .warn-box { background:#fef3c7; border:1px solid #f59e0b; border-radius:4px; padding:8px; margin:8px 0; }
+      .warn-box { background:#fef3c7; border:1px solid #f59e0b; border-radius:4px; padding:8px; margin:8px 0; page-break-inside:avoid; }
       .warn-box p { margin:2px 0; font-size:9px; color:#92400e; }
-      @media print { @page { margin:10mm; } }
+      /* Voorkomt dat Gmail/Outlook automatisch gedetecteerde adressen en e-mailadressen
+         blauw/onderstreept tonen — houdt de huisstijl-kleuren intact, ook in mailclients. */
+      a, a:link, a:visited, a:hover, a:active,
+      span[style*="color"] a { color:inherit !important; text-decoration:none !important; font-weight:inherit !important; cursor:default !important; }
+      @media print {
+        @page { margin:10mm; }
+        body { padding:0; }
+        h2 { page-break-after:avoid; }
+        table, .naw-box, .warn-box, .sign { page-break-inside:avoid; }
+        th, .ok, .nok, .warn, .warn-box, tr:nth-child(even) td {
+          -webkit-print-color-adjust:exact !important;
+          print-color-adjust:exact !important;
+          color-adjust:exact !important;
+        }
+      }
     `;
 
     // ── Helpers ───────────────────────────────────────────────────
