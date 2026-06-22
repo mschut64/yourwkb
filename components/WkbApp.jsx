@@ -76,8 +76,13 @@ const PV_OMVORMER_FABS = ["SMA","Fronius","Enphase","Huawei","Growatt","Solis","
 const PV_PANEEL_FABS   = ["Jinko Solar","LONGi","Canadian Solar","Trina Solar","SunPower","REC Group","Risen","JA Solar","Q CELLS"];
 const PV_BEVESTIGING   = ["Schletter","K2 Systems","Esdec","SolarEdge Mounting","Renusol","Van der Valk","IronRidge"];
 
-const PV_FOTO_CPS = [
-  { id:"voor",        label:"Situatie dak vóór installatie",     icon:"📦", required:true  },
+// Foto's vóór de werkzaamheden (bestaande situatie)
+const PV_FOTO_CPS_VOOR = [
+  { id:"voor_overzicht", label:"Bestaande situatie dak — overzicht",              icon:"📦", required:true },
+  { id:"voor_detail",    label:"Bestaande dakconstructie — detail (vóór montage)",icon:"🔍", required:true },
+];
+// Foto's ná de werkzaamheden (nieuwe situatie)
+const PV_FOTO_CPS_NA = [
   { id:"constructie", label:"Bevestigingssysteem gemonteerd",    icon:"🔩", required:true  },
   { id:"panelen",     label:"Panelen geplaatst (totaaloverzicht)",icon:"☀️", required:true  },
   { id:"mc4",         label:"MC4 connectoren aangebracht",       icon:"🔌", required:true  },
@@ -87,8 +92,11 @@ const PV_FOTO_CPS = [
   { id:"omvormer",    label:"Omvormer gemonteerd + aangesloten", icon:"📟", required:true  },
   { id:"ballast",     label:"Ballastplan aanwezig (foto)",       icon:"📋", required:true  },
   { id:"legplan",     label:"Legplan aanwezig (foto)",           icon:"📐", required:true  },
-  { id:"display",     label:"Omvormer display in bedrijf",       icon:"✅", required:false },
+  { id:"na_afgewerkt",label:"Nieuwe situatie — eindresultaat dak (afgewerkt)", icon:"✅", required:true  },
+  { id:"display",     label:"Omvormer display in bedrijf",       icon:"📺", required:false },
 ];
+// Voor het rapport: alle PV foto checkpoints samen
+const PV_FOTO_CPS = [...PV_FOTO_CPS_VOOR, ...PV_FOTO_CPS_NA];
 
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
@@ -224,12 +232,66 @@ const StatusTag = ({ level }) => {
   return <span style={{ ...S.tag, background:c.bg, color:c.color }}>{c.label}</span>;
 };
 
+// ─── LEERVIDEO'S ──────────────────────────────────────────────────────────────
+// Centrale plek voor alle uitlegvideo's. Vul hier de echte links in zodra ze
+// beschikbaar zijn — de rest van de app hoeft dan niet aangepast te worden.
+// Key = vrij te kiezen onderwerp-ID, gebruikt door <LeerIcoon onderwerp="..." />
+const LEERVIDEOS = {
+  iso_meting: {
+    titel: "Isolatieweerstand meten — uitleg",
+    url: "https://voorbeeld.nl/video-iso-meting", // TODO: vervang door echte link
+  },
+  stelsel_tn_tt: {
+    titel: "TN vs TT-stelsel: wat is het verschil?",
+    url: "https://voorbeeld.nl/video-stelsel", // TODO: vervang door echte link
+  },
+  aardlekgroep: {
+    titel: "Aardlekgroep & hoogst afgaande groep uitgelegd",
+    url: "https://voorbeeld.nl/video-aardlekgroep", // TODO: vervang door echte link
+  },
+  delta_t_i: {
+    titel: "ΔT en ΔI: wat meet je nu eigenlijk?",
+    url: "https://voorbeeld.nl/video-delta", // TODO: vervang door echte link
+  },
+  potentiaalvereffening: {
+    titel: "Potentiaalvereffening — hoofd en aanvullend",
+    url: "https://voorbeeld.nl/video-potentiaalvereffening", // TODO: vervang door echte link
+  },
+  selectiviteit: {
+    titel: "Selectiviteit van beveiligingen",
+    url: "https://voorbeeld.nl/video-selectiviteit", // TODO: vervang door echte link
+  },
+};
+
+// Klein ⓘ-icoontje dat naar een uitlegvideo linkt. Toon alleen als het
+// onderwerp in LEERVIDEOS bestaat — voorkomt kapotte links per ongeluk.
+const LeerIcoon = ({ onderwerp }) => {
+  const video = LEERVIDEOS[onderwerp];
+  if (!video) return null;
+  return (
+    <a href={video.url} target="_blank" rel="noopener noreferrer"
+      onClick={e => e.stopPropagation()}
+      title={video.titel}
+      style={{
+        display:"inline-flex", alignItems:"center", justifyContent:"center",
+        width:16, height:16, borderRadius:"50%",
+        background:K.purpleDim, color:K.purple,
+        fontSize:11, fontWeight:700, textDecoration:"none",
+        marginLeft:5, flexShrink:0, verticalAlign:"middle",
+        border:`1px solid ${K.purple}55`,
+      }}>
+      ⓘ
+    </a>
+  );
+};
+
 const MiniInput = ({ value, onChange, placeholder, unit, width=80 }) => (
   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
     <input style={{ ...S.input, width, padding:"8px 10px", fontSize:13 }}
       value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"—"}/>
     {unit && <span style={{ fontSize:11, color:K.muted, whiteSpace:"nowrap" }}>{unit}</span>}
   </div>
+
 );
 
 const MiniSelect = ({ value, onChange, options, width=90 }) => (
@@ -747,7 +809,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
       </div>
       <div style={S.body}>
         <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
-          Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. Je meet straks 1× per aardlekgroep — op de <strong>hoogst afgaande groep</strong> (de zwaarst belaste eindgroep in dat cluster).
+          Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. Je meet straks 1× per aardlekgroep — op de <strong>hoogst afgaande groep</strong> (de zwaarst belaste eindgroep in dat cluster). <LeerIcoon onderwerp="aardlekgroep"/>
         </div>
         {aardlekgroepen.map((ag,i)=>{
           const hoogstId = ag.hoogstId || autoHoogst(ag);
@@ -844,8 +906,10 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
 }
 
 function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
-  const [fotos,setFotos] = useState(data.fotos||{});
-  const [kiesVoor,setKiesVoor] = useState(null); // checkpoint id waarvoor camera/galerij keuze open staat
+  // Gebruik data.fotos direct (geen lokale kopie) — zo overschrijven
+  // de VOOR- en NA-stappen elkaars foto's nooit.
+  const fotos = data.fotos||{};
+  const [kiesVoor,setKiesVoor] = useState(null);
   const cameraRef = useRef(null);
   const galerijRef = useRef(null);
 
@@ -869,18 +933,20 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
   const verwerkFoto = async (file) => {
     if (!file || !kiesVoor) return;
     const dataUrl = await comprimeer(file);
-    const u = {...fotos, [kiesVoor]: dataUrl};
-    setFotos(u); onChange("fotos",u);
+    // Merge altijd met data.fotos (niet met een lokale kopie) —
+    // zo blijven VOOR-foto's bewaard als de NA-stap een foto toevoegt.
+    const u = {...(data.fotos||{}), [kiesVoor]: dataUrl};
+    onChange("fotos", u);
     setKiesVoor(null);
   };
 
   const verwijderFoto = (id) => {
-    const u = {...fotos}; delete u[id];
-    setFotos(u); onChange("fotos",u);
+    const u = {...(data.fotos||{})}; delete u[id];
+    onChange("fotos", u);
   };
 
   const verplichtDone = checkpoints.filter(c=>c.required).every(c=>fotos[c.id]);
-  const done = Object.values(fotos).filter(Boolean).length;
+  const done = checkpoints.filter(c=>fotos[c.id]).length;
 
   return (
     <div>
@@ -977,7 +1043,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.card}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
             <div><label style={S.label}>Voorzekering</label><MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/></div>
-            <div><label style={S.label}>Stelsel</label>
+            <div><label style={S.label}>Stelsel<LeerIcoon onderwerp="stelsel_tn_tt"/></label>
               <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
             </div>
           </div>
@@ -1019,10 +1085,10 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.card}>
           {[
             {k:"beschermingscontacten", l:"Beschermingscontacten wandcontactdozen + metalen gestellen gecontroleerd door meting"},
-            {k:"potentiaalvereffening", l:"Hoofd- en aanvullende potentiaalvereffening gecontroleerd"},
+            {k:"potentiaalvereffening", l:"Hoofd- en aanvullende potentiaalvereffening gecontroleerd", video:"potentiaalvereffening"},
             {k:"leidingberekeningen",   l:"Leidingberekeningen op alle punten gecontroleerd"},
-            {k:"beveiligingen",         l:"Beveiligingen (incl. selectiviteit) op alle punten gecontroleerd"},
-          ].map(({k,l})=>(
+            {k:"beveiligingen",         l:"Beveiligingen (incl. selectiviteit) op alle punten gecontroleerd", video:"selectiviteit"},
+          ].map(({k,l,video})=>(
             <div key={k} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${K.border}`,cursor:"pointer"}}
               onClick={()=>si(k, inst[k]==="OK"?"NOK":inst[k]==="NOK"?"":inst[k]||"OK")}>
               <div style={{width:30,height:30,borderRadius:8,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,
@@ -1030,7 +1096,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                 border: `1px solid ${inst[k]==="OK"?K.green:inst[k]==="NOK"?K.red:K.border}`,
                 color: inst[k]==="OK" ? K.green : inst[k]==="NOK" ? K.red : K.muted,
               }}>{inst[k]==="OK"?"✓":inst[k]==="NOK"?"✗":"?"}</div>
-              <div style={{flex:1,fontSize:12.5}}>{l}</div>
+              <div style={{flex:1,fontSize:12.5}}>{l}{video && <LeerIcoon onderwerp={video}/>}</div>
             </div>
           ))}
           <div style={{fontSize:10,color:K.muted,marginTop:8}}>Tik om te wisselen: ? → ✓ OK → ✗ NOK → ?</div>
@@ -1106,7 +1172,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
             {/* ISO velden per fase type */}
             <div style={{marginBottom:12}}>
-              <label style={S.label}>Isolatieweerstand (MΩ) — 250V — norm {isoNormLabel}</label>
+              <label style={S.label}>Isolatieweerstand (MΩ) — 250V — norm {isoNormLabel}<LeerIcoon onderwerp="iso_meting"/></label>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {isoVelden.map(({k,l})=>{
                   const val = gv(cag.id,k);
@@ -1140,7 +1206,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {cag.rcdType!=="geen" && (
                 <>
                   <div>
-                    <label style={S.label}>ΔT ms — norm ≤{dtNorm}ms ({stelsel})</label>
+                    <label style={S.label}>ΔT ms — norm ≤{dtNorm}ms ({stelsel})<LeerIcoon onderwerp="delta_t_i"/></label>
                     <input style={{...S.input,fontSize:15,fontWeight:700,
                       background:gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.greenDim:K.redDim):K.surface,
                       border:`1px solid ${gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.green:K.red):K.border}`}}
@@ -1217,7 +1283,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal PV</div><div style={{fontSize:11,color:K.muted}}>Stap 4 · Zonnepanelen</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal PV</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Zonnepanelen</div></div>
       </div>
       <div style={S.body}>
         {/* Panelen */}
@@ -1347,7 +1413,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden PV</div><div style={{fontSize:11,color:K.muted}}>Stap 7 · NEN1010:712</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden PV</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN1010:712</div></div>
       </div>
       <div style={S.body}>
 
@@ -1558,6 +1624,17 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         ${allWarnings.map(w=>`<p>${w.level==="red"?"🔴":"⚠️"} ${w.msg}</p>`).join("")}
       </div>` : "";
 
+    // YourWkb-logo als inline SVG (geen externe afbeelding — werkt ook in
+    // e-mailclients die externe afbeeldingen standaard blokkeren).
+    const logoHtml = () => `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <svg width="34" height="34" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+          <rect width="34" height="34" rx="8" fill="#F5C518"/>
+          <path d="M19.5 6 L11 18.5 H16 L14.5 28 L23.5 15 H18 L19.5 6 Z" fill="#111318"/>
+        </svg>
+        <span style="font-family:Arial,sans-serif;font-weight:800;font-size:17px;letter-spacing:-0.3px;color:#111318">YourWkb</span>
+      </div>`;
+
     const aiHtml = () => data.aiAnalyse ? `
       <h2>Technische beoordeling</h2>
       <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap;background:#fafaff">${data.aiAnalyse}</div>` : "";
@@ -1571,6 +1648,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const metFoto = (checkpoints||[]).filter(cp => fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image"));
       if (metFoto.length === 0) return "";
       return `
+      <!--FOTOSECTIE-START-->
       <h2 style="page-break-before:always">Fotodocumentatie</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         ${metFoto.map(cp=>`
@@ -1578,7 +1656,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <img src="${fotos[cp.id]}" style="width:100%;height:auto;display:block"/>
             <div style="padding:5px 8px;font-size:8px;font-weight:bold;background:#f5f5f5">${cp.icon} ${cp.label}</div>
           </div>`).join("")}
-      </div>`;
+      </div>
+      <!--FOTOSECTIE-EINDE-->`;
     };
 
     const signHtml = (norm, verklaring) => `
@@ -1609,6 +1688,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">Elektrische installatie · NEN1010 deel 6</p>
         ${nawHtml()}
@@ -1719,6 +1799,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-combiketel</title>
         <style>${css(accentCV)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">CV-installatie · BRL6000-25 · Gasketelwet</p>
         ${nawHtml()}
@@ -1807,6 +1888,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-warmtepomp</title>
         <style>${css(accentWP)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">Warmtepompinstallatie · BRL6000-21</p>
         ${nawHtml()}
@@ -1871,6 +1953,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-zonnepanelen</title>
         <style>${css(accentPV)}</style></head><body>
+        ${logoHtml()}
         <h1>Opleveringsrapport</h1>
         <p style="font-size:11px;color:#555;margin-bottom:12px">PV-installatie · NEN1010:712 · SCIOS Scope 12</p>
         ${nawHtml()}
@@ -1982,8 +2065,18 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     setMailStatus("sending");
     setMailError("");
     try {
+      // Foto's worden NIET meegestuurd in de e-mail zelf — bij disciplines met
+      // veel verplichte foto's (PV/CV/WP) maakt dat de payload te groot voor
+      // de server (>4,5MB wordt door Vercel geweigerd, nog vóórdat onze eigen
+      // code het ziet). Foto's blijven gewoon in de PDF-versie staan.
+      const fotoNotitie = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:10px;margin:10px 0;font-size:9px;color:#92400e">📷 De foto's bij dit rapport staan niet in deze e-mail (i.v.m. bestandsgrootte). Vraag de installateur naar de PDF-versie met foto's, of laat deze nasturen.</div>`;
+      const htmlZonderFotos = pdfHtml.replace(
+        /<!--FOTOSECTIE-START-->[\s\S]*?<!--FOTOSECTIE-EINDE-->/,
+        fotoNotitie
+      );
+
       // Persoonlijke aanhef toevoegen vóór de inhoud van het rapport
-      const introHtml = pdfHtml.replace(
+      const introHtml = htmlZonderFotos.replace(
         "<body>",
         `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
           <p>Beste ${data.naam||""},</p>
@@ -2000,8 +2093,16 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           html: introHtml,
         }),
       });
-      const json = await resp.json();
-      if (!resp.ok || json.error) throw new Error(json.error || "Versturen mislukt");
+
+      // Veilig parsen: lees eerst als tekst, probeer dan als JSON te lezen.
+      // Voorkomt een crash als de server een lege/HTML-foutpagina teruggeeft
+      // (bijv. bij een payload die alsnog te groot is, of een timeout).
+      const raw = await resp.text();
+      let json = {};
+      try { json = raw ? JSON.parse(raw) : {}; }
+      catch { throw new Error(`Onverwachte serverfout (status ${resp.status}) — probeer het later opnieuw.`); }
+
+      if (!resp.ok || json.error) throw new Error(json.error || `Versturen mislukt (status ${resp.status})`);
       setMailStatus("sent");
     } catch (e) {
       setMailStatus("error");
@@ -2303,19 +2404,26 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
 const CV_KETEL_FABS = ["Intergas","Remeha","Nefit/Bosch","Vaillant","Worcester Bosch","Viessmann","Baxi","AWB","Atag","De Dietrich"];
 const CV_AFVOER_TYPES = ["80/125mm concentrisch","60/100mm concentrisch","80mm apart","100mm apart","60mm apart"];
 
-const CV_FOTO_CPS = [
-  { id:"voor",       label:"Situatie vóór werkzaamheden",     icon:"📦", required:true  },
+// Foto's vóór de werkzaamheden (bestaande situatie)
+const CV_FOTO_CPS_VOOR = [
+  { id:"voor_overzicht", label:"Bestaande situatie — overzicht ruimte",         icon:"📦", required:true },
+  { id:"voor_detail",    label:"Bestaande aansluitpunten vóór vervanging",      icon:"🔍", required:true },
+];
+// Foto's ná de werkzaamheden (nieuwe situatie)
+const CV_FOTO_CPS_NA = [
   { id:"gemonteerd", label:"Ketel gemonteerd aan wand",        icon:"🔥", required:true  },
   { id:"gas",        label:"Gasaansluiting en afsluiter",      icon:"🔧", required:true  },
   { id:"rookgas",    label:"Rookgasafvoer aangebracht",        icon:"💨", required:true  },
   { id:"lucht",      label:"Luchttoevoer (type C)",            icon:"🌬️", required:true  },
   { id:"condens",    label:"Condensafvoer",                    icon:"💧", required:true  },
   { id:"expansie",   label:"Expansievat + veiligheidsventiel", icon:"⚙️", required:true  },
-  { id:"bedrijf",    label:"Ketel in bedrijf",                 icon:"✅", required:true  },
+  { id:"bedrijf",    label:"Ketel in bedrijf (nieuwe situatie, afgewerkt)", icon:"✅", required:true  },
   { id:"display",    label:"Display / bedieningspaneel",       icon:"📟", required:true  },
   { id:"meting",     label:"Meetresultaten analyser (foto)",   icon:"📊", required:true  },
   { id:"label",      label:"Typeplaatje ketel",                icon:"🏷️", required:false },
 ];
+// Voor het rapport: alle CV foto checkpoints samen
+const CV_FOTO_CPS = [...CV_FOTO_CPS_VOOR, ...CV_FOTO_CPS_NA];
 
 function cvCrossChecks(meet) {
   const warnings = [];
@@ -2356,7 +2464,7 @@ function CV_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal CV</div><div style={{fontSize:11,color:K.muted}}>Stap 4 · Combiketel</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal CV</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Combiketel</div></div>
       </div>
       <div style={S.body}>
         <div style={S.sTitle}>Ketel</div>
@@ -2440,8 +2548,13 @@ function CV_StapMateriaal({ data, onChange, onNext, onBack }) {
 const WP_MERK_FABS = ["Daikin","Mitsubishi Electric","Nibe","Itho Daalderop","Vaillant","Bosch","Panasonic","Viessmann","Stiebel Eltron","Atlantic","Toshiba","LG"];
 const WP_KOUDEMIDDEL = ["R32","R290 (propaan)","R454B","R410A"];
 
-const WP_FOTO_CPS = [
-  { id:"voor",        label:"Situatie vóór installatie",         icon:"📦", required:true  },
+// Foto's vóór de werkzaamheden (bestaande situatie)
+const WP_FOTO_CPS_VOOR = [
+  { id:"voor_overzicht", label:"Bestaande situatie — overzicht locatie",            icon:"📦", required:true },
+  { id:"voor_detail",    label:"Bestaande aansluitpunten/fundatie vóór installatie",icon:"🔍", required:true },
+];
+// Foto's ná de werkzaamheden (nieuwe situatie)
+const WP_FOTO_CPS_NA = [
   { id:"buitenunit",  label:"Buitenunit gemonteerd",              icon:"🌡️", required:true  },
   { id:"trilling",    label:"Trillingsdemping / fundatie",        icon:"🔩", required:true  },
   { id:"binnenunit",  label:"Binnenunit / boiler gemonteerd",     icon:"🏠", required:true  },
@@ -2449,9 +2562,11 @@ const WP_FOTO_CPS = [
   { id:"condensafv",  label:"Condensafvoer buitenunit",           icon:"💧", required:true  },
   { id:"elektrisch",  label:"Elektrische aansluiting + groep",    icon:"🔌", required:true  },
   { id:"expansie",    label:"Expansievat + veiligheidsventiel",   icon:"⚙️", required:true  },
-  { id:"bedrijf",     label:"Systeem in bedrijf / display",       icon:"✅", required:true  },
+  { id:"bedrijf",     label:"Systeem in bedrijf (nieuwe situatie, afgewerkt)", icon:"✅", required:true  },
   { id:"label",       label:"Typeplaatje + F-gassen sticker",     icon:"🏷️", required:false },
 ];
+// Voor het rapport: alle WP foto checkpoints samen
+const WP_FOTO_CPS = [...WP_FOTO_CPS_VOOR, ...WP_FOTO_CPS_NA];
 
 function wpCrossChecks(meet, materiaal) {
   const warnings = [];
@@ -2485,7 +2600,7 @@ function WP_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 4 · Warmtepomp</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Warmtepomp</div></div>
       </div>
       <div style={S.body}>
         <div style={S.sTitle}>Type systeem</div>
@@ -2698,7 +2813,7 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden CV</div><div style={{fontSize:11,color:K.muted}}>Stap 7 · BRL6000-25</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden CV</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · BRL6000-25</div></div>
       </div>
       <div style={S.body}>
 
@@ -2878,7 +2993,7 @@ export default function App() {
 
   // Stappen per discipline
   const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Foto's (nieuw)","Versturen"];
-  const PV_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
+  const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
 
   const gkScreens = [
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("kiezen")}/>,
@@ -2893,36 +3008,39 @@ export default function App() {
   ];
 
   const pvScreens = [
-    <StapKlant          key="klant"    data={job} onChange={upd} discipline="pv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
-    <StapInstallateur   key="inst"     data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapMeetapparatuur key="apparat"  data={job} onChange={upd} discipline="pv" onNext={next} onBack={prev}/>,
-    <PV_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={PV_FOTO_CPS} onNext={next} onBack={prev}/>,
-    <PV_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="pv" onSend={markeerOpgeleverd} onBack={prev}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="pv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="pv" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={PV_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <PV_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <PV_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={PV_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="pv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
-  const CV_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
-  const WP_STEPS = ["Klant","Installateur","Apparatuur","Materiaal","Foto's","Meten","Versturen"];
+  const CV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
+  const WP_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
 
   const cvScreens = [
-    <StapKlant          key="klant"    data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
-    <StapInstallateur   key="inst"     data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapMeetapparatuur key="apparat"  data={job} onChange={upd} discipline="cv" onNext={next} onBack={prev}/>,
-    <CV_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={CV_FOTO_CPS} onNext={next} onBack={prev}/>,
-    <CV_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="cv" onSend={markeerOpgeleverd} onBack={prev}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="cv" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={CV_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <CV_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <CV_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={CV_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="cv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const wpScreens = [
-    <StapKlant          key="klant"    data={job} onChange={upd} discipline="wp" onNext={next} onBack={()=>setScreen("kiezen")}/>,
-    <StapInstallateur   key="inst"     data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapMeetapparatuur key="apparat"  data={job} onChange={upd} discipline="wp" onNext={next} onBack={prev}/>,
-    <WP_StapMateriaal   key="mat"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos"    data={job} onChange={upd} checkpoints={WP_FOTO_CPS} onNext={next} onBack={prev}/>,
-    <WP_StapMeten       key="meten"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapVersturen      key="verstuur" data={job} onChange={upd} discipline="wp" onSend={markeerOpgeleverd} onBack={prev}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="wp" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="wp" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={WP_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <WP_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <WP_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={WP_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="wp" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : discipline==="wp" ? wpScreens : gkScreens;
