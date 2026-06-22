@@ -28,7 +28,7 @@ const S = {
   btn:    { width:"100%", padding:"15px", borderRadius:12, border:"none", cursor:"pointer", fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600, fontSize:15, marginBottom:10 },
   input:  { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none" },
   select: { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none", appearance:"none" },
-  label:  { fontSize:11, color:K.muted, fontWeight:600, letterSpacing:0.5, textTransform:"uppercase", marginBottom:5, display:"block" },
+  label:  { fontSize:11, color:"#A8B0C0", fontWeight:700, letterSpacing:0.5, textTransform:"uppercase", marginBottom:5, display:"block" },
   sTitle: { fontSize:11, color:K.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:10 },
   backBtn:{ width:34, height:34, borderRadius:8, border:`1px solid ${K.border}`, background:"transparent", color:K.text, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 },
   tag:    { display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:700 },
@@ -288,7 +288,9 @@ const LeerIcoon = ({ onderwerp }) => {
 const MiniInput = ({ value, onChange, placeholder, unit, width=80 }) => (
   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
     <input style={{ ...S.input, width, padding:"8px 10px", fontSize:13 }}
-      value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"—"}/>
+      value={value||""} onChange={e=>onChange(e.target.value)}
+      onFocus={e=>e.target.select()}
+      placeholder={placeholder||"—"}/>
     {unit && <span style={{ fontSize:11, color:K.muted, whiteSpace:"nowrap" }}>{unit}</span>}
   </div>
 
@@ -906,8 +908,10 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
 }
 
 function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
-  const [fotos,setFotos] = useState(data.fotos||{});
-  const [kiesVoor,setKiesVoor] = useState(null); // checkpoint id waarvoor camera/galerij keuze open staat
+  // Gebruik data.fotos direct (geen lokale kopie) — zo overschrijven
+  // de VOOR- en NA-stappen elkaars foto's nooit.
+  const fotos = data.fotos||{};
+  const [kiesVoor,setKiesVoor] = useState(null);
   const cameraRef = useRef(null);
   const galerijRef = useRef(null);
 
@@ -931,18 +935,20 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
   const verwerkFoto = async (file) => {
     if (!file || !kiesVoor) return;
     const dataUrl = await comprimeer(file);
-    const u = {...fotos, [kiesVoor]: dataUrl};
-    setFotos(u); onChange("fotos",u);
+    // Merge altijd met data.fotos (niet met een lokale kopie) —
+    // zo blijven VOOR-foto's bewaard als de NA-stap een foto toevoegt.
+    const u = {...(data.fotos||{}), [kiesVoor]: dataUrl};
+    onChange("fotos", u);
     setKiesVoor(null);
   };
 
   const verwijderFoto = (id) => {
-    const u = {...fotos}; delete u[id];
-    setFotos(u); onChange("fotos",u);
+    const u = {...(data.fotos||{})}; delete u[id];
+    onChange("fotos", u);
   };
 
   const verplichtDone = checkpoints.filter(c=>c.required).every(c=>fotos[c.id]);
-  const done = Object.values(fotos).filter(Boolean).length;
+  const done = checkpoints.filter(c=>fotos[c.id]).length;
 
   return (
     <div>
@@ -2697,17 +2703,20 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
   };
 
   const MeetVeld = ({k,l,unit,chk,ph}) => {
-    const val=meet[k]||""; const ok=val&&chk(val);
+    const raw = meet[k];
+    const val = raw !== undefined && raw !== null && raw !== "" ? String(raw) : "";
+    const ingevuld = val !== "";
+    const ok = ingevuld && chk(val);
     return (
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
-            background:val?(ok?K.greenDim:K.redDim):K.surface,
-            border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)}/>
+            background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
+            border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
+            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
           {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
-          {val&&<StatusTag level={ok?"ok":"red"}/>}
+          {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
     );
@@ -2789,17 +2798,21 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
   const tempOk   = v => toNum(v)>0;
 
   const MeetVeld = ({k,l,unit,chk,ph}) => {
-    const val=meet[k]||""; const ok=val&&chk(val); const err=val&&!chk(val);
+    const raw = meet[k];
+    const val = raw !== undefined && raw !== null && raw !== "" ? String(raw) : "";
+    const ingevuld = val !== "";
+    const ok = ingevuld && chk(val);
+    const err = ingevuld && !chk(val);
     return (
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
-            background:val?(ok?K.greenDim:K.redDim):K.surface,
-            border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)}/>
+            background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
+            border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
+            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
           {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
-          {val&&<StatusTag level={ok?"ok":err?"red":"ok"}/>}
+          {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
     );
@@ -2887,14 +2900,47 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── PROJECT OPSLAG HELPERS ───────────────────────────────────────────────────
 // Alle projecten staan lokaal op de telefoon van de installateur (geen server, geen AVG-risico).
-const PROJ_KEY = "ywkb_projecten";
+const PROJ_KEY   = "ywkb_projecten";
 const ACTIEF_KEY = "ywkb_actief_id";
 
 function laadProjecten() {
-  try { return JSON.parse(localStorage.getItem(PROJ_KEY)||"[]"); } catch { return []; }
+  try {
+    const lijst = JSON.parse(localStorage.getItem(PROJ_KEY)||"[]");
+    // Foto's worden apart opgeslagen onder ywkb_fotos_{id} — laad ze hier terug in
+    return lijst.map(p => {
+      try {
+        const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`)||"null");
+        if (fotos && p.job) p.job.fotos = fotos;
+      } catch {}
+      return p;
+    });
+  } catch { return []; }
 }
+
 function bewaarProjecten(lijst) {
-  try { localStorage.setItem(PROJ_KEY, JSON.stringify(lijst)); } catch {}
+  try {
+    // Sla projecten op zonder foto's in het hoofd-object (foto's apart)
+    const lijstZonderFotos = lijst.map(p => {
+      if (!p.job?.fotos) return p;
+      const { fotos, ...jobZonderFotos } = p.job;
+      // Sla foto's apart op per project-id
+      try {
+        localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos));
+      } catch {
+        console.warn("YourWkb: foto-opslag vol — foto's niet bewaard voor project", p.id);
+      }
+      return { ...p, job: jobZonderFotos };
+    });
+    localStorage.setItem(PROJ_KEY, JSON.stringify(lijstZonderFotos));
+  } catch (e) {
+    // Toon een zichtbare waarschuwing als ook de rest niet past
+    console.warn("YourWkb: localStorage vol — project niet opgeslagen:", e.message);
+    alert("⚠️ Onvoldoende opslagruimte op dit toestel. Maak ruimte vrij of lever het project direct op.");
+  }
+}
+
+function verwijderProjectOpslag(id) {
+  try { localStorage.removeItem(`ywkb_fotos_${id}`); } catch {}
 }
 function upsertProject(lijst, proj) {
   const i = lijst.findIndex(p=>p.id===proj.id);
@@ -2971,6 +3017,7 @@ export default function App() {
 
   const verwijderProject = (id) => {
     bewaarProjecten(laadProjecten().filter(p=>p.id!==id));
+    verwijderProjectOpslag(id);
   };
 
   const kiesDiscipline = (d) => {
