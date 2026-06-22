@@ -2891,14 +2891,47 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── PROJECT OPSLAG HELPERS ───────────────────────────────────────────────────
 // Alle projecten staan lokaal op de telefoon van de installateur (geen server, geen AVG-risico).
-const PROJ_KEY = "ywkb_projecten";
+const PROJ_KEY   = "ywkb_projecten";
 const ACTIEF_KEY = "ywkb_actief_id";
 
 function laadProjecten() {
-  try { return JSON.parse(localStorage.getItem(PROJ_KEY)||"[]"); } catch { return []; }
+  try {
+    const lijst = JSON.parse(localStorage.getItem(PROJ_KEY)||"[]");
+    // Foto's worden apart opgeslagen onder ywkb_fotos_{id} — laad ze hier terug in
+    return lijst.map(p => {
+      try {
+        const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`)||"null");
+        if (fotos && p.job) p.job.fotos = fotos;
+      } catch {}
+      return p;
+    });
+  } catch { return []; }
 }
+
 function bewaarProjecten(lijst) {
-  try { localStorage.setItem(PROJ_KEY, JSON.stringify(lijst)); } catch {}
+  try {
+    // Sla projecten op zonder foto's in het hoofd-object (foto's apart)
+    const lijstZonderFotos = lijst.map(p => {
+      if (!p.job?.fotos) return p;
+      const { fotos, ...jobZonderFotos } = p.job;
+      // Sla foto's apart op per project-id
+      try {
+        localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos));
+      } catch {
+        console.warn("YourWkb: foto-opslag vol — foto's niet bewaard voor project", p.id);
+      }
+      return { ...p, job: jobZonderFotos };
+    });
+    localStorage.setItem(PROJ_KEY, JSON.stringify(lijstZonderFotos));
+  } catch (e) {
+    // Toon een zichtbare waarschuwing als ook de rest niet past
+    console.warn("YourWkb: localStorage vol — project niet opgeslagen:", e.message);
+    alert("⚠️ Onvoldoende opslagruimte op dit toestel. Maak ruimte vrij of lever het project direct op.");
+  }
+}
+
+function verwijderProjectOpslag(id) {
+  try { localStorage.removeItem(`ywkb_fotos_${id}`); } catch {}
 }
 function upsertProject(lijst, proj) {
   const i = lijst.findIndex(p=>p.id===proj.id);
@@ -2975,6 +3008,7 @@ export default function App() {
 
   const verwijderProject = (id) => {
     bewaarProjecten(laadProjecten().filter(p=>p.id!==id));
+    verwijderProjectOpslag(id);
   };
 
   const kiesDiscipline = (d) => {
