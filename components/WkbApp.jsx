@@ -53,7 +53,7 @@ const GK_FABRIKANTEN = {
 const ALS_FABS  = ["Hager","Schneider","ABB","Eaton","Siemens","Doepke","Anders"];
 const ALS_TYPES = ["40A/2p/30mA type-A","40A/4p/30mA type-A","63A/2p/30mA type-A","63A/4p/30mA type-A","25A/2p/10mA type-A (bad)","40A/2p/30mA type-B","63A/4p/30mA type-B"];
 const RCD_MA = ["10","30","100","300","500"];
-const RCD_TYPE = ["AC","A","B","F"];
+const RCD_TYPE = ["A","B","AC","F"];
 const KAR_TYPE = ["B","C","D"];
 const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
 
@@ -108,7 +108,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const warnings = [];
   const stelsel = instMet.stelsel || "TN-C-S";
   const isTT = stelsel === "TT";
-  const dtNorm = isTT ? 200 : 400;
+  const dtNorm = 300; // EN 61008: apparaatnorm altijd 300ms bij 1× In, ongeacht stelsel
 
   (aardlekgroepen||[]).forEach(ag => {
     const geenRcd = ag.rcdType === "geen";
@@ -129,11 +129,17 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     if (!geenRcd) {
       const dt = toNum(grpMeet[`${ag.id}_dt`]);
       if (!isNaN(dt) && dt > dtNorm)
-        warnings.push({ level:"red", msg:`${ag.naam}: ΔT ${dt}ms boven norm (≤${dtNorm}ms voor ${stelsel})` });
-      const di  = toNum(grpMeet[`${ag.id}_di`]);
-      const mA  = toNum(ag.rcdMa);
-      if (!isNaN(di) && !isNaN(mA) && di > mA * 1.5)
-        warnings.push({ level:"orange", msg:`${ag.naam}: ΔI ${di}mA nadert limiet voor ${mA}mA RCD` });
+        warnings.push({ level:"red", msg:`${ag.naam}: ΔT ${dt}ms boven 300ms (EN 61008 apparaatnorm bij 1× In)` });
+
+      // ΔI-norm per RCD-type (alleen bovengrens, geen ondergrens — fabrikantwaarden leidend):
+      // Type AC: ≤ 1× In | Type A: ≤ 1,4× In (√2 factor pulserend DC) | Type B: ≤ 2× In
+      const di = toNum(grpMeet[`${ag.id}_di`]);
+      const mA = toNum(ag.rcdMa);
+      if (!isNaN(di) && !isNaN(mA)) {
+        const diMax = ag.rcdType==="B" ? mA*2 : ag.rcdType==="AC" ? mA*1 : mA*1.4;
+        if (di > diMax)
+          warnings.push({ level:"red", msg:`${ag.naam}: ΔI ${di}mA boven norm voor type-${ag.rcdType} (≤${diMax.toFixed(0)}mA bij ${mA}mA RCD)` });
+      }
     }
     // Hoogst afgaande groep moet de hoogst beschikbare ampèrewaarde in de cluster zijn
     if (hoogst && ag.eindgroepen?.length > 1) {
@@ -152,12 +158,24 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     const diff = Math.max(l1,l2,l3) - Math.min(l1,l2,l3);
     if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
   }
-  // Z L-PE hoog maar net OK — alleen relevant voor TN-stelsel
-  const zlpe = toNum(instMet.zlpe);
-  if (!isTT && !isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
-    warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum (0.5Ω) — bij uitbreiding opnieuw meten` });
-  if (!isTT && !isNaN(zlpe) && zlpe >= 0.5)
-    warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven 0.5Ω — kortsluitbeveiliging mogelijk onvoldoende in TN-stelsel` });
+  // Z L-N/L-PE check op basis van voorzekering karakteristiek (EN 60898)
+  // Z_max = 230 / (factor × In_voorzekering)  factor: B=5, C=10, D=20
+  if (!isTT) {
+    const karFac = { B:5, C:10, D:20 };
+    const vKar = instMet.voorzekerKar || "B";
+    const vA   = toNum(instMet.voorzekering);
+    if (!isNaN(vA) && vA > 0) {
+      const zMax = 230 / ((karFac[vKar]||5) * vA);
+      const zlpe = toNum(instMet.zlpe);
+      const zln  = toNum(instMet.zln);
+      if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
+        warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten` });
+      if (!isNaN(zlpe) && zlpe > zMax)
+        warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+      if (!isNaN(zln) && zln > zMax)
+        warnings.push({ level:"red", msg:`Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+    }
+  }
 
   // Visuele inspectiepunten — bij NOK is dit een directe afwijking
   const inspectieLabels = {
@@ -716,8 +734,8 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           </div>
           <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14}}>
             {data.stelsel==="TT"
-              ? "TT-stelsel: max. uitschakeltijd eindgroep ≤ 200ms (NEN1010 tabel 41.1)"
-              : "TN-stelsel: max. uitschakeltijd eindgroep ≤ 400ms (NEN1010 tabel 41.1)"}
+              ? "TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn. ΔT-norm altijd ≤300ms (EN 61008)."
+              : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
           </div>
           <label style={S.label}>Kastuitvoering</label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -1021,7 +1039,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const aardlekgroepen = data.aardlekgroepen||[];
   const stelsel = data.stelsel || "TN-C-S";
   const isTT = stelsel === "TT";
-  const dtNorm = isTT ? 200 : 400;
+  const dtNorm = 300; // EN 61008: altijd 300ms bij 1× In, ongeacht stelsel
   const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
   const si = (k,v) => { const u={...inst,[k]:v,stelsel}; setInst(u); onChange("instMetingen",u); };
   const sg = (gId,k,v) => { const u={...grpMeet,[`${gId}_${k}`]:v}; setGrpMeet(u); onChange("grpMeet",u); };
@@ -1032,22 +1050,24 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // Nieuwbouw: ≥ 1 MΩ — maar dat onderscheid hebben we bewust verwijderd; altijd bestaande norm.
   // In de praktijk meet de elektrician 0,23 MΩ of hoger op een bestaande installatie.
   const heeft3faseGroep = aardlekgroepen.some(a=>a.fase==="3");
-  const isoTotNorm = heeft3faseGroep ? 0.40 : 0.23;
+  const isoTotNorm = 0.23; // bestaande installatie: 1000Ω/V × 230V = 0,23 MΩ (ondergrens)
   const isoOk  = v => toNum(v) >= isoTotNorm;
   const dtOk   = v => toNum(v)<=dtNorm;
   const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
 
-  // Z L-N en Z L-PE checks zijn stelsel-afhankelijk:
-  // TN-stelsel: kortsluitbeveiliging via overcurrent — Z L-PE moet laag zijn (<0.5 Ω vuistregel)
-  // TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn (aardweerstand via grond),
-  //             hier is de Z L-N relevanter maar ook die heeft geen harde bovengrens via norm.
-  //             We tonen geen afwijking voor Z in TT, maar wel een informatieve waarde.
-  const zLnOk  = v => isTT ? true : toNum(v)<0.5;
-  const zLpeOk = v => isTT ? true : toNum(v)<0.5;
+  // Z L-N/L-PE norm afgeleid van voorzekering × karakteristiek (EN 60898 automaatnorm)
+  // Icc_min = factor × In_voorzekering → Z_max = 230 / Icc_min
+  // TT-stelsel: Z L-PE heeft geen harde norm (aardweerstand via grond) — alleen informatief
+  const karFactor = { B:5, C:10, D:20 };
+  const voorzekerKar = inst.voorzekerKar || "B";
+  const voorzekerA   = toNum(inst.voorzekering);
+  const iccMin       = !isNaN(voorzekerA) ? (karFactor[voorzekerKar]||5) * voorzekerA : null;
+  const zMaxVoorzek  = iccMin ? (230 / iccMin) : null;
+  const zLnOk  = v => isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const zLpeOk = v => isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
   const cag = aardlekgroepen.find(a=>a.id===activeAG);
   const heeft3fase = heeft3faseGroep;
-  // Zorg dat stelsel altijd gesynchroniseerd is naar instMetingen (voor cross-checks/rapport)
   useEffect(()=>{ if (inst.stelsel!==stelsel) si("stelsel",stelsel); }, [stelsel]);
   const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel});
 
@@ -1061,11 +1081,27 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Installatie algemeen</div>
         <div style={S.card}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-            <div><label style={S.label}>Voorzekering</label><MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/></div>
+            <div>
+              <label style={S.label}>Voorzekering</label>
+              <MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/>
+            </div>
+            <div>
+              <label style={S.label}>Kar. voorzekering</label>
+              <div style={{display:"flex",gap:6}}>
+                {["B","C","D"].map(k=>(
+                  <Pill key={k} small active={voorzekerKar===k} onClick={()=>si("voorzekerKar",k)}>{k}</Pill>
+                ))}
+              </div>
+            </div>
             <div><label style={S.label}>Stelsel<LeerIcoon onderwerp="stelsel_tn_tt"/></label>
               <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
             </div>
           </div>
+          {zMaxVoorzek && !isTT && (
+            <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
+              {voorzekerKar}{voorzekerA}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+            </div>
+          )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
             {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
@@ -1073,31 +1109,36 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
                   {inst[k] && <StatusTag level={chk(inst[k])?"ok":isTT?"orange":"red"}/>}
+                  {inst[k] && !isTT && (
+                    <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
+                      Icc≈{(230/toNum(inst[k])).toFixed(0)}A
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
           </div>
           {isTT && (
             <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:8,lineHeight:1.5}}>
-              ℹ️ <strong style={{color:K.text}}>TT-stelsel:</strong> beveiliging bij indirecte aanraking werkt via de RCD, niet via de kortsluitstroom. Z L-PE kan hier hoog zijn — dit is geen afwijking. De ΔT-meting per aardlekgroep (≤200ms) is de relevante controle.
+              ℹ️ <strong style={{color:K.text}}>TT-stelsel:</strong> beveiliging bij indirecte aanraking werkt via de RCD, niet via de kortsluitstroom. Z L-PE kan hier hoog zijn — dit is geen afwijking. ΔT-norm is altijd ≤300ms (EN 61008 apparaatnorm).
             </div>
           )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={inst.toon3fase ?? heeft3fase} onChange={e=>si("toon3fase",e.target.checked)}/>
-            <span style={{fontSize:12,color:K.muted}}>Ook L2/N, L3/N en N/PE meten (3-fase aansluiting aanwezig)</span>
+            <span style={{fontSize:12,color:K.muted}}>Ook L2/N en L3/N meten (3-fase aansluiting aanwezig)</span>
           </label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {(["L1/N"].concat((inst.toon3fase ?? heeft3fase) ? ["L2/N","L3/N","N/PE"] : [])).map(f=>(
+            {(["L1/N"].concat((inst.toon3fase ?? heeft3fase) ? ["L2/N","L3/N"] : [])).map(f=>(
               <div key={f}><label style={S.label}>{f}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
-                  {inst[`span_${f}`]&&f!=="N/PE"&&<StatusTag level={spanOk(inst[`span_${f}`])?"ok":"red"}/>}
+                  {inst[`span_${f}`]&&<StatusTag level={spanOk(inst[`span_${f}`])?"ok":"red"}/>}
                 </div>
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal — norm ≥ {isoTotNorm.toFixed(2)} MΩ {heeft3faseGroep?"(3-fase aanwezig)":"(1-fase)"}</label>
+          <label style={S.label}>ISO totaal — norm ≥ 0,23 MΩ</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
@@ -1230,19 +1271,32 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {cag.rcdType!=="geen" && (
                 <>
                   <div>
-                    <label style={S.label}>ΔT ms — norm ≤{dtNorm}ms ({stelsel})<LeerIcoon onderwerp="delta_t_i"/></label>
+                    <label style={S.label}>ΔT ms — norm ≤300ms (EN 61008)<LeerIcoon onderwerp="delta_t_i"/></label>
                     <input style={{...S.input,fontSize:15,fontWeight:700,
                       background:gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.greenDim:K.redDim):K.surface,
                       border:`1px solid ${gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.green:K.red):K.border}`}}
-                      type="text" inputMode="decimal" placeholder={String(dtNorm-50)} value={gv(cag.id,"dt")} onChange={e=>sg(cag.id,"dt",e.target.value)}/>
+                      type="text" inputMode="decimal" placeholder="180" value={gv(cag.id,"dt")} onChange={e=>sg(cag.id,"dt",e.target.value)}
+                      onFocus={e=>e.target.select()}/>
                   </div>
-                  <div>
-                    <label style={S.label}>ΔI mA — norm &lt;{toNum(cag.rcdMa)*2}mA</label>
-                    <input style={{...S.input,fontSize:15,fontWeight:700,
-                      background:gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.greenDim:K.redDim):K.surface,
-                      border:`1px solid ${gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.green:K.red):K.border}`}}
-                      type="text" inputMode="decimal" placeholder={String(toNum(cag.rcdMa)*0.8)} value={gv(cag.id,"di")} onChange={e=>sg(cag.id,"di",e.target.value)}/>
-                  </div>
+                  {(() => {
+                    // ΔI-norm per RCD-type, alleen bovengrens (geen ondergrens):
+                    const mA = toNum(cag.rcdMa);
+                    const diMax = cag.rcdType==="B" ? mA*2 : cag.rcdType==="AC" ? mA*1 : mA*1.4;
+                    const diLabel = cag.rcdType==="B" ? `≤ 2× In (≤${diMax.toFixed(0)}mA)` : cag.rcdType==="AC" ? `≤ 1× In (≤${diMax.toFixed(0)}mA)` : `≤ 1,4× In (≤${diMax.toFixed(0)}mA)`;
+                    const diVal = gv(cag.id,"di");
+                    const diOk = diVal && toNum(diVal) <= diMax;
+                    return (
+                      <div>
+                        <label style={S.label}>ΔI mA type-{cag.rcdType} — {diLabel}</label>
+                        <input style={{...S.input,fontSize:15,fontWeight:700,
+                          background:diVal?(diOk?K.greenDim:K.redDim):K.surface,
+                          border:`1px solid ${diVal?(diOk?K.green:K.red):K.border}`}}
+                          type="text" inputMode="decimal" placeholder={String(Math.round(mA*0.8))}
+                          value={diVal} onChange={e=>sg(cag.id,"di",e.target.value)}
+                          onFocus={e=>e.target.select()}/>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <label style={S.label}>Testknop RCD</label>
                     <div style={{display:"flex",gap:8,marginTop:2}}>
@@ -1276,7 +1330,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
 VOORZEKERING: ${inst.voorzekering||"—"}A
 Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal: ${inst.isoTot||"—"} MOhm
-SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V / N-PE ${inst["span_N/PE"]||"—"}V
+SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V
 AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
   const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
@@ -1733,7 +1787,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <h2>Meetgegevens installatie (AC)</h2>
         <table>
           <tr>
-            <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A</td>
+            <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A (kar. ${instMet.voorzekerKar||"B"})</td>
             <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}</td>
           </tr>
           <tr>
@@ -1750,12 +1804,12 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </tr>
           <tr>
             <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
-            <td><strong>N/PE</strong></td><td>${instMet["span_N/PE"]||"—"} V</td>
+            <td></td><td></td>
           </tr>
         </table>
         <h2>Aardlekgroepen — meetstaat</h2>
         <p style="font-size:8px;color:#666;margin-bottom:4px">
-          Gemeten op 250V, per aardlekgroep op de hoogst afgaande eindgroep. Norm 1000Ω/V nominaal: 1-fase ≥0,23 MΩ · 3-fase ≥0,40 MΩ. ΔT-norm voor ${instMet.stelsel||data.stelsel||"TN"}-stelsel: ≤${(instMet.stelsel||data.stelsel)==="TT"?200:400}ms.
+          Gemeten op 250V, per aardlekgroep op de hoogst afgaande eindgroep. Norm 1000Ω/V nominaal: 1-fase ≥0,23 MΩ · 3-fase ≥0,40 MΩ. ΔT-norm: ≤300ms (EN 61008 apparaatnorm bij 1× In). ΔI-norm: type AC ≤1× In · type A ≤1,4× In · type B ≤2× In.
         </p>
         <table>
           <tr>
@@ -1764,7 +1818,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </tr>
           ${aardlekgroepen.map((ag)=>{
             const norm = ag.fase==="3" ? 0.40 : 0.23;
-            const dtNormRap = (instMet.stelsel||data.stelsel)==="TT" ? 200 : 400;
+            const dtNormRap = 300; // EN 61008 altijd 300ms
             const isoKeys = ag.fase==="3"
               ? [["iso_l1a","L1-A"],["iso_l2a","L2-A"],["iso_l3a","L3-A"],["iso_na","N-A"]]
               : [["iso_fa","F-A"],["iso_na","N-A"]];
@@ -1776,9 +1830,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const isoAllOk = isoKeys.every(([k])=>{const v=gv(ag.id,k);return v!=="—"&&toNum(v)>=norm;});
             const span = gv(ag.id,"spanning"); const spOk = span!=="—"&&toNum(span)>=207&&toNum(span)<=253;
             const geenRcd = ag.rcdType==="geen";
-            const dt = geenRcd?"n.v.t.":gv(ag.id,"dt"); const di = geenRcd?"n.v.t.":gv(ag.id,"di"); const tk = geenRcd?"n.v.t.":gv(ag.id,"testknop");
+            const dt = geenRcd?"n.v.t.":gv(ag.id,"dt");
+            const di = geenRcd?"n.v.t.":gv(ag.id,"di");
+            const tk = geenRcd?"n.v.t.":gv(ag.id,"testknop");
             const dtOk2 = geenRcd || (dt!=="—"&&toNum(dt)<=dtNormRap);
-            const diOk = geenRcd || (di!=="—"&&toNum(di)<toNum(ag.rcdMa)*2);
+            // ΔI-norm per RCD-type (alleen bovengrens):
+            const mARap = toNum(ag.rcdMa);
+            const diMaxRap = ag.rcdType==="B" ? mARap*2 : ag.rcdType==="AC" ? mARap*1 : mARap*1.4;
+            const diOk = geenRcd || (di!=="—"&&toNum(di)<=diMaxRap);
             const tkOk = geenRcd || tk==="OK";
             const allOk = isoAllOk&&dtOk2&&diOk&&spOk&&tkOk;
             const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
