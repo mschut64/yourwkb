@@ -1,7 +1,12 @@
 export async function POST(request) {
+  let to, subject, html, replyTo;
   try {
-    const { to, subject, html, replyTo } = await request.json();
+    ({ to, subject, html, replyTo } = await request.json());
+  } catch {
+    return Response.json({ error: "Ongeldig verzoek ontvangen — probeer het opnieuw" }, { status: 400 });
+  }
 
+  try {
     if (!to) {
       return Response.json({ error: "Geen e-mailadres opgegeven" }, { status: 400 });
     }

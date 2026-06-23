@@ -28,7 +28,7 @@ const S = {
   btn:    { width:"100%", padding:"15px", borderRadius:12, border:"none", cursor:"pointer", fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600, fontSize:15, marginBottom:10 },
   input:  { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none" },
   select: { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none", appearance:"none" },
-  label:  { fontSize:11, color:K.muted, fontWeight:600, letterSpacing:0.5, textTransform:"uppercase", marginBottom:5, display:"block" },
+  label:  { fontSize:11, color:"#A8B0C0", fontWeight:700, letterSpacing:0.5, textTransform:"uppercase", marginBottom:5, display:"block" },
   sTitle: { fontSize:11, color:K.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:10 },
   backBtn:{ width:34, height:34, borderRadius:8, border:`1px solid ${K.border}`, background:"transparent", color:K.text, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 },
   tag:    { display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:700 },
@@ -152,10 +152,12 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     const diff = Math.max(l1,l2,l3) - Math.min(l1,l2,l3);
     if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
   }
-  // Z L-PE hoog maar net OK
+  // Z L-PE hoog maar net OK — alleen relevant voor TN-stelsel
   const zlpe = toNum(instMet.zlpe);
-  if (!isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
+  if (!isTT && !isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
     warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum (0.5Ω) — bij uitbreiding opnieuw meten` });
+  if (!isTT && !isNaN(zlpe) && zlpe >= 0.5)
+    warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven 0.5Ω — kortsluitbeveiliging mogelijk onvoldoende in TN-stelsel` });
 
   // Visuele inspectiepunten — bij NOK is dit een directe afwijking
   const inspectieLabels = {
@@ -288,7 +290,9 @@ const LeerIcoon = ({ onderwerp }) => {
 const MiniInput = ({ value, onChange, placeholder, unit, width=80 }) => (
   <div style={{ display:"flex", alignItems:"center", gap:4 }}>
     <input style={{ ...S.input, width, padding:"8px 10px", fontSize:13 }}
-      value={value||""} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"—"}/>
+      value={value||""} onChange={e=>onChange(e.target.value)}
+      onFocus={e=>e.target.select()}
+      placeholder={placeholder||"—"}/>
     {unit && <span style={{ fontSize:11, color:K.muted, whiteSpace:"nowrap" }}>{unit}</span>}
   </div>
 
@@ -1022,12 +1026,27 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const si = (k,v) => { const u={...inst,[k]:v,stelsel}; setInst(u); onChange("instMetingen",u); };
   const sg = (gId,k,v) => { const u={...grpMeet,[`${gId}_${k}`]:v}; setGrpMeet(u); onChange("grpMeet",u); };
   const gv = (gId,k) => grpMeet[`${gId}_${k}`]||"";
-  const isoOk  = v => toNum(v)>=1;
+
+  // ISO totaal norm is stelsel-afhankelijk EN afhankelijk van wat er in de installatie zit:
+  // Bestaande installatie: 1000 Ω/V × 230V = 0,23 MΩ (1-fase) / 0,40 MΩ (3-fase)
+  // Nieuwbouw: ≥ 1 MΩ — maar dat onderscheid hebben we bewust verwijderd; altijd bestaande norm.
+  // In de praktijk meet de elektrician 0,23 MΩ of hoger op een bestaande installatie.
+  const heeft3faseGroep = aardlekgroepen.some(a=>a.fase==="3");
+  const isoTotNorm = heeft3faseGroep ? 0.40 : 0.23;
+  const isoOk  = v => toNum(v) >= isoTotNorm;
   const dtOk   = v => toNum(v)<=dtNorm;
   const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
-  const zOk    = v => toNum(v)<0.5;
+
+  // Z L-N en Z L-PE checks zijn stelsel-afhankelijk:
+  // TN-stelsel: kortsluitbeveiliging via overcurrent — Z L-PE moet laag zijn (<0.5 Ω vuistregel)
+  // TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn (aardweerstand via grond),
+  //             hier is de Z L-N relevanter maar ook die heeft geen harde bovengrens via norm.
+  //             We tonen geen afwijking voor Z in TT, maar wel een informatieve waarde.
+  const zLnOk  = v => isTT ? true : toNum(v)<0.5;
+  const zLpeOk = v => isTT ? true : toNum(v)<0.5;
+
   const cag = aardlekgroepen.find(a=>a.id===activeAG);
-  const heeft3fase = aardlekgroepen.some(a=>a.fase==="3");
+  const heeft3fase = heeft3faseGroep;
   // Zorg dat stelsel altijd gesynchroniseerd is naar instMetingen (voor cross-checks/rapport)
   useEffect(()=>{ if (inst.stelsel!==stelsel) si("stelsel",stelsel); }, [stelsel]);
   const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel});
@@ -1049,15 +1068,20 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {[["Z L-N","zln","Ω",zOk],["Z L-PE","zlpe","Ω",zOk]].map(([l,k,u,chk])=>(
-              <div key={k}><label style={S.label}>{l}</label>
+            {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
+              <div key={k}><label style={S.label}>{l}{isTT&&<span style={{fontSize:9,color:K.muted,marginLeft:4,textTransform:"none"}}>(info)</span>}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
-                  {inst[k] && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
+                  {inst[k] && <StatusTag level={chk(inst[k])?"ok":isTT?"orange":"red"}/>}
                 </div>
               </div>
             ))}
           </div>
+          {isTT && (
+            <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:8,lineHeight:1.5}}>
+              ℹ️ <strong style={{color:K.text}}>TT-stelsel:</strong> beveiliging bij indirecte aanraking werkt via de RCD, niet via de kortsluitstroom. Z L-PE kan hier hoog zijn — dit is geen afwijking. De ΔT-meting per aardlekgroep (≤200ms) is de relevante controle.
+            </div>
+          )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={inst.toon3fase ?? heeft3fase} onChange={e=>si("toon3fase",e.target.checked)}/>
@@ -1073,7 +1097,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal — norm ≥ 1 MΩ</label>
+          <label style={S.label}>ISO totaal — norm ≥ {isoTotNorm.toFixed(2)} MΩ {heeft3faseGroep?"(3-fase aanwezig)":"(1-fase)"}</label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
@@ -1717,7 +1741,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<0.5)}>${instMet.zlpe||"—"} Ω</td>
           </tr>
           <tr>
-            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=1)}>${instMet.isoTot||"—"} MΩ</td>
+            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=(aardlekgroepen.some(a=>a.fase==="3")?0.40:0.23))}>${instMet.isoTot||"—"} MΩ</td>
             <td><strong>Kastuitvoering</strong></td><td>${data.kastType==="metaal"?"Metaal":"Kunststof (dubbel geïsoleerd)"}</td>
           </tr>
           <tr>
@@ -2701,17 +2725,20 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
   };
 
   const MeetVeld = ({k,l,unit,chk,ph}) => {
-    const val=meet[k]||""; const ok=val&&chk(val);
+    const raw = meet[k];
+    const val = raw !== undefined && raw !== null && raw !== "" ? String(raw) : "";
+    const ingevuld = val !== "";
+    const ok = ingevuld && chk(val);
     return (
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
-            background:val?(ok?K.greenDim:K.redDim):K.surface,
-            border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)}/>
+            background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
+            border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
+            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
           {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
-          {val&&<StatusTag level={ok?"ok":"red"}/>}
+          {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
     );
@@ -2793,17 +2820,21 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
   const tempOk   = v => toNum(v)>0;
 
   const MeetVeld = ({k,l,unit,chk,ph}) => {
-    const val=meet[k]||""; const ok=val&&chk(val); const err=val&&!chk(val);
+    const raw = meet[k];
+    const val = raw !== undefined && raw !== null && raw !== "" ? String(raw) : "";
+    const ingevuld = val !== "";
+    const ok = ingevuld && chk(val);
+    const err = ingevuld && !chk(val);
     return (
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
-            background:val?(ok?K.greenDim:K.redDim):K.surface,
-            border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)}/>
+            background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
+            border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
+            type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
           {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
-          {val&&<StatusTag level={ok?"ok":err?"red":"ok"}/>}
+          {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
     );
