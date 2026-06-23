@@ -737,11 +737,34 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
               ? "TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn. ΔT-norm altijd ≤300ms (EN 61008)."
               : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
           </div>
-          <label style={S.label}>Kastuitvoering</label>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <Pill active={(data.kastType||"kunststof")==="kunststof"} onClick={()=>onChange("kastType","kunststof")}>Kunststof (dubbel geïsoleerd)</Pill>
-            <Pill active={data.kastType==="metaal"} onClick={()=>onChange("kastType","metaal")}>Metaal</Pill>
+          <label style={S.label}>Kastklasse</label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            <Pill active={(data.kastType||"klasse2")==="klasse2"} onClick={()=>onChange("kastType","klasse2")}>Klasse 2 — dubbel geïsoleerd (kunststof)</Pill>
+            <Pill active={data.kastType==="klasse1"} onClick={()=>onChange("kastType","klasse1")}>Klasse 1 — metaal (geaard)</Pill>
           </div>
+          {data.kastType==="klasse1" && (
+            <div style={{marginTop:10}}>
+              <label style={S.label}>Voorzekering (Klasse 1 — nodig voor Z-check)</label>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input style={{...S.input,width:80}} type="text" inputMode="numeric" placeholder="25"
+                  value={data.voorzekerAmp||""} onChange={e=>onChange("voorzekerAmp",e.target.value)}/>
+                <span style={{fontSize:12,color:K.muted}}>A</span>
+                <div style={{display:"flex",gap:6}}>
+                  {["B","C","D"].map(k=>(
+                    <Pill key={k} small active={(data.voorzekerKarMat||"B")===k} onClick={()=>onChange("voorzekerKarMat",k)}>{k}</Pill>
+                  ))}
+                </div>
+              </div>
+              <div style={{fontSize:11,color:K.muted,marginTop:6}}>
+                {data.voorzekerAmp && (() => {
+                  const fac = {B:5,C:10,D:20}[data.voorzekerKarMat||"B"]||5;
+                  const icc = fac * toNum(data.voorzekerAmp);
+                  const zMax = (230/icc).toFixed(3);
+                  return `${data.voorzekerKarMat||"B"}${data.voorzekerAmp}A → Icc_min = ${icc}A → Z_max = ${zMax}Ω`;
+                })()}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={S.card}>
@@ -1059,12 +1082,13 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // Icc_min = factor × In_voorzekering → Z_max = 230 / Icc_min
   // TT-stelsel: Z L-PE heeft geen harde norm (aardweerstand via grond) — alleen informatief
   const karFactor = { B:5, C:10, D:20 };
-  const voorzekerKar = inst.voorzekerKar || "B";
-  const voorzekerA   = toNum(inst.voorzekering);
-  const iccMin       = !isNaN(voorzekerA) ? (karFactor[voorzekerKar]||5) * voorzekerA : null;
+  const voorzekerKar = inst.voorzekerKar || data.voorzekerKarMat || "B";
+  const voorzekerA   = toNum(inst.voorzekering) || toNum(data.voorzekerAmp);
+  const iccMin       = !isNaN(voorzekerA) && voorzekerA > 0 ? (karFactor[voorzekerKar]||5) * voorzekerA : null;
   const zMaxVoorzek  = iccMin ? (230 / iccMin) : null;
-  const zLnOk  = v => isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
-  const zLpeOk = v => isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const isKlasse2    = (data.kastType||"klasse2") === "klasse2";
+  const zLnOk  = v => isKlasse2 ? true : isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const zLpeOk = v => isKlasse2 ? true : isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
   const cag = aardlekgroepen.find(a=>a.id===activeAG);
   const heeft3fase = heeft3faseGroep;
@@ -1103,24 +1127,64 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
           )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
-              <div key={k}><label style={S.label}>{l}{isTT&&<span style={{fontSize:9,color:K.muted,marginLeft:4,textTransform:"none"}}>(info)</span>}</label>
-                <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
-                  {inst[k] && <StatusTag level={chk(inst[k])?"ok":isTT?"orange":"red"}/>}
-                  {inst[k] && !isTT && (
-                    <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
-                      Icc≈{(230/toNum(inst[k])).toFixed(0)}A
-                    </span>
+          {/* Z L-N en Z L-PE — alleen relevant bij Klasse 1 (metalen kast) */}
+          {data.kastType==="klasse1" ? (
+            <>
+              <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
+                📍 <strong style={{color:K.text}}>Meting in de meterkast.</strong> Vertaal de waarde naar de verst afgaande groep — bij langere kabels is Z hoger. Z_max per automaat: 230 / (factor × In).
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
+                  <div key={k}><label style={S.label}>{l}</label>
+                    <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                      <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
+                      {inst[k] && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
+                      {inst[k] && !isTT && (
+                        <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
+                          Icc≈{(230/toNum(inst[k])).toFixed(0)}A
+                        </span>
+                      )}
+                    </div>
+                    {inst[k] && !isTT && zMaxVoorzek && (
+                      <div style={{fontSize:10,color:zLnOk(inst[k])?K.green:K.red,marginTop:3}}>
+                        Z_max={zMaxVoorzek.toFixed(2)}Ω ({(data.voorzekerKarMat||inst.voorzekerKar||"B")}{data.voorzekerAmp||inst.voorzekering||"?"}A)
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Z L-PE achter aardlek — Ra_max = 50V / IΔn */}
+              <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
+                <label style={S.label}>Z L-PE achter aardlekschakelaar</label>
+                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                  Als de hoogst afgaande groep achter een RCD zit: Ra_max = 50V ÷ IΔn<br/>
+                  {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
+                    <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
+                  {["10","30","100","300","500"].map(mA=>(
+                    <Pill key={mA} small active={inst.rcdMaZlpe===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
+                  ))}
+                </div>
+                {inst.rcdMaZlpe && (
+                  <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
+                    background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
+                    Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe)/1000}A = {(50/(toNum(inst.rcdMaZlpe)/1000)).toFixed(0)}Ω
+                  </div>
+                )}
+                <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                  <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
+                  {inst.zlpeAardlek && inst.rcdMaZlpe && (
+                    <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe)/1000))?"ok":"red"}/>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-          {isTT && (
+            </>
+          ) : (
             <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:8,lineHeight:1.5}}>
-              ℹ️ <strong style={{color:K.text}}>TT-stelsel:</strong> beveiliging bij indirecte aanraking werkt via de RCD, niet via de kortsluitstroom. Z L-PE kan hier hoog zijn — dit is geen afwijking. ΔT-norm is altijd ≤300ms (EN 61008 apparaatnorm).
+              ℹ️ <strong style={{color:K.text}}>Klasse 2 kast</strong> — Z L-N/L-PE check niet van toepassing (geen aardverbinding via de kast). Beveiliging via kortsluitbeveiliging per eindgroep.
             </div>
           )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
@@ -1138,11 +1202,16 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal — norm ≥ 0,23 MΩ</label>
+          <label style={S.label}>ISO totaal — norm ≥ 0,23 MΩ<LeerIcoon onderwerp="iso_meting"/></label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
           </div>
+          {inst.isoTot && !isoOk(inst.isoTot) && (
+            <div style={{fontSize:11,color:K.orange,marginTop:6,lineHeight:1.5,padding:"6px 10px",background:K.orangeDim,borderRadius:8}}>
+              ⚠ Waarde niet OK — bepaal per aardlekgroep welke groep de afwijking veroorzaakt. Meet per aardlekschakelaar-cluster om de problematische groep te isoleren.
+            </div>
+          )}
         </div>
 
         {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
@@ -1763,6 +1832,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     if (discipline === "groepenkast") {
       const accentGK = "#1565C0";
       const statusGK = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
+      const karFacRap = { B:5, C:10, D:20 };
+      const vKarRap = instMet.voorzekerKar || data.voorzekerKarMat || "B";
+      const vARap   = toNum(instMet.voorzekering) || toNum(data.voorzekerAmp);
+      const zMaxVoorzekRap = (!isNaN(vARap) && vARap>0) ? 230/((karFacRap[vKarRap]||5)*vARap) : null;
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -1791,12 +1864,16 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}</td>
           </tr>
           <tr>
-            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<0.5)}>${instMet.zln||"—"} Ω</td>
-            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<0.5)}>${instMet.zlpe||"—"} Ω</td>
+            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zln||"—"} Ω ${instMet.zln&&!isNaN(toNum(instMet.zln))?`(Icc≈${(230/toNum(instMet.zln)).toFixed(0)}A)`:""}</td>
+            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpe||"—"} Ω ${instMet.zlpe&&!isNaN(toNum(instMet.zlpe))?`(Icc≈${(230/toNum(instMet.zlpe)).toFixed(0)}A)`:""}</td>
           </tr>
+          ${instMet.zlpeAardlek ? `<tr>
+            <td><strong>Z L-PE achter aardlek</strong></td><td>${instMet.zlpeAardlek} Ω (RCD ${instMet.rcdMaZlpe||"?"}mA · Ra_max=${instMet.rcdMaZlpe?(50/(toNum(instMet.rcdMaZlpe)/1000)).toFixed(0):"?"}Ω)</td>
+            <td></td><td></td>
+          </tr>` : ""}
           <tr>
             <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=(aardlekgroepen.some(a=>a.fase==="3")?0.40:0.23))}>${instMet.isoTot||"—"} MΩ</td>
-            <td><strong>Kastuitvoering</strong></td><td>${data.kastType==="metaal"?"Metaal":"Kunststof (dubbel geïsoleerd)"}</td>
+            <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td>
           </tr>
           <tr>
             <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
