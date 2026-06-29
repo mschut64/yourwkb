@@ -6,6 +6,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="nl">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__YWKB_DROPBOX_KEY__ = "zrc981iaivs4ims";`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   )
