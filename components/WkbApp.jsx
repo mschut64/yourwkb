@@ -53,13 +53,13 @@ const GK_FABRIKANTEN = {
 const ALS_FABS  = ["Hager","Schneider","ABB","Eaton","Siemens","Doepke","Anders"];
 const ALS_TYPES = ["40A/2p/30mA type-A","40A/4p/30mA type-A","63A/2p/30mA type-A","63A/4p/30mA type-A","25A/2p/10mA type-A (bad)","40A/2p/30mA type-B","63A/4p/30mA type-B"];
 const RCD_MA = ["10","30","100","300","500"];
-const RCD_TYPE = ["AC","A","B","F"];
+const RCD_TYPE = ["A","B","AC","F"];
 const KAR_TYPE = ["B","C","D"];
 const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
 const GK_FOTO_CPS_VOOR = [
-  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true  },
+  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true, optioneelInRapport:true },
   { id:"voor_open",  label:"Bestaande situatie — kast open",  icon:"🔓", required:true  },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
@@ -108,7 +108,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const warnings = [];
   const stelsel = instMet.stelsel || "TN-C-S";
   const isTT = stelsel === "TT";
-  const dtNorm = isTT ? 200 : 400;
+  const dtNorm = 300; // EN 61008: apparaatnorm altijd 300ms bij 1× In, ongeacht stelsel
 
   (aardlekgroepen||[]).forEach(ag => {
     const geenRcd = ag.rcdType === "geen";
@@ -129,11 +129,17 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     if (!geenRcd) {
       const dt = toNum(grpMeet[`${ag.id}_dt`]);
       if (!isNaN(dt) && dt > dtNorm)
-        warnings.push({ level:"red", msg:`${ag.naam}: ΔT ${dt}ms boven norm (≤${dtNorm}ms voor ${stelsel})` });
-      const di  = toNum(grpMeet[`${ag.id}_di`]);
-      const mA  = toNum(ag.rcdMa);
-      if (!isNaN(di) && !isNaN(mA) && di > mA * 1.5)
-        warnings.push({ level:"orange", msg:`${ag.naam}: ΔI ${di}mA nadert limiet voor ${mA}mA RCD` });
+        warnings.push({ level:"red", msg:`${ag.naam}: ΔT ${dt}ms boven 300ms (EN 61008 apparaatnorm bij 1× In)` });
+
+      // ΔI-norm per RCD-type (alleen bovengrens, geen ondergrens — fabrikantwaarden leidend):
+      // Type AC: ≤ 1× In | Type A: ≤ 1,4× In (√2 factor pulserend DC) | Type B: ≤ 2× In
+      const di = toNum(grpMeet[`${ag.id}_di`]);
+      const mA = toNum(ag.rcdMa);
+      if (!isNaN(di) && !isNaN(mA)) {
+        const diMax = ag.rcdType==="B" ? mA*2 : ag.rcdType==="AC" ? mA*1 : mA*1.4;
+        if (di > diMax)
+          warnings.push({ level:"red", msg:`${ag.naam}: ΔI ${di}mA boven norm voor type-${ag.rcdType} (≤${diMax.toFixed(0)}mA bij ${mA}mA RCD)` });
+      }
     }
     // Hoogst afgaande groep moet de hoogst beschikbare ampèrewaarde in de cluster zijn
     if (hoogst && ag.eindgroepen?.length > 1) {
@@ -152,10 +158,24 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     const diff = Math.max(l1,l2,l3) - Math.min(l1,l2,l3);
     if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
   }
-  // Z L-PE hoog maar net OK
-  const zlpe = toNum(instMet.zlpe);
-  if (!isNaN(zlpe) && zlpe > 0.4 && zlpe < 0.5)
-    warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum (0.5Ω) — bij uitbreiding opnieuw meten` });
+  // Z L-N/L-PE check op basis van voorzekering karakteristiek (EN 60898)
+  // Z_max = 230 / (factor × In_voorzekering)  factor: B=5, C=10, D=20
+  if (!isTT) {
+    const karFac = { B:5, C:10, D:20, gG:4 };
+    const vKar = instMet.voorzekerKar || "B";
+    const vA   = toNum(instMet.voorzekering);
+    if (!isNaN(vA) && vA > 0 && karFac[vKar]) {
+      const zMax = 230 / (karFac[vKar] * vA);
+      const zlpe = toNum(instMet.zlpe);
+      const zln  = toNum(instMet.zln);
+      if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
+        warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten` });
+      if (!isNaN(zlpe) && zlpe > zMax)
+        warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+      if (!isNaN(zln) && zln > zMax)
+        warnings.push({ level:"red", msg:`Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+    }
+  }
 
   // Visuele inspectiepunten — bij NOK is dit een directe afwijking
   const inspectieLabels = {
@@ -451,7 +471,7 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
   const ok  = data.naam && data.postcode && data.huisnummer && data.email;
 
   const typeWerkOpties = {
-    groepenkast: ["Nieuwe groepenkast plaatsen","Groepenkast vervangen","Groepenkast uitbreiden","Groepenkast renoveren"],
+    groepenkast: [], // bewust leeg — heeft geen impact op de rest van de app
     pv:          ["Nieuwe PV installatie","PV uitbreiden","PV + thuisbatterij","PV + omvormer vervangen"],
     cv:          ["Combiketel plaatsen (nieuw)","Combiketel vervangen","Combiketel + warmtepomp","CV renovatie"],
     wp:          ["Nieuwe warmtepomp plaatsen","Warmtepomp vervangen","Hybride opstelling (CV + warmtepomp)","Warmtepomp uitbreiden"],
@@ -519,11 +539,15 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
               <input style={S.input} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
             </div>
           ))}
-          <label style={S.label}>Type werk</label>
-          <select style={S.select} value={data.typewerk||""} onChange={e=>onChange("typewerk",e.target.value)}>
-            <option value="">Kies type</option>
-            {(typeWerkOpties[discipline]||[]).map(o=><option key={o}>{o}</option>)}
-          </select>
+          {typeWerkOpties[discipline]?.length > 0 && (
+            <>
+              <label style={S.label}>Type werk</label>
+              <select style={S.select} value={data.typewerk||""} onChange={e=>onChange("typewerk",e.target.value)}>
+                <option value="">Kies type</option>
+                {typeWerkOpties[discipline].map(o=><option key={o}>{o}</option>)}
+              </select>
+            </>
+          )}
         </div>
         <button style={{ ...S.btn, background:ok?K.yellow:K.border, color:ok?"#000":K.muted }}
           onClick={ok?onNext:undefined}>Volgende →</button>
@@ -707,26 +731,63 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Stelsel &amp; kastuitvoering</div>
         <div style={{...S.card,marginBottom:16}}>
           <label style={S.label}>Stelsel</label>
-          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-            {["TN-C-S","TN-S","TT"].map(s=>(
+          <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+            {["TN-C-S","TN-S","TT","Anders"].map(s=>(
               <Pill key={s} active={(data.stelsel||"TN-C-S")===s} onClick={()=>onChange("stelsel",s)}>{s}</Pill>
             ))}
           </div>
-          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14}}>
+          {data.stelsel==="Anders" && (
+            <input style={{...S.input,marginBottom:14}} placeholder="Beschrijf het stelsel"
+              value={data.stelselAnders||""} onChange={e=>onChange("stelselAnders",e.target.value)}/>
+          )}
+          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14,marginTop:6}}>
             {data.stelsel==="TT"
-              ? "TT-stelsel: max. uitschakeltijd eindgroep ≤ 200ms (NEN1010 tabel 41.1)"
-              : "TN-stelsel: max. uitschakeltijd eindgroep ≤ 400ms (NEN1010 tabel 41.1)"}
+              ? "TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn. ΔT-norm altijd ≤300ms (EN 61008)."
+              : data.stelsel==="Anders"
+                ? "Aangepast stelsel: controleer zelf welke normen van toepassing zijn."
+                : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
           </div>
-          <label style={S.label}>Kastuitvoering</label>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <Pill active={(data.kastType||"kunststof")==="kunststof"} onClick={()=>onChange("kastType","kunststof")}>Kunststof (dubbel geïsoleerd)</Pill>
-            <Pill active={data.kastType==="metaal"} onClick={()=>onChange("kastType","metaal")}>Metaal</Pill>
+          <label style={S.label}>Kastklasse</label>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            <Pill active={(data.kastType||"klasse2")==="klasse2"} onClick={()=>onChange("kastType","klasse2")}>Klasse 2 — dubbel geïsoleerd (kunststof)</Pill>
+            <Pill active={data.kastType==="klasse1"} onClick={()=>onChange("kastType","klasse1")}>Klasse 1 — metaal (geaard)</Pill>
           </div>
+          {data.kastType==="klasse1" && (
+            <div style={{marginTop:10}}>
+              <label style={S.label}>Voorzekering (Klasse 1 — nodig voor Z-check)</label>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <input style={{...S.input,width:80}} type="text" inputMode="numeric" placeholder="25"
+                  value={data.voorzekerAmp||""} onChange={e=>onChange("voorzekerAmp",e.target.value)}
+                  onFocus={e=>e.target.select()}/>
+                <span style={{fontSize:12,color:K.muted}}>A</span>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {["B","C","D","gG","Anders"].map(k=>(
+                    <Pill key={k} small active={(data.voorzekerKarMat||"B")===k} onClick={()=>onChange("voorzekerKarMat",k)}>{k}</Pill>
+                  ))}
+                </div>
+              </div>
+              {data.voorzekerKarMat==="Anders" && (
+                <input style={{...S.input,marginTop:8}} type="text"
+                  placeholder="Beschrijf de karakteristiek (bijv. K, Z, aM)"
+                  value={data.voorzekerKarAnders||""} onChange={e=>onChange("voorzekerKarAnders",e.target.value)}/>
+              )}
+              <div style={{fontSize:11,color:K.muted,marginTop:6}}>
+                {data.voorzekerAmp && data.voorzekerKarMat!=="Anders" && (() => {
+                  const facs = {B:5,C:10,D:20,gG:4}; // gG: trage smeltzekering, factor ~4 voor 5s uitschakeltijd (NEN-EN 60269)
+                  const kar = data.voorzekerKarMat||"B";
+                  const fac = facs[kar];
+                  if (!fac) return `Onbekende karakteristiek — Z_max niet automatisch berekend`;
+                  const icc = fac * toNum(data.voorzekerAmp);
+                  const zMax = (230/icc).toFixed(3);
+                  return `${kar}${data.voorzekerAmp}A → Icc_min = ${icc}A → Z_max = ${zMax}Ω`;
+                })()}
+                {data.voorzekerKarMat==="Anders" && "Aangepaste karakteristiek — Z-check niet automatisch beoordeeld."}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={S.card}>
-          <label style={S.label}>Kastmodel</label>
-          <input style={{...S.input,marginBottom:12}} placeholder="Hager Volta 3-fase 24 gr." value={data.kast||""} onChange={e=>onChange("kast",e.target.value)}/>
           <label style={S.label}>Bouwjaar installatie</label>
           <input style={S.input} placeholder="2024" value={data.bouwjaar||""} onChange={e=>onChange("bouwjaar",e.target.value)} maxLength={4}/>
         </div>
@@ -980,6 +1041,18 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
                 <div style={{fontSize:11,marginTop:2}}>
                   {cp.required?<span style={{color:fotos[cp.id]?K.green:K.red}}>● Verplicht</span>:<span style={{color:K.muted}}>○ Aanbevolen</span>}
                 </div>
+                {cp.optioneelInRapport && fotos[cp.id] && (
+                  <label style={{display:"flex",alignItems:"center",gap:6,marginTop:6,fontSize:11,color:K.muted,cursor:"pointer"}} onClick={e=>e.stopPropagation()}>
+                    <input type="checkbox"
+                      checked={data.fotoInRapport?.[cp.id] !== false}
+                      onChange={e=>{
+                        const huidige = data.fotoInRapport||{};
+                        onChange("fotoInRapport", {...huidige, [cp.id]: e.target.checked});
+                      }}
+                      style={{cursor:"pointer"}}/>
+                    Opnemen in rapport
+                  </label>
+                )}
               </div>
               {fotos[cp.id]
                 ? <button onClick={e=>{e.stopPropagation();verwijderFoto(cp.id);}} style={{background:"transparent",border:`1px solid ${K.border}`,borderRadius:8,color:K.muted,cursor:"pointer",fontSize:12,padding:"6px 10px"}}>✕</button>
@@ -1019,18 +1092,37 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const aardlekgroepen = data.aardlekgroepen||[];
   const stelsel = data.stelsel || "TN-C-S";
   const isTT = stelsel === "TT";
-  const dtNorm = isTT ? 200 : 400;
+  const dtNorm = 300; // EN 61008: altijd 300ms bij 1× In, ongeacht stelsel
   const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
   const si = (k,v) => { const u={...inst,[k]:v,stelsel}; setInst(u); onChange("instMetingen",u); };
   const sg = (gId,k,v) => { const u={...grpMeet,[`${gId}_${k}`]:v}; setGrpMeet(u); onChange("grpMeet",u); };
   const gv = (gId,k) => grpMeet[`${gId}_${k}`]||"";
-  const isoOk  = v => toNum(v)>=1;
+
+  // ISO totaal norm is stelsel-afhankelijk EN afhankelijk van wat er in de installatie zit:
+  // Bestaande installatie: 1000 Ω/V × 230V = 0,23 MΩ (1-fase) / 0,40 MΩ (3-fase)
+  // Nieuwbouw: ≥ 1 MΩ — maar dat onderscheid hebben we bewust verwijderd; altijd bestaande norm.
+  // In de praktijk meet de elektrician 0,23 MΩ of hoger op een bestaande installatie.
+  const heeft3faseGroep = aardlekgroepen.some(a=>a.fase==="3");
+  const isoTotNorm = 1.0; // ISO totaal moet ≥ 1 MΩ zijn (strengere norm voor de gehele installatie)
+  const isoOk  = v => toNum(v) >= isoTotNorm;
   const dtOk   = v => toNum(v)<=dtNorm;
   const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
-  const zOk    = v => toNum(v)<0.5;
+
+  // Z L-N/L-PE norm afgeleid van voorzekering × karakteristiek (EN 60898 automaatnorm)
+  // Icc_min = factor × In_voorzekering → Z_max = 230 / Icc_min
+  // TT-stelsel: Z L-PE heeft geen harde norm (aardweerstand via grond) — alleen informatief
+  const karFactor = { B:5, C:10, D:20, gG:4 }; // gG: trage smeltzekering, factor ~4× In voor 5s uitschakeltijd (NEN-EN 60269)
+  const voorzekerKar = inst.voorzekerKar || data.voorzekerKarMat || "B";
+  const voorzekerA   = toNum(inst.voorzekering) || toNum(data.voorzekerAmp);
+  const karOnbekend  = !karFactor[voorzekerKar]; // bijv. "Anders" — geen Z-check
+  const iccMin       = !isNaN(voorzekerA) && voorzekerA > 0 && !karOnbekend ? karFactor[voorzekerKar] * voorzekerA : null;
+  const zMaxVoorzek  = iccMin ? (230 / iccMin) : null;
+  const isKlasse2    = (data.kastType||"klasse2") === "klasse2";
+  const zLnOk  = v => isKlasse2 ? true : isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const zLpeOk = v => isKlasse2 ? true : isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+
   const cag = aardlekgroepen.find(a=>a.id===activeAG);
-  const heeft3fase = aardlekgroepen.some(a=>a.fase==="3");
-  // Zorg dat stelsel altijd gesynchroniseerd is naar instMetingen (voor cross-checks/rapport)
+  const heeft3fase = heeft3faseGroep;
   useEffect(()=>{ if (inst.stelsel!==stelsel) si("stelsel",stelsel); }, [stelsel]);
   const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel});
 
@@ -1044,42 +1136,122 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Installatie algemeen</div>
         <div style={S.card}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-            <div><label style={S.label}>Voorzekering</label><MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/></div>
+            <div>
+              <label style={S.label}>Voorzekering</label>
+              <MiniInput value={inst.voorzekering} onChange={v=>si("voorzekering",v)} unit="A" width={70}/>
+            </div>
+            <div>
+              <label style={S.label}>Kar. voorzekering</label>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["B","C","D","gG","Anders"].map(k=>(
+                  <Pill key={k} small active={voorzekerKar===k} onClick={()=>si("voorzekerKar",k)}>{k}</Pill>
+                ))}
+              </div>
+            </div>
             <div><label style={S.label}>Stelsel<LeerIcoon onderwerp="stelsel_tn_tt"/></label>
               <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
             </div>
           </div>
+          {zMaxVoorzek && !isTT && (
+            <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
+              {voorzekerKar}{voorzekerA}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+            </div>
+          )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {[["Z L-N","zln","Ω",zOk],["Z L-PE","zlpe","Ω",zOk]].map(([l,k,u,chk])=>(
-              <div key={k}><label style={S.label}>{l}</label>
-                <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
-                  {inst[k] && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
+          {/* Z L-N en Z L-PE — alleen relevant bij Klasse 1 (metalen kast) */}
+          {data.kastType==="klasse1" ? (
+            <>
+              <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
+                📍 <strong style={{color:K.text}}>Meting in de meterkast.</strong> Vertaal de waarde naar de verst afgaande groep — bij langere kabels is Z hoger. Z_max per automaat: 230 / (factor × In).
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+                {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
+                  <div key={k}><label style={S.label}>{l}</label>
+                    <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                      <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
+                      {inst[k] && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
+                      {inst[k] && !isTT && (
+                        <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
+                          Icc≈{(230/toNum(inst[k])).toFixed(0)}A
+                        </span>
+                      )}
+                    </div>
+                    {inst[k] && !isTT && zMaxVoorzek && (
+                      <div style={{fontSize:10,color:zLnOk(inst[k])?K.green:K.red,marginTop:3}}>
+                        Z_max={zMaxVoorzek.toFixed(2)}Ω ({(data.voorzekerKarMat||inst.voorzekerKar||"B")}{data.voorzekerAmp||inst.voorzekering||"?"}A)
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Z L-PE achter aardlek — Ra_max = 50V / IΔn */}
+              <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
+                <label style={S.label}>Z L-PE achter aardlekschakelaar</label>
+                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                  Als de hoogst afgaande groep achter een RCD zit: Ra_max = 50V ÷ IΔn<br/>
+                  {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
+                    <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
+                  {["10","30","100","300","500"].map(mA=>(
+                    <Pill key={mA} small active={inst.rcdMaZlpe===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
+                  ))}
+                </div>
+                {inst.rcdMaZlpe && (
+                  <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
+                    background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
+                    Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe)/1000}A = {(50/(toNum(inst.rcdMaZlpe)/1000)).toFixed(0)}Ω
+                  </div>
+                )}
+                <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                  <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
+                  {inst.zlpeAardlek && inst.rcdMaZlpe && (
+                    <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe)/1000))?"ok":"red"}/>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:8,lineHeight:1.5}}>
+              ℹ️ <strong style={{color:K.text}}>Klasse 2 kast</strong> — Z L-N/L-PE check niet van toepassing (geen aardverbinding via de kast). Beveiliging via kortsluitbeveiliging per eindgroep.
+            </div>
+          )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={inst.toon3fase ?? heeft3fase} onChange={e=>si("toon3fase",e.target.checked)}/>
-            <span style={{fontSize:12,color:K.muted}}>Ook L2/N, L3/N en N/PE meten (3-fase aansluiting aanwezig)</span>
+            <span style={{fontSize:12,color:K.muted}}>Ook L2/N en L3/N meten (3-fase aansluiting aanwezig)</span>
           </label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {(["L1/N"].concat((inst.toon3fase ?? heeft3fase) ? ["L2/N","L3/N","N/PE"] : [])).map(f=>(
+            {(["L1/N"].concat((inst.toon3fase ?? heeft3fase) ? ["L2/N","L3/N"] : [])).map(f=>(
               <div key={f}><label style={S.label}>{f}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
-                  {inst[`span_${f}`]&&f!=="N/PE"&&<StatusTag level={spanOk(inst[`span_${f}`])?"ok":"red"}/>}
+                  {inst[`span_${f}`]&&<StatusTag level={spanOk(inst[`span_${f}`])?"ok":"red"}/>}
                 </div>
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal — norm ≥ 1 MΩ</label>
+          <label style={S.label}>ISO totaal — norm ≥ 1 MΩ (gehele installatie)<LeerIcoon onderwerp="iso_meting"/></label>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
           </div>
+          {inst.isoTot && !isoOk(inst.isoTot) && (
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:11,color:K.orange,lineHeight:1.5,padding:"8px 10px",background:K.orangeDim,borderRadius:8,marginBottom:8}}>
+                ⚠ Waarde onder 1 MΩ — meet per aardlekgroep om de probleemgroep(en) te vinden. Geef hieronder aan welke groep(en) afwijken.
+              </div>
+              <label style={S.label}>Groep(en) met afwijkende ISO-waarde</label>
+              <input style={S.input} type="text"
+                placeholder="bijv. Aardlek B (eindgroep 4 — keuken) — 0.4 MΩ"
+                value={inst.isoTotProblemen||""}
+                onChange={e=>si("isoTotProblemen",e.target.value)}
+                onFocus={e=>e.target.select()}/>
+              <div style={{fontSize:10,color:K.muted,marginTop:4}}>Deze notitie wordt opgenomen in het rapport bij de ISO totaal-meting.</div>
+            </div>
+          )}
         </div>
 
         {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
@@ -1182,11 +1354,15 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                   return (
                     <div key={k}>
                       <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
-                      <input style={{...S.input,fontSize:15,fontWeight:700,
-                        background:val?(ok?K.greenDim:K.redDim):K.surface,
-                        border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-                        type="text" inputMode="decimal" placeholder="0,5"
-                        value={val} onChange={e=>sg(cag.id,k,e.target.value)}/>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+                          background:val?(ok?K.greenDim:K.redDim):K.surface,
+                          border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
+                          type="text" inputMode="decimal" placeholder="0,5"
+                          value={val} onChange={e=>sg(cag.id,k,e.target.value)}
+                          onFocus={e=>e.target.select()}/>
+                        <span style={{fontSize:12,fontWeight:700,color:K.muted,whiteSpace:"nowrap"}}>MΩ</span>
+                      </div>
                     </div>
                   );
                 })}
@@ -1208,19 +1384,32 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {cag.rcdType!=="geen" && (
                 <>
                   <div>
-                    <label style={S.label}>ΔT ms — norm ≤{dtNorm}ms ({stelsel})<LeerIcoon onderwerp="delta_t_i"/></label>
+                    <label style={S.label}>ΔT ms — norm ≤300ms (EN 61008)<LeerIcoon onderwerp="delta_t_i"/></label>
                     <input style={{...S.input,fontSize:15,fontWeight:700,
                       background:gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.greenDim:K.redDim):K.surface,
                       border:`1px solid ${gv(cag.id,"dt")?(dtOk(gv(cag.id,"dt"))?K.green:K.red):K.border}`}}
-                      type="text" inputMode="decimal" placeholder={String(dtNorm-50)} value={gv(cag.id,"dt")} onChange={e=>sg(cag.id,"dt",e.target.value)}/>
+                      type="text" inputMode="decimal" placeholder="180" value={gv(cag.id,"dt")} onChange={e=>sg(cag.id,"dt",e.target.value)}
+                      onFocus={e=>e.target.select()}/>
                   </div>
-                  <div>
-                    <label style={S.label}>ΔI mA — norm &lt;{toNum(cag.rcdMa)*2}mA</label>
-                    <input style={{...S.input,fontSize:15,fontWeight:700,
-                      background:gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.greenDim:K.redDim):K.surface,
-                      border:`1px solid ${gv(cag.id,"di")?(toNum(gv(cag.id,"di"))<toNum(cag.rcdMa)*2?K.green:K.red):K.border}`}}
-                      type="text" inputMode="decimal" placeholder={String(toNum(cag.rcdMa)*0.8)} value={gv(cag.id,"di")} onChange={e=>sg(cag.id,"di",e.target.value)}/>
-                  </div>
+                  {(() => {
+                    // ΔI-norm per RCD-type, alleen bovengrens (geen ondergrens):
+                    const mA = toNum(cag.rcdMa);
+                    const diMax = cag.rcdType==="B" ? mA*2 : cag.rcdType==="AC" ? mA*1 : mA*1.4;
+                    const diLabel = cag.rcdType==="B" ? `≤ 2× In (≤${diMax.toFixed(0)}mA)` : cag.rcdType==="AC" ? `≤ 1× In (≤${diMax.toFixed(0)}mA)` : `≤ 1,4× In (≤${diMax.toFixed(0)}mA)`;
+                    const diVal = gv(cag.id,"di");
+                    const diOk = diVal && toNum(diVal) <= diMax;
+                    return (
+                      <div>
+                        <label style={S.label}>ΔI mA type-{cag.rcdType} — {diLabel}</label>
+                        <input style={{...S.input,fontSize:15,fontWeight:700,
+                          background:diVal?(diOk?K.greenDim:K.redDim):K.surface,
+                          border:`1px solid ${diVal?(diOk?K.green:K.red):K.border}`}}
+                          type="text" inputMode="decimal" placeholder={String(Math.round(mA*0.8))}
+                          value={diVal} onChange={e=>sg(cag.id,"di",e.target.value)}
+                          onFocus={e=>e.target.select()}/>
+                      </div>
+                    );
+                  })()}
                   <div>
                     <label style={S.label}>Testknop RCD</label>
                     <div style={{display:"flex",gap:8,marginTop:2}}>
@@ -1254,7 +1443,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
 VOORZEKERING: ${inst.voorzekering||"—"}A
 Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal: ${inst.isoTot||"—"} MOhm
-SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V / N-PE ${inst["span_N/PE"]||"—"}V
+SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V
 AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
   const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
@@ -1647,7 +1836,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
 
     const fotosHtml = (checkpoints) => {
       const fotos = data.fotos||{};
-      const metFoto = (checkpoints||[]).filter(cp => fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image"));
+      const inRapport = data.fotoInRapport||{};
+      const metFoto = (checkpoints||[]).filter(cp => {
+        const heeftFoto = fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image");
+        if (!heeftFoto) return false;
+        // Foto's met 'optioneelInRapport' alleen tonen als vinkje aan staat (default: aan)
+        if (cp.optioneelInRapport && inRapport[cp.id] === false) return false;
+        return true;
+      });
       if (metFoto.length === 0) return "";
       return `
       <!--FOTOSECTIE-START-->
@@ -1687,6 +1883,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     if (discipline === "groepenkast") {
       const accentGK = "#1565C0";
       const statusGK = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
+      const karFacRap = { B:5, C:10, D:20, gG:4 };
+      const vKarRap = instMet.voorzekerKar || data.voorzekerKarMat || "B";
+      const vARap   = toNum(instMet.voorzekering) || toNum(data.voorzekerAmp);
+      const zMaxVoorzekRap = (!isNaN(vARap) && vARap>0) ? 230/((karFacRap[vKarRap]||5)*vARap) : null;
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -1703,24 +1903,28 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         <h2>Gegevens installatie</h2>
         <table>
-          <tr><td><strong>Kastmodel</strong></td><td>${data.kast||"—"}</td>
-              <td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td></tr>
+          <tr><td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td>
+              <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td></tr>
           <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||"—"}</td></tr>
           <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${ag.naam}: geen RCD`:`${ag.naam}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
         </table>
         <h2>Meetgegevens installatie (AC)</h2>
         <table>
           <tr>
-            <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A</td>
+            <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A (kar. ${instMet.voorzekerKar||"B"})</td>
             <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}</td>
           </tr>
           <tr>
-            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<0.5)}>${instMet.zln||"—"} Ω</td>
-            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<0.5)}>${instMet.zlpe||"—"} Ω</td>
+            <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zln||"—"} Ω ${instMet.zln&&!isNaN(toNum(instMet.zln))?`(Icc≈${(230/toNum(instMet.zln)).toFixed(0)}A)`:""}</td>
+            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpe||"—"} Ω ${instMet.zlpe&&!isNaN(toNum(instMet.zlpe))?`(Icc≈${(230/toNum(instMet.zlpe)).toFixed(0)}A)`:""}</td>
           </tr>
+          ${instMet.zlpeAardlek ? `<tr>
+            <td><strong>Z L-PE achter aardlek</strong></td><td>${instMet.zlpeAardlek} Ω (RCD ${instMet.rcdMaZlpe||"?"}mA · Ra_max=${instMet.rcdMaZlpe?(50/(toNum(instMet.rcdMaZlpe)/1000)).toFixed(0):"?"}Ω)</td>
+            <td></td><td></td>
+          </tr>` : ""}
           <tr>
-            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=1)}>${instMet.isoTot||"—"} MΩ</td>
-            <td><strong>Kastuitvoering</strong></td><td>${data.kastType==="metaal"?"Metaal":"Kunststof (dubbel geïsoleerd)"}</td>
+            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=1)}>${instMet.isoTot||"—"} MΩ ${instMet.isoTotProblemen?`<br><span style="font-size:8px;color:#92400e">⚠ ${instMet.isoTotProblemen}</span>`:""}</td>
+            <td colspan="2"></td>
           </tr>
           <tr>
             <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
@@ -1728,12 +1932,12 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </tr>
           <tr>
             <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
-            <td><strong>N/PE</strong></td><td>${instMet["span_N/PE"]||"—"} V</td>
+            <td></td><td></td>
           </tr>
         </table>
         <h2>Aardlekgroepen — meetstaat</h2>
         <p style="font-size:8px;color:#666;margin-bottom:4px">
-          Gemeten op 250V, per aardlekgroep op de hoogst afgaande eindgroep. Norm 1000Ω/V nominaal: 1-fase ≥0,23 MΩ · 3-fase ≥0,40 MΩ. ΔT-norm voor ${instMet.stelsel||data.stelsel||"TN"}-stelsel: ≤${(instMet.stelsel||data.stelsel)==="TT"?200:400}ms.
+          Gemeten op 250V, per aardlekgroep op de hoogst afgaande eindgroep. Norm 1000Ω/V nominaal: 1-fase ≥0,23 MΩ · 3-fase ≥0,40 MΩ. ΔT-norm: ≤300ms (EN 61008 apparaatnorm bij 1× In). ΔI-norm: type AC ≤1× In · type A ≤1,4× In · type B ≤2× In.
         </p>
         <table>
           <tr>
@@ -1742,7 +1946,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </tr>
           ${aardlekgroepen.map((ag)=>{
             const norm = ag.fase==="3" ? 0.40 : 0.23;
-            const dtNormRap = (instMet.stelsel||data.stelsel)==="TT" ? 200 : 400;
+            const dtNormRap = 300; // EN 61008 altijd 300ms
             const isoKeys = ag.fase==="3"
               ? [["iso_l1a","L1-A"],["iso_l2a","L2-A"],["iso_l3a","L3-A"],["iso_na","N-A"]]
               : [["iso_fa","F-A"],["iso_na","N-A"]];
@@ -1754,9 +1958,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const isoAllOk = isoKeys.every(([k])=>{const v=gv(ag.id,k);return v!=="—"&&toNum(v)>=norm;});
             const span = gv(ag.id,"spanning"); const spOk = span!=="—"&&toNum(span)>=207&&toNum(span)<=253;
             const geenRcd = ag.rcdType==="geen";
-            const dt = geenRcd?"n.v.t.":gv(ag.id,"dt"); const di = geenRcd?"n.v.t.":gv(ag.id,"di"); const tk = geenRcd?"n.v.t.":gv(ag.id,"testknop");
+            const dt = geenRcd?"n.v.t.":gv(ag.id,"dt");
+            const di = geenRcd?"n.v.t.":gv(ag.id,"di");
+            const tk = geenRcd?"n.v.t.":gv(ag.id,"testknop");
             const dtOk2 = geenRcd || (dt!=="—"&&toNum(dt)<=dtNormRap);
-            const diOk = geenRcd || (di!=="—"&&toNum(di)<toNum(ag.rcdMa)*2);
+            // ΔI-norm per RCD-type (alleen bovengrens):
+            const mARap = toNum(ag.rcdMa);
+            const diMaxRap = ag.rcdType==="B" ? mARap*2 : ag.rcdType==="AC" ? mARap*1 : mARap*1.4;
+            const diOk = geenRcd || (di!=="—"&&toNum(di)<=diMaxRap);
             const tkOk = geenRcd || tk==="OK";
             const allOk = isoAllOk&&dtOk2&&diOk&&spOk&&tkOk;
             const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
