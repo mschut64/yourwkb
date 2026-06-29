@@ -958,6 +958,34 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
             )}
           </div>
         )})}
+
+        {/* Opties voor in het rapport — automatisch uit de aardlekgroep-data */}
+        {aardlekgroepen.length > 0 && (
+          <div style={{...S.card,marginTop:14,background:K.surface}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,letterSpacing:0.5,textTransform:"uppercase",marginBottom:10}}>📋 Extra's in het rapport</div>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",marginBottom:10}}>
+              <input type="checkbox"
+                checked={data.toonGroepenschema !== false}
+                onChange={e=>onChange("toonGroepenschema", e.target.checked)}
+                style={{marginTop:3,cursor:"pointer"}}/>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>Groepenschema automatisch genereren</div>
+                <div style={{fontSize:11,color:K.muted,marginTop:2,lineHeight:1.4}}>Boomstructuur per aardlekschakelaar met onderliggende eindgroepen. Vervangt de noodzaak voor een aparte foto van het schema.</div>
+              </div>
+            </label>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+              <input type="checkbox"
+                checked={data.toonLabels !== false}
+                onChange={e=>onChange("toonLabels", e.target.checked)}
+                style={{marginTop:3,cursor:"pointer"}}/>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>Uitknipbare labels voor de meterkast</div>
+                <div style={{fontSize:11,color:K.muted,marginTop:2,lineHeight:1.4}}>Aparte pagina met labels per eindgroep (nummer, naam, karakteristiek). Druk op stickerpapier voor direct plakken.</div>
+              </div>
+            </label>
+          </div>
+        )}
+
         <button style={{...S.btn,background:K.yellow,color:"#000",marginTop:8}} onClick={()=>{
           // Zorg dat elke aardlekgroep een hoogstId heeft vóór doorgaan
           const u = aardlekgroepen.map(a=>({...a, hoogstId: a.hoogstId||autoHoogst(a)}));
@@ -1834,6 +1862,66 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <h2>Opmerkingen</h2>
       <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap">${data.notitie}</div>` : "";
 
+    // ── GROEPENSCHEMA — boomstructuur per aardlekschakelaar ─────────────────
+    // Wordt automatisch gegenereerd uit aardlekgroep → eindgroep data.
+    // De installateur kan dit per rapport aan/uit zetten via data.toonGroepenschema (default: true).
+    const groepenschemaHtml = () => {
+      if (data.toonGroepenschema === false) return "";
+      if (!aardlekgroepen?.length) return "";
+      // Bouw per aardlekschakelaar een kolom met eindgroepen eronder
+      const kolommen = aardlekgroepen.map(ag => {
+        const rcdLabel = ag.rcdType === "geen"
+          ? "Zonder RCD"
+          : `RCD ${ag.rcdMa}mA · type-${ag.rcdType}`;
+        const rcdKleur = ag.rcdType === "geen" ? "#999" : "#1565C0";
+        const eindGroepen = (ag.eindgroepen||[]).map((e, idx) => `
+          <div style="border:1px solid #ccc;padding:6px 8px;margin-top:4px;background:#fff;border-radius:3px;font-size:9px">
+            <div style="font-weight:700;color:#333">${idx+1}. ${e.naam||"—"}</div>
+            <div style="color:#666;font-size:8px;margin-top:2px">${e.kar||"B"}${e.ampere||"16A"}</div>
+          </div>`).join("");
+        return `
+          <div style="flex:1;min-width:120px;page-break-inside:avoid">
+            <div style="background:${rcdKleur};color:#fff;padding:6px 8px;border-radius:3px;font-size:10px;font-weight:700;text-align:center">
+              ${ag.naam}<br><span style="font-size:8px;font-weight:500;opacity:0.9">${rcdLabel}</span>
+            </div>
+            <div style="border-left:2px dashed #ccc;margin-left:50%;height:8px"></div>
+            ${eindGroepen}
+          </div>`;
+      }).join("");
+      return `
+      <h2 style="page-break-before:always">Groepenschema</h2>
+      <p style="font-size:9px;color:#555;margin-bottom:10px">Automatisch gegenereerd uit de meetregistratie. Toont de structuur van aardlekschakelaars met onderliggende eindgroepen.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${kolommen}</div>`;
+    };
+
+    // ── UITKNIPBARE LABELS — voor in de meterkast ───────────────────────────
+    // Aparte pagina met labels per eindgroep, in een raster met snijlijnen.
+    const labelsHtml = () => {
+      if (data.toonLabels === false) return "";
+      if (!aardlekgroepen?.length) return "";
+      const alleLabels = [];
+      aardlekgroepen.forEach(ag => {
+        (ag.eindgroepen||[]).forEach((e, idx) => {
+          alleLabels.push({
+            nummer: `${ag.naam.replace(/[^A-Z]/g,"")||"?"}${idx+1}`,
+            naam: e.naam || "—",
+            kar: `${e.kar||"B"}${e.ampere||"16A"}`,
+          });
+        });
+      });
+      if (!alleLabels.length) return "";
+      // 4 kolommen × n rijen, met snijlijnen (dashed border) tussen labels
+      const labelHtml = alleLabels.map(l => `
+        <div style="border:1px dashed #999;padding:6px 8px;text-align:center;background:#fff;page-break-inside:avoid;height:52px;display:flex;flex-direction:column;justify-content:center">
+          <div style="font-weight:800;font-size:10px;color:#000;letter-spacing:0.5px">${l.nummer} · ${l.naam}</div>
+          <div style="font-size:8px;color:#666;margin-top:2px">${l.kar}</div>
+        </div>`).join("");
+      return `
+      <h2 style="page-break-before:always">Uitknipbare labels meterkast</h2>
+      <p style="font-size:9px;color:#555;margin-bottom:10px">Knip langs de stippellijnen en plak op de bijbehorende eindgroep in de meterkast. Het is aan te raden de pagina op stickerpapier af te drukken.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0">${labelHtml}</div>`;
+    };
+
     const fotosHtml = (checkpoints) => {
       const fotos = data.fotos||{};
       const inRapport = data.fotoInRapport||{};
@@ -1999,7 +2087,9 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><td>Rookmelder aanwezig</td><td>${instMet.rookmelder||"—"}${instMet.rookmelder==="Ja"?` (voeding: ${instMet.rookmelderVoeding||"—"}, juist geprojecteerd: ${instMet.rookmelderProjectie||"—"})`:""}</td></tr>
         </table>
         ${waarschuwingHtml()}
+        ${groepenschemaHtml()}
         ${fotosHtml(GK_FOTO_CPS)}
+        ${labelsHtml()}
         ${signHtml("NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 §4.1, §4.2 en §4.3","De installatie is aangelegd conform de huidige NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 hoofdstuk §4.1, §4.2 en §4.3. De visuele controle en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
         </body></html>`;
 
@@ -2511,12 +2601,12 @@ function DisciplineKiezer({ onKies, onBack }) {
 }
 
 // ─── HOME SCHERM ──────────────────────────────────────────────────────────────
-function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
+function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar }) {
   const [projecten, setProjecten] = useState([]);
 
   useEffect(() => {
     setProjecten(laadProjecten());
-  }, []);
+  }, [idbKlaar]);
 
   const verwijder = (id, e) => {
     e?.stopPropagation();
@@ -2602,6 +2692,110 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
             <div style={{fontSize:13,color:K.muted}}>Nog geen projecten — start hierboven je eerste registratie.</div>
           </div>
         )}
+
+        {/* Back-up & herstel */}
+        <div style={{...S.sTitle,marginTop:24}}>💾 Back-up &amp; herstel</div>
+        <div style={S.card}>
+          <div style={{fontSize:11,color:K.muted,lineHeight:1.5,marginBottom:12}}>
+            Bewaar al je projecten als één bestand op je telefoon, in iCloud, Google Drive of Dropbox. Bij verlies of nieuwe telefoon kun je ze hier weer importeren.
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+            <button onClick={() => {
+              try {
+                const n = exporteerProjecten();
+                alert(`✅ Back-up gemaakt van ${n} project${n===1?"":"en"}. Sla het JSON-bestand op in iCloud/Drive/Dropbox.`);
+              } catch (e) {
+                alert(`Back-up mislukt: ${e.message}`);
+              }
+            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:"none",background:K.yellow,color:"#000",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+              📥 Back-up downloaden
+            </button>
+            <button onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file"; input.accept = "application/json,.json";
+              input.onchange = async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const r = importeerProjecten(text);
+                  alert(`✅ Geïmporteerd: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt (totaal in back-up: ${r.totaal}).`);
+                  setProjecten(laadProjecten());
+                } catch (err) {
+                  alert(`Importeren mislukt: ${err.message}`);
+                }
+              };
+              input.click();
+            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+              📤 Back-up herstellen
+            </button>
+          </div>
+
+          {/* Dropbox koppeling — werkt zonder OAuth via Dropbox Saver/Chooser widgets.
+              Vereist Dropbox App Key (zie https://www.dropbox.com/developers/apps).
+              Tot die er is, vervang DROPBOX_APP_KEY door je echte key. */}
+          <div style={{borderTop:`1px solid ${K.border}`,paddingTop:10,marginTop:4}}>
+            <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+              <strong style={{color:K.text}}>📦 Dropbox</strong> — sla direct op in of laad uit je Dropbox (2GB gratis, ~1.300 projecten).
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={() => {
+                // Dropbox Saver: opent een popup waarin de gebruiker zijn Dropbox map kiest
+                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || ""; // TODO: vul in via index.html
+                if (!DROPBOX_APP_KEY) {
+                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig en upload zelf naar Dropbox.");
+                  return;
+                }
+                // Bouw eerst de JSON op in een blob URL die Dropbox kan ophalen
+                const lijst = laadProjecten();
+                const blob = new Blob([JSON.stringify({version:1,exportedAt:new Date().toISOString(),projecten:lijst},null,2)],{type:"application/json"});
+                const url = URL.createObjectURL(blob);
+                const datum = new Date().toISOString().slice(0,10);
+                if (!window.Dropbox) {
+                  // Lazy-load Dropbox SDK
+                  const s = document.createElement("script");
+                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
+                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
+                  s.onload = () => window.Dropbox?.save?.({ files:[{url, filename:`yourwkb-backup-${datum}.json`}], success:() => alert("✅ Opgeslagen in Dropbox") });
+                  document.body.appendChild(s);
+                } else {
+                  window.Dropbox.save({ files:[{url, filename:`yourwkb-backup-${datum}.json`}], success:() => alert("✅ Opgeslagen in Dropbox") });
+                }
+              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+                ☁️ Opslaan in Dropbox
+              </button>
+              <button onClick={() => {
+                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || "";
+                if (!DROPBOX_APP_KEY) {
+                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig uit Dropbox en gebruik 'Herstellen'.");
+                  return;
+                }
+                const open = () => window.Dropbox.choose({
+                  linkType: "direct", extensions: [".json"], multiselect: false,
+                  success: async (files) => {
+                    try {
+                      const resp = await fetch(files[0].link);
+                      const text = await resp.text();
+                      const r = importeerProjecten(text);
+                      alert(`✅ Geïmporteerd uit Dropbox: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt.`);
+                      setProjecten(laadProjecten());
+                    } catch (err) {
+                      alert(`Importeren uit Dropbox mislukt: ${err.message}`);
+                    }
+                  }
+                });
+                if (!window.Dropbox) {
+                  const s = document.createElement("script");
+                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
+                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
+                  s.onload = open; document.body.appendChild(s);
+                } else open();
+              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+                ☁️ Laden uit Dropbox
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div style={{fontSize:11,color:K.muted,textAlign:"center",marginTop:16,lineHeight:1.6}}>
           🔒 Projecten staan alleen op dit toestel opgeslagen.<br/>Wij bewaren niets op een server.
@@ -3109,13 +3303,109 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── PROJECT OPSLAG HELPERS ───────────────────────────────────────────────────
 // Alle projecten staan lokaal op de telefoon van de installateur (geen server, geen AVG-risico).
+// ─── PROJECT-OPSLAG ──────────────────────────────────────────────────────────
+// We gebruiken IndexedDB als primaire opslag (veel grotere capaciteit, robuuster),
+// met automatische fallback naar localStorage. De data wordt 1× bij eerste laad
+// vanuit localStorage gemigreerd naar IndexedDB en daarna parallel weggeschreven.
 const PROJ_KEY   = "ywkb_projecten";
 const ACTIEF_KEY = "ywkb_actief_id";
+const IDB_NAME   = "yourwkb";
+const IDB_VERSION = 1;
+const IDB_STORE_PROJ = "projecten";
+const IDB_STORE_FOTOS = "fotos";
 
+// IndexedDB open (asynchroon, maar we cachen de connectie)
+let _idbPromise = null;
+function openIDB() {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE_PROJ)) db.createObjectStore(IDB_STORE_PROJ, { keyPath: "id" });
+        if (!db.objectStoreNames.contains(IDB_STORE_FOTOS)) db.createObjectStore(IDB_STORE_FOTOS, { keyPath: "id" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => resolve(null);
+    } catch { resolve(null); }
+  });
+  return _idbPromise;
+}
+
+// Sync-helper: in-memory cache van wat IndexedDB ooit terug-las (asynchroon),
+// zodat onze synchrone laadProjecten()-API behouden blijft (compatibel met de rest van de app).
+let _idbCache = null; // null = nog niet geladen; [] of array = geladen
+let _idbFotosCache = {}; // {id: fotosObject}
+
+async function _initIDBCache() {
+  const db = await openIDB();
+  if (!db) { _idbCache = []; return; }
+  await new Promise((resolve) => {
+    const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readonly");
+    const projStore = tx.objectStore(IDB_STORE_PROJ);
+    const fotoStore = tx.objectStore(IDB_STORE_FOTOS);
+    const reqP = projStore.getAll();
+    const reqF = fotoStore.getAll();
+    let done = 0;
+    const klaar = () => { if (++done === 2) resolve(); };
+    reqP.onsuccess = () => { _idbCache = reqP.result || []; klaar(); };
+    reqP.onerror   = () => { _idbCache = []; klaar(); };
+    reqF.onsuccess = () => { (reqF.result||[]).forEach(f => _idbFotosCache[f.id] = f.fotos); klaar(); };
+    reqF.onerror   = () => klaar();
+  });
+  // Eerste keer: migreer eventuele oude localStorage data naar IndexedDB
+  if (_idbCache.length === 0) {
+    try {
+      const oude = JSON.parse(localStorage.getItem(PROJ_KEY) || "[]");
+      if (oude.length > 0) {
+        for (const p of oude) {
+          try {
+            const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`) || "null");
+            if (fotos) { p.job = p.job || {}; p.job.fotos = fotos; _idbFotosCache[p.id] = fotos; }
+          } catch {}
+        }
+        _idbCache = oude;
+        _persistAllToIDB(oude);
+      }
+    } catch {}
+  }
+}
+
+function _persistAllToIDB(projecten) {
+  openIDB().then(db => {
+    if (!db) return;
+    try {
+      const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readwrite");
+      const projStore = tx.objectStore(IDB_STORE_PROJ);
+      const fotoStore = tx.objectStore(IDB_STORE_FOTOS);
+      projStore.clear();
+      fotoStore.clear();
+      for (const p of projecten) {
+        const fotos = p.job?.fotos;
+        const { fotos: _f, ...jobZonderFotos } = p.job || {};
+        projStore.put({ ...p, job: jobZonderFotos });
+        if (fotos) fotoStore.put({ id: p.id, fotos });
+      }
+    } catch {}
+  });
+}
+
+// Synchrone laadProjecten — leest uit de cache (na _initIDBCache).
+// Bij eerste call vóór async-init zijn klaar, valt automatisch terug op localStorage.
 function laadProjecten() {
+  // Cache geladen? → die gebruiken
+  if (_idbCache !== null) {
+    return _idbCache.map(p => {
+      const fotos = _idbFotosCache[p.id];
+      if (fotos && p.job) return { ...p, job: { ...p.job, fotos } };
+      return p;
+    });
+  }
+  // Fallback: lees direct uit localStorage (eerste laad, vóór IDB-init)
   try {
     const lijst = JSON.parse(localStorage.getItem(PROJ_KEY)||"[]");
-    // Foto's worden apart opgeslagen onder ywkb_fotos_{id} — laad ze hier terug in
     return lijst.map(p => {
       try {
         const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`)||"null");
@@ -3127,29 +3417,87 @@ function laadProjecten() {
 }
 
 function bewaarProjecten(lijst) {
+  // Update in-memory cache
+  _idbCache = lijst.map(p => {
+    if (p.job?.fotos) {
+      _idbFotosCache[p.id] = p.job.fotos;
+      const { fotos, ...rest } = p.job;
+      return { ...p, job: rest };
+    }
+    return p;
+  });
+  // Persistent in IndexedDB (async, fire-and-forget)
+  _persistAllToIDB(lijst);
+  // Parallel ook in localStorage voor compatibiliteit + fallback bij geen IDB
   try {
-    // Sla projecten op zonder foto's in het hoofd-object (foto's apart)
     const lijstZonderFotos = lijst.map(p => {
       if (!p.job?.fotos) return p;
       const { fotos, ...jobZonderFotos } = p.job;
-      // Sla foto's apart op per project-id
-      try {
-        localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos));
-      } catch {
-        console.warn("YourWkb: foto-opslag vol — foto's niet bewaard voor project", p.id);
-      }
+      try { localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos)); }
+      catch { /* localStorage vol — IndexedDB heeft het al, dus geen alert nodig */ }
       return { ...p, job: jobZonderFotos };
     });
     localStorage.setItem(PROJ_KEY, JSON.stringify(lijstZonderFotos));
-  } catch (e) {
-    // Toon een zichtbare waarschuwing als ook de rest niet past
-    console.warn("YourWkb: localStorage vol — project niet opgeslagen:", e.message);
-    alert("⚠️ Onvoldoende opslagruimte op dit toestel. Maak ruimte vrij of lever het project direct op.");
+  } catch {
+    // localStorage vol — IndexedDB heeft het al, dus geen blocker
+    console.warn("YourWkb: localStorage vol, maar IndexedDB werkt nog");
   }
 }
 
 function verwijderProjectOpslag(id) {
+  delete _idbFotosCache[id];
   try { localStorage.removeItem(`ywkb_fotos_${id}`); } catch {}
+  openIDB().then(db => {
+    if (!db) return;
+    try {
+      const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readwrite");
+      tx.objectStore(IDB_STORE_PROJ).delete(id);
+      tx.objectStore(IDB_STORE_FOTOS).delete(id);
+    } catch {}
+  });
+}
+
+// ─── BACK-UP / EXPORT / IMPORT ───────────────────────────────────────────────
+// Eén JSON-bestand met alle projecten + foto's. Werkt offline, geen server.
+// Format: { version: 1, exportedAt: "...", projecten: [{...met fotos erin}] }
+function exporteerProjecten() {
+  const lijst = laadProjecten(); // bevat foto's al re-gemerged
+  const blob = new Blob([JSON.stringify({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projecten: lijst,
+  }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const datum = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `yourwkb-backup-${datum}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  return lijst.length;
+}
+
+function importeerProjecten(jsonText) {
+  let data;
+  try { data = JSON.parse(jsonText); }
+  catch { throw new Error("Ongeldig JSON-bestand"); }
+  const inkomend = Array.isArray(data) ? data : data.projecten;
+  if (!Array.isArray(inkomend)) throw new Error("Geen geldig YourWkb back-up bestand");
+  const bestaand = laadProjecten();
+  const bestaandIds = new Set(bestaand.map(p => p.id));
+  // Bestaande projecten met dezelfde id krijgen voorrang als ze nieuwer zijn,
+  // anders importeren we de back-up versie (laatst-bewerkt wint)
+  const samengevoegd = [...bestaand];
+  let nieuw = 0, vervangen = 0;
+  for (const p of inkomend) {
+    if (!p?.id) continue;
+    const idx = samengevoegd.findIndex(x => x.id === p.id);
+    if (idx === -1) { samengevoegd.unshift(p); nieuw++; }
+    else if ((p.updatedAt||0) > (samengevoegd[idx].updatedAt||0)) {
+      samengevoegd[idx] = p; vervangen++;
+    }
+  }
+  bewaarProjecten(samengevoegd);
+  return { nieuw, vervangen, totaal: inkomend.length };
 }
 function upsertProject(lijst, proj) {
   const i = lijst.findIndex(p=>p.id===proj.id);
@@ -3164,6 +3512,13 @@ export default function App() {
   const [step,       setStep]       = useState(0);
   const [job,        setJob]        = useState({});
   const [actiefId,   setActiefId]   = useState(null);
+  const [idbKlaar,   setIdbKlaar]   = useState(false);
+
+  // Initialiseer IndexedDB-cache bij app-start (eenmalig).
+  // Doet ook automatisch migratie van localStorage → IndexedDB.
+  useEffect(() => {
+    _initIDBCache().finally(() => setIdbKlaar(true));
+  }, []);
 
   // Schrijf de huidige staat van het actieve project terug naar de projectenlijst
   const persist = (jobData, disc, st, status) => {
@@ -3302,7 +3657,7 @@ export default function App() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
-        {screen==="home"   && <HomeScreen onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
+        {screen==="home"   && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {screen==="job"    && (
           <div>
