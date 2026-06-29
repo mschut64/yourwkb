@@ -400,21 +400,34 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
   );
 }
 
-function StepBar({ step, steps }) {
+function StepBar({ step, steps, onJump }) {
   return (
     <div style={{ display:"flex", alignItems:"center", padding:"10px 14px", background:K.surface, borderBottom:`1px solid ${K.border}`, gap:0, overflowX:"auto" }}>
-      {steps.map((s,i) => (
-        <div key={s} style={{ display:"flex", alignItems:"center", flex: i<steps.length-1?1:0 }}>
-          <div style={{
-            width:26, height:26, borderRadius:"50%", flexShrink:0,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontWeight:700, fontSize:11,
-            background: i<step ? K.green : i===step ? K.yellow : K.border,
-            color: i<step ? "#fff" : i===step ? "#000" : K.muted,
-          }}>{i<step ? "✓" : i+1}</div>
-          {i<steps.length-1 && <div style={{ flex:1, height:2, background: i<step?K.green:K.border, margin:"0 3px", minWidth:6 }}/>}
-        </div>
-      ))}
+      {steps.map((s,i) => {
+        const voltooid = i < step;
+        const huidig = i === step;
+        const klikbaar = voltooid && onJump; // alleen voltooide stappen zijn klikbaar
+        return (
+          <div key={s} style={{ display:"flex", alignItems:"center", flex: i<steps.length-1?1:0 }}>
+            <div
+              onClick={klikbaar ? () => onJump(i) : undefined}
+              title={klikbaar ? `Terug naar: ${s}` : (huidig ? `Huidige stap: ${s}` : `${s} (nog niet bereikt)`)}
+              style={{
+                width:26, height:26, borderRadius:"50%", flexShrink:0,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontWeight:700, fontSize:11,
+                background: voltooid ? K.green : huidig ? K.yellow : K.border,
+                color: voltooid ? "#fff" : huidig ? "#000" : K.muted,
+                cursor: klikbaar ? "pointer" : "default",
+                transition: "transform 0.1s",
+              }}
+              onMouseEnter={klikbaar ? (e) => e.currentTarget.style.transform = "scale(1.15)" : undefined}
+              onMouseLeave={klikbaar ? (e) => e.currentTarget.style.transform = "scale(1)" : undefined}
+            >{voltooid ? "✓" : i+1}</div>
+            {i<steps.length-1 && <div style={{ flex:1, height:2, background: voltooid?K.green:K.border, margin:"0 3px", minWidth:6 }}/>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -959,10 +972,11 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
           </div>
         )})}
 
-        {/* Opties voor in het rapport — automatisch uit de aardlekgroep-data */}
+        {/* Opties voor in de bijlage — automatisch uit de aardlekgroep-data */}
         {aardlekgroepen.length > 0 && (
           <div style={{...S.card,marginTop:14,background:K.surface}}>
-            <div style={{fontSize:11,fontWeight:700,color:K.muted,letterSpacing:0.5,textTransform:"uppercase",marginBottom:10}}>📋 Extra's in het rapport</div>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,letterSpacing:0.5,textTransform:"uppercase",marginBottom:10}}>📎 Bijlage bij het rapport</div>
+            <div style={{fontSize:11,color:K.muted,lineHeight:1.4,marginBottom:12}}>Worden als <strong>aparte bijlage</strong> bij het rapport gegenereerd — niet in het hoofdrapport zelf.</div>
             <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",marginBottom:10}}>
               <input type="checkbox"
                 checked={data.toonGroepenschema !== false}
@@ -1743,6 +1757,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const [status, setStatus] = useState("idle");
   const [pdfHtml, setPdfHtml] = useState("");
+  const [bijlageHtml, setBijlageHtml] = useState("");
   const [mailStatus, setMailStatus] = useState("idle"); // idle | sending | sent | error
   const [mailError, setMailError] = useState("");
   const disc = DISCIPLINES.find(d=>d.id===discipline);
@@ -2087,9 +2102,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><td>Rookmelder aanwezig</td><td>${instMet.rookmelder||"—"}${instMet.rookmelder==="Ja"?` (voeding: ${instMet.rookmelderVoeding||"—"}, juist geprojecteerd: ${instMet.rookmelderProjectie||"—"})`:""}</td></tr>
         </table>
         ${waarschuwingHtml()}
-        ${groepenschemaHtml()}
         ${fotosHtml(GK_FOTO_CPS)}
-        ${labelsHtml()}
         ${signHtml("NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 §4.1, §4.2 en §4.3","De installatie is aangelegd conform de huidige NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 hoofdstuk §4.1, §4.2 en §4.3. De visuele controle en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
         </body></html>`;
 
@@ -2323,6 +2336,34 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     }
 
     setPdfHtml(html);
+
+    // ── BIJLAGE (alleen voor groepenkast) — groepenschema en uitknipbare labels
+    // Apart document zodat het hoofdrapport compact blijft en de bijlage los
+    // af te drukken/op te slaan is. Wordt alleen gegenereerd als er aardlekgroepen zijn
+    // én tenminste één van de twee vinkjes aan staat.
+    if (discipline === "groepenkast"
+        && aardlekgroepen?.length > 0
+        && (data.toonGroepenschema !== false || data.toonLabels !== false)) {
+      const accentGK = "#1565C0";
+      const schemaSectie = data.toonGroepenschema !== false ? groepenschemaHtml() : "";
+      const labelsSectie = data.toonLabels !== false ? labelsHtml() : "";
+      // De helper-functies beginnen met "page-break-before:always" — voor de eerste
+      // sectie in een los document hoeven we die page break niet, dus die strippen we.
+      const schemaSchoon = schemaSectie.replace('<h2 style="page-break-before:always">', '<h1>');
+      const labelsSchoon = labelsSectie;
+      const bijlage = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${data.projectId}-bijlage</title>
+        <style>${css(accentGK)}</style></head><body>
+        ${logoHtml()}
+        <h1>Bijlage opleverrapport</h1>
+        <p style="font-size:11px;color:#555;margin-bottom:16px">Behoort bij rapport <strong>${data.projectId||""}</strong> · ${data.straat||""} ${data.huisnummer||""}, ${data.plaats||""}</p>
+        ${schemaSchoon}
+        ${labelsSchoon}
+        </body></html>`;
+      setBijlageHtml(bijlage);
+    } else {
+      setBijlageHtml("");
+    }
     setStatus("done");
   };
 
@@ -2501,6 +2542,28 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <button style={{...S.btn,background:K.green,color:"#fff"}} onClick={download}>
               🖨️ Openen &amp; opslaan als PDF
             </button>
+
+            {/* Bijlage met groepenschema + uitknipbare labels (alleen GK) */}
+            {bijlageHtml && (
+              <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`}} onClick={() => {
+                const win = window.open("", "_blank");
+                win.document.write(`
+                  <!DOCTYPE html><html><head>
+                    <title>${data.projectId||"rapport"}-bijlage</title>
+                    <style>@media print { .print-btn { display:none !important; } body { margin:0; } }</style>
+                  </head><body>
+                    <div class="print-btn" style="position:fixed;top:12px;right:12px;z-index:999;display:flex;gap:8px;">
+                      <button onclick="window.print()" style="background:#F5C518;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">🖨️ Opslaan als PDF</button>
+                      <button onclick="window.close()" style="background:#2E3347;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">✕ Sluiten</button>
+                    </div>
+                    ${bijlageHtml}
+                  </body></html>
+                `);
+                win.document.close();
+              }}>
+                📎 Bijlage openen (groepenschema &amp; labels)
+              </button>
+            )}
 
             {/* Mail rapport naar klant — via Resend */}
             {mailStatus==="idle" && (
@@ -3661,7 +3724,10 @@ export default function App() {
         {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {screen==="job"    && (
           <div>
-            <StepBar step={step} steps={stepLabels}/>
+            <StepBar step={step} steps={stepLabels} onJump={(i) => {
+              setStep(i);
+              persist(job, discipline, i);
+            }}/>
             {screens[step]}
           </div>
         )}
