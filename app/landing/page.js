@@ -412,10 +412,9 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer>
-        <p>© 2025 YourWkb · yourwkb.nl</p>
+        <p>© {new Date().getFullYear()} BlauweVisie B.V. · YourWkb is een handelsnaam · yourwkb.nl</p>
         <div className="footer-links">
-          <a href="/privacy">Privacy</a>
-          <a href="/voorwaarden">Voorwaarden</a>
+          <a href="/avg">Privacy &amp; AVG</a>
           <a href="mailto:info@yourwkb.nl">info@yourwkb.nl</a>
         </div>
       </footer>
