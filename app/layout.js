@@ -4,12 +4,15 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }) {
+  // Dropbox App key komt uit Vercel environment variable NEXT_PUBLIC_DROPBOX_KEY.
+  // Variabelen die met NEXT_PUBLIC_ beginnen worden door Next.js veilig naar de browser doorgezet.
+  const dropboxKey = process.env.NEXT_PUBLIC_DROPBOX_KEY || ""
   return (
     <html lang="nl">
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__YWKB_DROPBOX_KEY__ = "zrc981iaivs4ims";`,
+            __html: `window.__YWKB_DROPBOX_KEY__ = ${JSON.stringify(dropboxKey)};`,
           }}
         />
       </head>
