@@ -1,12 +1,19 @@
 export async function POST(request) {
-  let to, subject, html, replyTo;
   try {
-    ({ to, subject, html, replyTo } = await request.json());
-  } catch {
-    return Response.json({ error: "Ongeldig verzoek ontvangen — probeer het opnieuw" }, { status: 400 });
-  }
+    // Request body veilig parsen: als de payload te groot is (Vercel weigert >4.5MB
+    // vóórdat het onze code bereikt), of als de JSON corrupt is, geven we een
+    // nette foutmelding in plaats van te crashen.
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({
+        error: "Aanvraag te groot of onleesbaar — zonder foto's proberen te versturen"
+      }, { status: 400 });
+    }
 
-  try {
+    const { to, subject, html, replyTo } = body;
+
     if (!to) {
       return Response.json({ error: "Geen e-mailadres opgegeven" }, { status: 400 });
     }

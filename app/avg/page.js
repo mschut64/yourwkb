@@ -1,6 +1,6 @@
 'use client'
 
-export default function PrivacyPage() {
+export default function AvgPage() {
   return (
     <>
       <style>{`
@@ -100,8 +100,9 @@ export default function PrivacyPage() {
         <h3>Anonieme statistieken</h3>
         <p>
           Via <a href="https://vercel.com/docs/analytics" target="_blank" rel="noopener noreferrer">Vercel Analytics</a> meten we
-          welke pagina's hoe vaak worden bezocht. Dit gebeurt <strong>zonder cookies en zonder identificatie</strong> —
-          we zien geen IP-adressen, geen apparaatidentificaties en geen gebruikersprofielen.
+          welke pagina's hoe vaak worden bezocht en welke acties worden uitgevoerd (bijvoorbeeld: hoeveel rapporten worden gegenereerd).
+          Dit gebeurt <strong>zonder cookies en zonder identificatie</strong> — we zien geen IP-adressen,
+          geen apparaatidentificaties en geen gebruikersprofielen.
         </p>
 
         <h2>3. Op welke wettelijke grond?</h2>
@@ -121,8 +122,8 @@ export default function PrivacyPage() {
         <h2>5. Worden gegevens gedeeld met derden?</h2>
         <p>
           Wij verkopen geen data. Wij delen geen data met derden behalve de hierboven genoemde technische
-          dienstverleners die nodig zijn om de app te laten functioneren. Met elk van deze partijen heeft
-          een privacybeleid dat in lijn is met de AVG.
+          dienstverleners die nodig zijn om de app te laten functioneren. Elk van deze partijen heeft een
+          privacybeleid dat in lijn is met de AVG.
         </p>
 
         <h2>6. Worden er cookies gebruikt?</h2>
@@ -168,7 +169,7 @@ export default function PrivacyPage() {
       <footer>
         © {new Date().getFullYear()} BlauweVisie B.V. · YourWkb is een handelsnaam ·{' '}
         <a href="/">Home</a> ·{' '}
-        <a href="/avg">Privacy</a> ·{' '}
+        <a href="/avg">AVG</a> ·{' '}
         <a href="mailto:info@yourwkb.nl">Contact</a>
       </footer>
     </>

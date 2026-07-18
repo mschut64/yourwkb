@@ -172,8 +172,8 @@ export default function LandingPage() {
             <div className="badge-dot" />
             Nu beschikbaar: elektricien, zonnepanelen & cv-monteur
           </div>
-          <h1>Opleverrapport.<br /><span>In minuten.</span><br />Op je telefoon.</h1>
-          <p className="hero-sub">Leg foto's, meetwaarden en materialen vast terwijl je werkt. Automatisch een professioneel rapport naar je klant. Voor elektriciens, PV-installateurs en cv-monteurs.</p>
+          <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
+          <p className="hero-sub">Snel ingevuld op je telefoon, klaar in minuten. NEN-conform en Wkb-proof — voor elektriciens, PV-installateurs, cv- en warmtepompmonteurs.</p>
           <div className="hero-cta">
             <a href="/app" className="btn-primary">Gratis beginnen →</a>
             <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
@@ -192,7 +192,7 @@ export default function LandingPage() {
             <div className="phone-screen">
               <div className="phone-hdr">
                 <div className="phone-logo">⚡</div>
-                <div><div className="phone-title">WkbVeld</div><div className="phone-sub">NEN1010 · groepenkast</div></div>
+                <div><div className="phone-title">YourWkb</div><div className="phone-sub">NEN1010 · groepenkast</div></div>
               </div>
               <div className="step-bar">
                 {[...Array(8)].map((_, i) => (
