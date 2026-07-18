@@ -9,7 +9,7 @@ export default function LandingPage() {
   const faqs = [
     { q: 'Moet ik iets installeren?', a: 'Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates.' },
     { q: 'Is het rapport echt NEN1010-compliant?', a: 'Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
-    { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Je downloadt de PDF zelf en bent zelf verantwoordelijk voor opslag. Archivering op onze server is inbegrepen bij een definitief rapport (€2,50) en wordt minimaal 10 jaar bewaard — conform de Wkb aansprakelijkheidstermijn.' },
+    { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie (JSON-export of gratis Dropbox-koppeling) om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
     { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nooit. YourWkb verdient geen geld met advertenties en verkoopt geen data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn van jou. We verdienen alleen aan definitieve rapporten (€2,50 per stuk). Dat is ons volledige verdienmodel.' },
     { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen en combiketel zijn nu beschikbaar. Warmtepomp en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl.' },
     { q: 'Wat kost het na de testperiode?', a: 'De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
@@ -175,7 +175,7 @@ export default function LandingPage() {
           <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
           <p className="hero-sub">Snel ingevuld op je telefoon, klaar in minuten. NEN-conform en Wkb-proof — voor elektriciens, PV-installateurs, cv- en warmtepompmonteurs.</p>
           <div className="hero-cta">
-            <a href="/app" className="btn-primary">Gratis beginnen →</a>
+            <a href="/app" className="btn-primary">Start project →</a>
             <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
           </div>
           <div className="hero-trust">
@@ -259,7 +259,7 @@ export default function LandingPage() {
             { icon: '📷', n: 3, title: "Foto's per checkpoint", desc: 'Vaste checkpoints: kast leeg, bedrading, aarding, verdeler dicht.' },
             { icon: '📏', n: 4, title: 'Meetwaarden invoeren', desc: 'Per groep: ISO, ΔT, ΔI, Z L-PE. Direct groen of rood op NEN1010 normen.' },
             { icon: '📄', n: 5, title: 'Rapport gegenereerd', desc: 'AI stelt het volledige NEN1010 opleverrapport op. Jij hoeft niks te typen.' },
-            { icon: '📬', n: 6, title: 'Naar de klant', desc: 'PDF direct per e-mail naar de opdrachtgever. Project wordt gearchiveerd.' },
+            { icon: '📬', n: 6, title: 'Naar de klant', desc: 'PDF direct per e-mail naar de opdrachtgever. Project blijft op je eigen toestel bewaard.' },
           ].map(s => (
             <div key={s.n} className="step-card">
               <div className="step-icon">{s.icon}</div>
@@ -336,20 +336,19 @@ export default function LandingPage() {
                 <li key={l}><span className="feat-check">{i}</span>{l}</li>
               ))}
             </ul>
-            <a href="/app" className="btn-price-primary">Gratis beginnen →</a>
+            <a href="/app" className="btn-price-primary">Start project →</a>
           </div>
         </div>
 
-        {/* Binnenkort */}
+        {/* Jouw data, jouw back-up */}
         <div style={{ maxWidth:700, marginBottom:48 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Binnenkort beschikbaar</div>
+          <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Al beschikbaar</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {[
-              { icon:'🗄️', title:'Server archivering', desc:'Dossiers 10-20 jaar bewaard op beveiligde EU-server. Wkb-proof.' },
+              { icon:'☁️', title:'Gratis Dropbox back-up', desc:'Sla je projecten op in je eigen Dropbox — 2GB gratis is goed voor 800-2000 projecten.' },
               { icon:'🏷️', title:'Eigen logo op rapport', desc:'Jouw huisstijl op elk rapport. Upload eenmalig je logo.' },
             ].map(c => (
-              <div key={c.title} style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:12, padding:18, opacity:0.45, position:'relative', overflow:'hidden' }}>
-                <div style={{ position:'absolute', top:10, right:10, background:'var(--border)', color:'var(--muted)', fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10 }}>BINNENKORT</div>
+              <div key={c.title} style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:12, padding:18, position:'relative', overflow:'hidden' }}>
                 <div style={{ fontSize:22, marginBottom:8 }}>{c.icon}</div>
                 <div style={{ fontWeight:700, fontSize:14, color:'var(--text)', marginBottom:4 }}>{c.title}</div>
                 <div style={{ fontSize:12, color:'var(--muted)' }}>{c.desc}</div>
@@ -404,7 +403,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 400, margin: '0 auto' }}>
           <input type="email" className="email-input" placeholder="jouw@emailadres.nl" />
           <a href="/app" className="btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', marginBottom: 12 }}>
-            Gratis beginnen →
+            Start project →
           </a>
           <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Daarna direct toegang tot de app. Geen wachttijd.</p>
         </div>

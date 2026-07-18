@@ -1,10 +1,8 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-18-A
-// Deze release: Z L-N/L-PE altijd invulbaar (ongeacht kastklasse), hoofdzekering +
-// hoofdschakelaar velden, eindgroep-categorieën (kookgroep/PV/kracht/laadgroep/
-// thuisbatterij), RISO-workflow herontworpen (totaalmeting eerst + geleide
-// probleemgroep-identificatie), klantstap-titel verduidelijkt (geen registratie-
-// verwarring meer), LeerIcoon dode links vervangen door inhoudelijke popups.
+// YourWkb WkbApp.jsx — versie 2026-07-18-B
+// Deze release: soortwerk-popup ook weggehaald bij PV/CV/WP (consistent met groepenkast),
+// foto-vinkje 'optioneel in rapport' toegevoegd aan CV en WP (ontbrak, zat al bij GK/PV).
+// Klikbare stappenbalk werkte al gedeeld voor alle disciplines, geen aparte fix nodig.
 import { useState, useEffect, useRef } from "react";
 import { trackEvent } from "./analytics";
 
@@ -527,9 +525,9 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
 
   const typeWerkOpties = {
     groepenkast: [], // bewust leeg — heeft geen impact op de rest van de app
-    pv:          ["Nieuwe PV installatie","PV uitbreiden","PV + thuisbatterij","PV + omvormer vervangen"],
-    cv:          ["Combiketel plaatsen (nieuw)","Combiketel vervangen","Combiketel + warmtepomp","CV renovatie"],
-    wp:          ["Nieuwe warmtepomp plaatsen","Warmtepomp vervangen","Hybride opstelling (CV + warmtepomp)","Warmtepomp uitbreiden"],
+    pv:          [], // idem — consistent gemaakt met groepenkast
+    cv:          [], // idem
+    wp:          [], // idem
   };
 
   return (
@@ -2997,7 +2995,7 @@ const CV_AFVOER_TYPES = ["80/125mm concentrisch","60/100mm concentrisch","80mm a
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
 const CV_FOTO_CPS_VOOR = [
-  { id:"voor_overzicht", label:"Bestaande situatie — overzicht ruimte",         icon:"📦", required:true },
+  { id:"voor_overzicht", label:"Bestaande situatie — overzicht ruimte",         icon:"📦", required:true, optioneelInRapport:true },
   { id:"voor_detail",    label:"Bestaande aansluitpunten vóór vervanging",      icon:"🔍", required:true },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
@@ -3141,7 +3139,7 @@ const WP_KOUDEMIDDEL = ["R32","R290 (propaan)","R454B","R410A"];
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
 const WP_FOTO_CPS_VOOR = [
-  { id:"voor_overzicht", label:"Bestaande situatie — overzicht locatie",            icon:"📦", required:true },
+  { id:"voor_overzicht", label:"Bestaande situatie — overzicht locatie",            icon:"📦", required:true, optioneelInRapport:true },
   { id:"voor_detail",    label:"Bestaande aansluitpunten/fundatie vóór installatie",icon:"🔍", required:true },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
