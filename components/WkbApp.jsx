@@ -1,5 +1,12 @@
 'use client'
+// YourWkb WkbApp.jsx — versie 2026-07-18-A
+// Deze release: Z L-N/L-PE altijd invulbaar (ongeacht kastklasse), hoofdzekering +
+// hoofdschakelaar velden, eindgroep-categorieën (kookgroep/PV/kracht/laadgroep/
+// thuisbatterij), RISO-workflow herontworpen (totaalmeting eerst + geleide
+// probleemgroep-identificatie), klantstap-titel verduidelijkt (geen registratie-
+// verwarring meer), LeerIcoon dode links vervangen door inhoudelijke popups.
 import { useState, useEffect, useRef } from "react";
+import { trackEvent } from "./analytics";
 
 // Robuuste numerieke parser — accepteert zowel komma als punt als decimaalteken.
 // Zonder deze fix leest parseFloat("1,9") als 1 (stopt bij de komma) — dat veroorzaakte
@@ -56,10 +63,20 @@ const RCD_MA = ["10","30","100","300","500"];
 const RCD_TYPE = ["A","B","AC","F"];
 const KAR_TYPE = ["B","C","D"];
 const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
+// Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
+// Laadgroep/thuisbatterij ook relevant wanneer die via de hoofdgroepenkast gevoed worden
+// i.p.v. als losse discipline.
+const EINDGROEP_TYPES = [
+  { id:"kook",   icon:"🍳", label:"Kookgroep" },
+  { id:"pv",     icon:"☀️", label:"PV-groep" },
+  { id:"kracht", icon:"⚡", label:"Krachtgroep" },
+  { id:"laad",   icon:"🔌", label:"Laadgroep (auto)" },
+  { id:"batterij", icon:"🔋", label:"Thuisbatterij" },
+];
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
 const GK_FOTO_CPS_VOOR = [
-  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true  },
+  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true, optioneelInRapport:true },
   { id:"voor_open",  label:"Bestaande situatie — kast open",  icon:"🔓", required:true  },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
@@ -78,7 +95,7 @@ const PV_BEVESTIGING   = ["Schletter","K2 Systems","Esdec","SolarEdge Mounting",
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
 const PV_FOTO_CPS_VOOR = [
-  { id:"voor_overzicht", label:"Bestaande situatie dak — overzicht",              icon:"📦", required:true },
+  { id:"voor_overzicht", label:"Bestaande situatie dak — overzicht",              icon:"📦", required:true, optioneelInRapport:true },
   { id:"voor_detail",    label:"Bestaande dakconstructie — detail (vóór montage)",icon:"🔍", required:true },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
@@ -161,11 +178,11 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   // Z L-N/L-PE check op basis van voorzekering karakteristiek (EN 60898)
   // Z_max = 230 / (factor × In_voorzekering)  factor: B=5, C=10, D=20
   if (!isTT) {
-    const karFac = { B:5, C:10, D:20 };
+    const karFac = { B:5, C:10, D:20, gG:4 };
     const vKar = instMet.voorzekerKar || "B";
     const vA   = toNum(instMet.voorzekering);
-    if (!isNaN(vA) && vA > 0) {
-      const zMax = 230 / ((karFac[vKar]||5) * vA);
+    if (!isNaN(vA) && vA > 0 && karFac[vKar]) {
+      const zMax = 230 / (karFac[vKar] * vA);
       const zlpe = toNum(instMet.zlpe);
       const zln  = toNum(instMet.zln);
       if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
@@ -256,52 +273,75 @@ const StatusTag = ({ level }) => {
 // Centrale plek voor alle uitlegvideo's. Vul hier de echte links in zodra ze
 // beschikbaar zijn — de rest van de app hoeft dan niet aangepast te worden.
 // Key = vrij te kiezen onderwerp-ID, gebruikt door <LeerIcoon onderwerp="..." />
-const LEERVIDEOS = {
+// Korte tekstuele uitleg per onderwerp — vervangt de video's die er nog niet zijn.
+// Blijft bruikbaar als aanvulling zodra er wel video's komen (url dan optioneel toevoegen).
+const LEERUITLEG = {
   iso_meting: {
-    titel: "Isolatieweerstand meten — uitleg",
-    url: "https://voorbeeld.nl/video-iso-meting", // TODO: vervang door echte link
+    titel: "Isolatieweerstand (ISO) meten",
+    tekst: "De isolatieweerstand test of de bedrading nog goed geïsoleerd is tussen de aders onderling en naar aarde. Een lage waarde wijst op vochtdoordringing, beschadigde kabelisolatie of een defect apparaat. Meet bij voorkeur met alle apparatuur losgekoppeld en verlichting uit (anders meet je mee door aangesloten apparatuur, wat de waarde kunstmatig verlaagt). Norm bestaande installatie: ≥0,23 MΩ bij 1-fase, ≥0,40 MΩ bij 3-fase, gemeten op 250V. Voor de totale installatie (vanaf de hoofdschakelaar) geldt een strengere norm van ≥1 MΩ.",
   },
   stelsel_tn_tt: {
-    titel: "TN vs TT-stelsel: wat is het verschil?",
-    url: "https://voorbeeld.nl/video-stelsel", // TODO: vervang door echte link
+    titel: "TN vs. TT-stelsel",
+    tekst: "Het verschil zit in hoe de installatie beveiligd is tegen een fout naar aarde. Bij een TN-stelsel (TN-C-S of TN-S, in Nederland het meest voorkomend) loopt de retourstroom bij een fout via een vaste PE-verbinding terug naar de bron — de automaat/zekering lost dan snel op door de hoge kortsluitstroom. Bij een TT-stelsel is er geen vaste PE-verbinding naar de bron; de beveiliging verloopt dan via de aardlekschakelaar (RCD), niet via de kortsluitstroom. Daardoor kan de lus-impedantie (Z L-PE) bij TT-installaties hoog zijn zonder dat dit een probleem is — dat is dan geen afwijking maar normaal voor dat stelsel.",
   },
   aardlekgroep: {
-    titel: "Aardlekgroep & hoogst afgaande groep uitgelegd",
-    url: "https://voorbeeld.nl/video-aardlekgroep", // TODO: vervang door echte link
+    titel: "Aardlekgroep & hoogst afgaande groep",
+    tekst: "Een aardlekgroep is een cluster van eindgroepen die allemaal door dezelfde aardlekschakelaar (RCD) worden beveiligd. Binnen zo'n cluster meet je niet elke eindgroep apart door — je meet op de 'hoogst afgaande groep': de eindgroep met de hoogste stroomsterkte (bijvoorbeeld de 32A-groep in plaats van een 16A-lichtgroep). Als die hoogst belaste groep binnen de norm valt, geldt dat als representatief voor de rest van het cluster, omdat die minder zwaar belast worden.",
   },
   delta_t_i: {
-    titel: "ΔT en ΔI: wat meet je nu eigenlijk?",
-    url: "https://voorbeeld.nl/video-delta", // TODO: vervang door echte link
+    titel: "ΔT en ΔI van de aardlekschakelaar",
+    tekst: "ΔT is de tijd die de aardlekschakelaar nodig heeft om uit te schakelen zodra er een lekstroom optreedt — de norm is altijd ≤300ms (EN 61008), ongeacht het stelsel. ΔI is de lekstroom waarbij de RCD daadwerkelijk afslaat, getoetst aan een percentage van de nominale waarde: bij type AC ≤1× In, type A ≤1,4× In (vanwege de extra marge voor pulserende gelijkstroom), en type B ≤2× In. Beide waarden meet je met de testfunctie van je installatietester.",
   },
   potentiaalvereffening: {
     titel: "Potentiaalvereffening — hoofd en aanvullend",
-    url: "https://voorbeeld.nl/video-potentiaalvereffening", // TODO: vervang door echte link
+    tekst: "Potentiaalvereffening zorgt dat alle geleidende delen in een gebouw (waterleiding, cv-leidingen, metalen kozijnen, etc.) op hetzelfde elektrische potentiaal zitten, zodat er bij een fout geen gevaarlijk spanningsverschil kan ontstaan tussen bijvoorbeeld een kraan en een stopcontact. De hoofdpotentiaalvereffening verbindt de invoerende leidingen (water, gas, CV) bij binnenkomst met de aarde. Aanvullende potentiaalvereffening is verplicht in natte ruimtes zoals badkamers (NEN1010 art. 701) — daar moet ook het Centraal Aardpunt aanwezig zijn.",
   },
   selectiviteit: {
     titel: "Selectiviteit van beveiligingen",
-    url: "https://voorbeeld.nl/video-selectiviteit", // TODO: vervang door echte link
+    tekst: "Selectiviteit betekent dat bij een fout alleen de dichtstbijzijnde beveiliging (automaat/zekering) uitschakelt, en niet ook de groepen erboven in de installatie. Dit voorkom je door de karakteristieken en stroomwaarden goed op elkaar af te stemmen — bijvoorbeeld een B16 eindgroep-automaat onder een C32 hoofdautomaat, zodat de eindgroep-automaat altijd eerder reageert dan de hoofdautomaat. Zonder goede selectiviteit valt bij een enkele storing mogelijk de hele installatie uit in plaats van alleen de betreffende groep.",
   },
 };
 
-// Klein ⓘ-icoontje dat naar een uitlegvideo linkt. Toon alleen als het
-// onderwerp in LEERVIDEOS bestaat — voorkomt kapotte links per ongeluk.
+// Klein ⓘ-icoontje dat een popup met uitleg toont. Toon alleen als het
+// onderwerp in LEERUITLEG bestaat — voorkomt lege popups per ongeluk.
 const LeerIcoon = ({ onderwerp }) => {
-  const video = LEERVIDEOS[onderwerp];
-  if (!video) return null;
+  const [open, setOpen] = useState(false);
+  const info = LEERUITLEG[onderwerp];
+  if (!info) return null;
   return (
-    <a href={video.url} target="_blank" rel="noopener noreferrer"
-      onClick={e => e.stopPropagation()}
-      title={video.titel}
-      style={{
-        display:"inline-flex", alignItems:"center", justifyContent:"center",
-        width:16, height:16, borderRadius:"50%",
-        background:K.purpleDim, color:K.purple,
-        fontSize:11, fontWeight:700, textDecoration:"none",
-        marginLeft:5, flexShrink:0, verticalAlign:"middle",
-        border:`1px solid ${K.purple}55`,
-      }}>
-      ⓘ
-    </a>
+    <>
+      <button type="button"
+        onClick={e => { e.stopPropagation(); setOpen(true); }}
+        title={info.titel}
+        style={{
+          display:"inline-flex", alignItems:"center", justifyContent:"center",
+          width:16, height:16, borderRadius:"50%",
+          background:K.purpleDim, color:K.purple,
+          fontSize:11, fontWeight:700, textDecoration:"none",
+          marginLeft:5, flexShrink:0, verticalAlign:"middle",
+          border:`1px solid ${K.purple}55`, cursor:"pointer", padding:0,
+          fontFamily:"inherit",
+        }}>
+        ⓘ
+      </button>
+      {open && (
+        <div onClick={()=>setOpen(false)} style={{
+          position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
+          display:"flex", alignItems:"center", justifyContent:"center", padding:20,
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            background:K.card, borderRadius:14, padding:20, maxWidth:420, width:"100%",
+            border:`1px solid ${K.border}`, maxHeight:"80vh", overflowY:"auto",
+          }}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:12}}>
+              <div style={{fontWeight:700, fontSize:15, color:K.purple}}>{info.titel}</div>
+              <button onClick={()=>setOpen(false)} style={{background:"transparent", border:"none", color:K.muted, fontSize:20, cursor:"pointer", lineHeight:1, padding:0}}>×</button>
+            </div>
+            <div style={{fontSize:13, color:K.text, lineHeight:1.6}}>{info.tekst}</div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -361,9 +401,11 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
       if (!json.html) throw new Error("Geen antwoord ontvangen van de AI");
       onAnalyse(json.html);
       setStatus("done");
+      trackEvent("ai_analyse_gebruikt", { success: true });
     } catch(e) {
       setErrMsg(e.message || "Onbekende fout");
       setStatus("error");
+      trackEvent("ai_analyse_gebruikt", { success: false });
     }
   };
 
@@ -400,21 +442,34 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
   );
 }
 
-function StepBar({ step, steps }) {
+function StepBar({ step, steps, onJump }) {
   return (
     <div style={{ display:"flex", alignItems:"center", padding:"10px 14px", background:K.surface, borderBottom:`1px solid ${K.border}`, gap:0, overflowX:"auto" }}>
-      {steps.map((s,i) => (
-        <div key={s} style={{ display:"flex", alignItems:"center", flex: i<steps.length-1?1:0 }}>
-          <div style={{
-            width:26, height:26, borderRadius:"50%", flexShrink:0,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontWeight:700, fontSize:11,
-            background: i<step ? K.green : i===step ? K.yellow : K.border,
-            color: i<step ? "#fff" : i===step ? "#000" : K.muted,
-          }}>{i<step ? "✓" : i+1}</div>
-          {i<steps.length-1 && <div style={{ flex:1, height:2, background: i<step?K.green:K.border, margin:"0 3px", minWidth:6 }}/>}
-        </div>
-      ))}
+      {steps.map((s,i) => {
+        const voltooid = i < step;
+        const huidig = i === step;
+        const klikbaar = voltooid && onJump; // alleen voltooide stappen zijn klikbaar
+        return (
+          <div key={s} style={{ display:"flex", alignItems:"center", flex: i<steps.length-1?1:0 }}>
+            <div
+              onClick={klikbaar ? () => onJump(i) : undefined}
+              title={klikbaar ? `Terug naar: ${s}` : (huidig ? `Huidige stap: ${s}` : `${s} (nog niet bereikt)`)}
+              style={{
+                width:26, height:26, borderRadius:"50%", flexShrink:0,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontWeight:700, fontSize:11,
+                background: voltooid ? K.green : huidig ? K.yellow : K.border,
+                color: voltooid ? "#fff" : huidig ? "#000" : K.muted,
+                cursor: klikbaar ? "pointer" : "default",
+                transition: "transform 0.1s",
+              }}
+              onMouseEnter={klikbaar ? (e) => e.currentTarget.style.transform = "scale(1.15)" : undefined}
+              onMouseLeave={klikbaar ? (e) => e.currentTarget.style.transform = "scale(1)" : undefined}
+            >{voltooid ? "✓" : i+1}</div>
+            {i<steps.length-1 && <div style={{ flex:1, height:2, background: voltooid?K.green:K.border, margin:"0 3px", minWidth:6 }}/>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -471,7 +526,7 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
   const ok  = data.naam && data.postcode && data.huisnummer && data.email;
 
   const typeWerkOpties = {
-    groepenkast: ["Nieuwe groepenkast plaatsen","Groepenkast vervangen","Groepenkast uitbreiden","Groepenkast renoveren"],
+    groepenkast: [], // bewust leeg — heeft geen impact op de rest van de app
     pv:          ["Nieuwe PV installatie","PV uitbreiden","PV + thuisbatterij","PV + omvormer vervangen"],
     cv:          ["Combiketel plaatsen (nieuw)","Combiketel vervangen","Combiketel + warmtepomp","CV renovatie"],
     wp:          ["Nieuwe warmtepomp plaatsen","Warmtepomp vervangen","Hybride opstelling (CV + warmtepomp)","Warmtepomp uitbreiden"],
@@ -482,12 +537,15 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
         <div style={{ flex:1 }}>
-          <div style={{ fontWeight:700, fontSize:15 }}>Klant & locatie</div>
-          <div style={{ fontSize:11, color:K.muted }}>Stap 1 · {disc?.label}</div>
+          <div style={{ fontWeight:700, fontSize:15 }}>Nieuw project — gegevens klant</div>
+          <div style={{ fontSize:11, color:K.muted }}>Stap 1 van {disc?.label} · geen account nodig</div>
         </div>
         <div style={{ fontSize:22 }}>{disc?.icon}</div>
       </div>
       <div style={S.body}>
+        <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.4}}>
+          Vul hieronder de gegevens van de klant/het adres in waar je dit project uitvoert. Je hoeft je zelf nergens voor te registreren.
+        </div>
         {pid && (
           <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow}55`, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ fontSize:20 }}>📁</span>
@@ -539,11 +597,15 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
               <input style={S.input} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
             </div>
           ))}
-          <label style={S.label}>Type werk</label>
-          <select style={S.select} value={data.typewerk||""} onChange={e=>onChange("typewerk",e.target.value)}>
-            <option value="">Kies type</option>
-            {(typeWerkOpties[discipline]||[]).map(o=><option key={o}>{o}</option>)}
-          </select>
+          {typeWerkOpties[discipline]?.length > 0 && (
+            <>
+              <label style={S.label}>Type werk</label>
+              <select style={S.select} value={data.typewerk||""} onChange={e=>onChange("typewerk",e.target.value)}>
+                <option value="">Kies type</option>
+                {typeWerkOpties[discipline].map(o=><option key={o}>{o}</option>)}
+              </select>
+            </>
+          )}
         </div>
         <button style={{ ...S.btn, background:ok?K.yellow:K.border, color:ok?"#000":K.muted }}
           onClick={ok?onNext:undefined}>Volgende →</button>
@@ -727,15 +789,21 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Stelsel &amp; kastuitvoering</div>
         <div style={{...S.card,marginBottom:16}}>
           <label style={S.label}>Stelsel</label>
-          <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-            {["TN-C-S","TN-S","TT"].map(s=>(
+          <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+            {["TN-C-S","TN-S","TT","Anders"].map(s=>(
               <Pill key={s} active={(data.stelsel||"TN-C-S")===s} onClick={()=>onChange("stelsel",s)}>{s}</Pill>
             ))}
           </div>
-          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14}}>
+          {data.stelsel==="Anders" && (
+            <input style={{...S.input,marginBottom:14}} placeholder="Beschrijf het stelsel"
+              value={data.stelselAnders||""} onChange={e=>onChange("stelselAnders",e.target.value)}/>
+          )}
+          <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14,marginTop:6}}>
             {data.stelsel==="TT"
               ? "TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn. ΔT-norm altijd ≤300ms (EN 61008)."
-              : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
+              : data.stelsel==="Anders"
+                ? "Aangepast stelsel: controleer zelf welke normen van toepassing zijn."
+                : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
           </div>
           <label style={S.label}>Kastklasse</label>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
@@ -745,31 +813,39 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           {data.kastType==="klasse1" && (
             <div style={{marginTop:10}}>
               <label style={S.label}>Voorzekering (Klasse 1 — nodig voor Z-check)</label>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                 <input style={{...S.input,width:80}} type="text" inputMode="numeric" placeholder="25"
-                  value={data.voorzekerAmp||""} onChange={e=>onChange("voorzekerAmp",e.target.value)}/>
+                  value={data.voorzekerAmp||""} onChange={e=>onChange("voorzekerAmp",e.target.value)}
+                  onFocus={e=>e.target.select()}/>
                 <span style={{fontSize:12,color:K.muted}}>A</span>
-                <div style={{display:"flex",gap:6}}>
-                  {["B","C","D"].map(k=>(
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {["B","C","D","gG","Anders"].map(k=>(
                     <Pill key={k} small active={(data.voorzekerKarMat||"B")===k} onClick={()=>onChange("voorzekerKarMat",k)}>{k}</Pill>
                   ))}
                 </div>
               </div>
+              {data.voorzekerKarMat==="Anders" && (
+                <input style={{...S.input,marginTop:8}} type="text"
+                  placeholder="Beschrijf de karakteristiek (bijv. K, Z, aM)"
+                  value={data.voorzekerKarAnders||""} onChange={e=>onChange("voorzekerKarAnders",e.target.value)}/>
+              )}
               <div style={{fontSize:11,color:K.muted,marginTop:6}}>
-                {data.voorzekerAmp && (() => {
-                  const fac = {B:5,C:10,D:20}[data.voorzekerKarMat||"B"]||5;
+                {data.voorzekerAmp && data.voorzekerKarMat!=="Anders" && (() => {
+                  const facs = {B:5,C:10,D:20,gG:4}; // gG: trage smeltzekering, factor ~4 voor 5s uitschakeltijd (NEN-EN 60269)
+                  const kar = data.voorzekerKarMat||"B";
+                  const fac = facs[kar];
+                  if (!fac) return `Onbekende karakteristiek — Z_max niet automatisch berekend`;
                   const icc = fac * toNum(data.voorzekerAmp);
                   const zMax = (230/icc).toFixed(3);
-                  return `${data.voorzekerKarMat||"B"}${data.voorzekerAmp}A → Icc_min = ${icc}A → Z_max = ${zMax}Ω`;
+                  return `${kar}${data.voorzekerAmp}A → Icc_min = ${icc}A → Z_max = ${zMax}Ω`;
                 })()}
+                {data.voorzekerKarMat==="Anders" && "Aangepaste karakteristiek — Z-check niet automatisch beoordeeld."}
               </div>
             </div>
           )}
         </div>
 
         <div style={S.card}>
-          <label style={S.label}>Kastmodel</label>
-          <input style={{...S.input,marginBottom:12}} placeholder="Hager Volta 3-fase 24 gr." value={data.kast||""} onChange={e=>onChange("kast",e.target.value)}/>
           <label style={S.label}>Bouwjaar installatie</label>
           <input style={S.input} placeholder="2024" value={data.bouwjaar||""} onChange={e=>onChange("bouwjaar",e.target.value)} maxLength={4}/>
         </div>
@@ -817,7 +893,7 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
 // Aardlekgroep (RCD-cluster) — bevat 1 of meer eindgroepen (automaten).
 // Er wordt 1× gemeten per aardlekgroep, op de hoogst afgaande eindgroep (NEN1010-praktijk).
 function GK_StapGroepen({ data, onChange, onNext, onBack }) {
-  const nieuweEindgroep = (naam="Nieuwe eindgroep") => ({ id:Date.now()+Math.random(), naam, kar:"B", ampere:"16A" });
+  const nieuweEindgroep = (naam="Nieuwe eindgroep") => ({ id:Date.now()+Math.random(), naam, kar:"B", ampere:"16A", type:null });
   const [aardlekgroepen,setAG] = useState(data.aardlekgroepen || [
     { id:1, naam:"Aardlek A", rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null,
       eindgroepen:[ nieuweEindgroep("Licht BG"), nieuweEindgroep("Stopcontacten woonkamer") ] },
@@ -900,6 +976,14 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                       <input style={{...S.input,fontSize:13,flex:1}} value={eg.naam} onChange={e=>updEind(ag.id,eg.id,"naam",e.target.value)}/>
                       <button onClick={()=>remEind(ag.id,eg.id)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
                     </div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                      {EINDGROEP_TYPES.map(t=>(
+                        <Pill key={t.id} small active={eg.type===t.id} onClick={()=>{
+                          updEind(ag.id,eg.id,"type",t.id);
+                          if (eg.naam===""||eg.naam==="Nieuwe eindgroep") updEind(ag.id,eg.id,"naam",t.label);
+                        }}>{t.icon} {t.label}</Pill>
+                      ))}
+                    </div>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
                       <MiniSelect value={eg.kar} onChange={v=>updEind(ag.id,eg.id,"kar",v)} options={KAR_TYPE} width={56}/>
                       <MiniSelect value={eg.ampere} onChange={v=>updEind(ag.id,eg.id,"ampere",v)} options={GROEP_A} width={72}/>
@@ -940,6 +1024,35 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
             )}
           </div>
         )})}
+
+        {/* Opties voor in de bijlage — automatisch uit de aardlekgroep-data */}
+        {aardlekgroepen.length > 0 && (
+          <div style={{...S.card,marginTop:14,background:K.surface}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.muted,letterSpacing:0.5,textTransform:"uppercase",marginBottom:10}}>📎 Bijlage bij het rapport</div>
+            <div style={{fontSize:11,color:K.muted,lineHeight:1.4,marginBottom:12}}>Worden als <strong>aparte bijlage</strong> bij het rapport gegenereerd — niet in het hoofdrapport zelf.</div>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",marginBottom:10}}>
+              <input type="checkbox"
+                checked={data.toonGroepenschema !== false}
+                onChange={e=>onChange("toonGroepenschema", e.target.checked)}
+                style={{marginTop:3,cursor:"pointer"}}/>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>Groepenschema automatisch genereren</div>
+                <div style={{fontSize:11,color:K.muted,marginTop:2,lineHeight:1.4}}>Boomstructuur per aardlekschakelaar met onderliggende eindgroepen. Vervangt de noodzaak voor een aparte foto van het schema.</div>
+              </div>
+            </label>
+            <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer"}}>
+              <input type="checkbox"
+                checked={data.toonLabels !== false}
+                onChange={e=>onChange("toonLabels", e.target.checked)}
+                style={{marginTop:3,cursor:"pointer"}}/>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>Uitknipbare labels voor de meterkast</div>
+                <div style={{fontSize:11,color:K.muted,marginTop:2,lineHeight:1.4}}>Aparte pagina met labels per eindgroep (nummer, naam, karakteristiek). Druk op stickerpapier voor direct plakken.</div>
+              </div>
+            </label>
+          </div>
+        )}
+
         <button style={{...S.btn,background:K.yellow,color:"#000",marginTop:8}} onClick={()=>{
           // Zorg dat elke aardlekgroep een hoogstId heeft vóór doorgaan
           const u = aardlekgroepen.map(a=>({...a, hoogstId: a.hoogstId||autoHoogst(a)}));
@@ -1023,6 +1136,18 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
                 <div style={{fontSize:11,marginTop:2}}>
                   {cp.required?<span style={{color:fotos[cp.id]?K.green:K.red}}>● Verplicht</span>:<span style={{color:K.muted}}>○ Aanbevolen</span>}
                 </div>
+                {cp.optioneelInRapport && fotos[cp.id] && (
+                  <label style={{display:"flex",alignItems:"center",gap:6,marginTop:6,fontSize:11,color:K.muted,cursor:"pointer"}} onClick={e=>e.stopPropagation()}>
+                    <input type="checkbox"
+                      checked={data.fotoInRapport?.[cp.id] !== false}
+                      onChange={e=>{
+                        const huidige = data.fotoInRapport||{};
+                        onChange("fotoInRapport", {...huidige, [cp.id]: e.target.checked});
+                      }}
+                      style={{cursor:"pointer"}}/>
+                    Opnemen in rapport
+                  </label>
+                )}
               </div>
               {fotos[cp.id]
                 ? <button onClick={e=>{e.stopPropagation();verwijderFoto(cp.id);}} style={{background:"transparent",border:`1px solid ${K.border}`,borderRadius:8,color:K.muted,cursor:"pointer",fontSize:12,padding:"6px 10px"}}>✕</button>
@@ -1073,7 +1198,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // Nieuwbouw: ≥ 1 MΩ — maar dat onderscheid hebben we bewust verwijderd; altijd bestaande norm.
   // In de praktijk meet de elektrician 0,23 MΩ of hoger op een bestaande installatie.
   const heeft3faseGroep = aardlekgroepen.some(a=>a.fase==="3");
-  const isoTotNorm = 0.23; // bestaande installatie: 1000Ω/V × 230V = 0,23 MΩ (ondergrens)
+  const isoTotNorm = 1.0; // ISO totaal moet ≥ 1 MΩ zijn (strengere norm voor de gehele installatie)
   const isoOk  = v => toNum(v) >= isoTotNorm;
   const dtOk   = v => toNum(v)<=dtNorm;
   const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
@@ -1081,14 +1206,15 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // Z L-N/L-PE norm afgeleid van voorzekering × karakteristiek (EN 60898 automaatnorm)
   // Icc_min = factor × In_voorzekering → Z_max = 230 / Icc_min
   // TT-stelsel: Z L-PE heeft geen harde norm (aardweerstand via grond) — alleen informatief
-  const karFactor = { B:5, C:10, D:20 };
+  const karFactor = { B:5, C:10, D:20, gG:4 }; // gG: trage smeltzekering, factor ~4× In voor 5s uitschakeltijd (NEN-EN 60269)
   const voorzekerKar = inst.voorzekerKar || data.voorzekerKarMat || "B";
   const voorzekerA   = toNum(inst.voorzekering) || toNum(data.voorzekerAmp);
-  const iccMin       = !isNaN(voorzekerA) && voorzekerA > 0 ? (karFactor[voorzekerKar]||5) * voorzekerA : null;
+  const karOnbekend  = !karFactor[voorzekerKar]; // bijv. "Anders" — geen Z-check
+  const iccMin       = !isNaN(voorzekerA) && voorzekerA > 0 && !karOnbekend ? karFactor[voorzekerKar] * voorzekerA : null;
   const zMaxVoorzek  = iccMin ? (230 / iccMin) : null;
   const isKlasse2    = (data.kastType||"klasse2") === "klasse2";
-  const zLnOk  = v => isKlasse2 ? true : isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
-  const zLpeOk = v => isKlasse2 ? true : isTT ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const zLnOk  = v => isKlasse2 ? true : isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  const zLpeOk = v => isKlasse2 ? true : isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
   const cag = aardlekgroepen.find(a=>a.id===activeAG);
   const heeft3fase = heeft3faseGroep;
@@ -1111,8 +1237,8 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
             <div>
               <label style={S.label}>Kar. voorzekering</label>
-              <div style={{display:"flex",gap:6}}>
-                {["B","C","D"].map(k=>(
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {["B","C","D","gG","Anders"].map(k=>(
                   <Pill key={k} small active={voorzekerKar===k} onClick={()=>si("voorzekerKar",k)}>{k}</Pill>
                 ))}
               </div>
@@ -1127,66 +1253,83 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
           )}
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
-          {/* Z L-N en Z L-PE — alleen relevant bij Klasse 1 (metalen kast) */}
-          {data.kastType==="klasse1" ? (
-            <>
+          {/* Z L-N en Z L-PE — altijd invulbaar voor documentatie, ongeacht kastklasse.
+              De automatische Z_max-toetsing verschijnt alleen als er een voorzekering-
+              karakteristiek bekend is (typisch bij Klasse 1). Bij Klasse 2 of ontbrekende
+              voorzekering wordt de waarde puur informatief vastgelegd, zonder oordeel. */}
+          <>
+            {!isKlasse2 && (
               <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
                 📍 <strong style={{color:K.text}}>Meting in de meterkast.</strong> Vertaal de waarde naar de verst afgaande groep — bij langere kabels is Z hoger. Z_max per automaat: 230 / (factor × In).
               </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-                {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
-                  <div key={k}><label style={S.label}>{l}</label>
-                    <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-                      <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
-                      {inst[k] && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
-                      {inst[k] && !isTT && (
-                        <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
-                          Icc≈{(230/toNum(inst[k])).toFixed(0)}A
-                        </span>
-                      )}
-                    </div>
-                    {inst[k] && !isTT && zMaxVoorzek && (
-                      <div style={{fontSize:10,color:zLnOk(inst[k])?K.green:K.red,marginTop:3}}>
-                        Z_max={zMaxVoorzek.toFixed(2)}Ω ({(data.voorzekerKarMat||inst.voorzekerKar||"B")}{data.voorzekerAmp||inst.voorzekering||"?"}A)
-                      </div>
+            )}
+            {isKlasse2 && (
+              <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
+                ℹ️ <strong style={{color:K.text}}>Klasse 2 kast</strong> — geen automatische Z_max-toetsing (geen aardverbinding via de kast), maar de meetwaarde kan hieronder toch vastgelegd worden voor documentatie.
+              </div>
+            )}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+              {[["Z L-N","zln","Ω",zLnOk],["Z L-PE","zlpe","Ω",zLpeOk]].map(([l,k,u,chk])=>(
+                <div key={k}><label style={S.label}>{l}</label>
+                  <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+                    <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit={u} width={70}/>
+                    {inst[k] && zMaxVoorzek && !isTT && <StatusTag level={chk(inst[k])?"ok":"red"}/>}
+                    {inst[k] && !isTT && (
+                      <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
+                        Icc≈{(230/toNum(inst[k])).toFixed(0)}A
+                      </span>
                     )}
                   </div>
-                ))}
-              </div>
-              {/* Z L-PE achter aardlek — Ra_max = 50V / IΔn */}
-              <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
-                <label style={S.label}>Z L-PE achter aardlekschakelaar</label>
-                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-                  Als de hoogst afgaande groep achter een RCD zit: Ra_max = 50V ÷ IΔn<br/>
-                  {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
-                    <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
-                  {["10","30","100","300","500"].map(mA=>(
-                    <Pill key={mA} small active={inst.rcdMaZlpe===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
-                  ))}
-                </div>
-                {inst.rcdMaZlpe && (
-                  <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
-                    background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
-                    Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe)/1000}A = {(50/(toNum(inst.rcdMaZlpe)/1000)).toFixed(0)}Ω
-                  </div>
-                )}
-                <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-                  <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
-                  {inst.zlpeAardlek && inst.rcdMaZlpe && (
-                    <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe)/1000))?"ok":"red"}/>
+                  {inst[k] && !isTT && zMaxVoorzek && (
+                    <div style={{fontSize:10,color:zLnOk(inst[k])?K.green:K.red,marginTop:3}}>
+                      Z_max={zMaxVoorzek.toFixed(2)}Ω ({(data.voorzekerKarMat||inst.voorzekerKar||"B")}{data.voorzekerAmp||inst.voorzekering||"?"}A)
+                    </div>
                   )}
                 </div>
-              </div>
-            </>
-          ) : (
-            <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:8,lineHeight:1.5}}>
-              ℹ️ <strong style={{color:K.text}}>Klasse 2 kast</strong> — Z L-N/L-PE check niet van toepassing (geen aardverbinding via de kast). Beveiliging via kortsluitbeveiliging per eindgroep.
+              ))}
             </div>
-          )}
+            {/* Hoofdzekering en hoofdschakelaar — losse documentatievelden */}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
+              <div>
+                <label style={S.label}>Hoofdzekering</label>
+                <MiniInput value={inst.hoofdzekering} onChange={v=>si("hoofdzekering",v)} unit="A" width={80} placeholder="bijv. 40"/>
+              </div>
+              <div>
+                <label style={S.label}>Hoofdschakelaar</label>
+                <input style={{...S.input,width:140}} type="text" placeholder="bijv. 40A / 4-polig"
+                  value={inst.hoofdschakelaar||""} onChange={e=>si("hoofdschakelaar",e.target.value)}
+                  onFocus={e=>e.target.select()}/>
+              </div>
+            </div>
+            {/* Z L-PE achter aardlek — Ra_max = 50V / IΔn */}
+            <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
+              <label style={S.label}>Z L-PE achter aardlekschakelaar</label>
+              <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                Als de hoogst afgaande groep achter een RCD zit: Ra_max = 50V ÷ IΔn<br/>
+                {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
+                  <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
+                {["10","30","100","300","500"].map(mA=>(
+                  <Pill key={mA} small active={inst.rcdMaZlpe===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
+                ))}
+              </div>
+              {inst.rcdMaZlpe && (
+                <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
+                  background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
+                  Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe)/1000}A = {(50/(toNum(inst.rcdMaZlpe)/1000)).toFixed(0)}Ω
+                </div>
+              )}
+              <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
+                {inst.zlpeAardlek && inst.rcdMaZlpe && (
+                  <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe)/1000))?"ok":"red"}/>
+                )}
+              </div>
+            </div>
+          </>
           <div style={{height:1,background:K.border,margin:"8px 0"}}/>
           <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,cursor:"pointer"}}>
             <input type="checkbox" checked={inst.toon3fase ?? heeft3fase} onChange={e=>si("toon3fase",e.target.checked)}/>
@@ -1202,16 +1345,46 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             ))}
           </div>
-          <label style={S.label}>ISO totaal — norm ≥ 0,23 MΩ<LeerIcoon onderwerp="iso_meting"/></label>
+          <label style={S.label}>ISO totaal — norm ≥ 1 MΩ (gehele installatie, vanaf hoofdschakelaar)<LeerIcoon onderwerp="iso_meting"/></label>
+          <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.4}}>
+            Dit is de hoofdmeting — meet in één keer vanaf de hoofdschakelaar, met alle aardlekgroepen ingeschakeld.
+          </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
             {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
           </div>
           {inst.isoTot && !isoOk(inst.isoTot) && (
-            <div style={{fontSize:11,color:K.orange,marginTop:6,lineHeight:1.5,padding:"6px 10px",background:K.orangeDim,borderRadius:8}}>
-              ⚠ Waarde niet OK — bepaal per aardlekgroep welke groep de afwijking veroorzaakt. Meet per aardlekschakelaar-cluster om de problematische groep te isoleren.
+            <div style={{marginTop:10,padding:"10px 12px",background:K.orangeDim,borderRadius:10,border:`1px solid ${K.orange}44`}}>
+              <div style={{fontSize:11,color:K.orange,lineHeight:1.6,marginBottom:10}}>
+                ⚠ <strong>Waarde onder 1 MΩ.</strong> Zoek de boosdoener zo op:
+                <ol style={{margin:"6px 0 0 18px",padding:0}}>
+                  <li>Zet alle aardlekgroepen uit</li>
+                  <li>Zet ze één voor één weer aan, meet steeds opnieuw</li>
+                  <li>De groep waarbij de ISO-waarde weer instort, is de probleemgroep — vink 'm hieronder aan</li>
+                </ol>
+              </div>
+              <label style={S.label}>Geïdentificeerde probleemgroep(en)</label>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                {aardlekgroepen.map(ag=>{
+                  const geselecteerd = (inst.isoTotProblemGroepen||[]).includes(ag.id);
+                  return (
+                    <Pill key={ag.id} small active={geselecteerd} onClick={()=>{
+                      const huidige = inst.isoTotProblemGroepen||[];
+                      si("isoTotProblemGroepen", geselecteerd ? huidige.filter(id=>id!==ag.id) : [...huidige, ag.id]);
+                    }}>{ag.naam}</Pill>
+                  );
+                })}
+              </div>
+              <label style={S.label}>Toelichting (optioneel)</label>
+              <input style={S.input} type="text"
+                placeholder="bijv. vochtige leiding badkamer, defect apparaat"
+                value={inst.isoTotProblemen||""}
+                onChange={e=>si("isoTotProblemen",e.target.value)}
+                onFocus={e=>e.target.select()}/>
+              <div style={{fontSize:10,color:K.muted,marginTop:4}}>Geselecteerde groep(en) + toelichting worden opgenomen in het rapport.</div>
             </div>
           )}
+
         </div>
 
         {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
@@ -1304,9 +1477,10 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             )}
 
-            {/* ISO velden per fase type */}
+            {/* ISO velden per fase type — optioneel, alleen relevant als ISO totaal een afwijking toont */}
             <div style={{marginBottom:12}}>
-              <label style={S.label}>Isolatieweerstand (MΩ) — 250V — norm {isoNormLabel}<LeerIcoon onderwerp="iso_meting"/></label>
+              <label style={S.label}>Isolatieweerstand (MΩ) — 250V — norm {isoNormLabel} <span style={{color:K.muted,fontWeight:500,textTransform:"none"}}>(optioneel)</span><LeerIcoon onderwerp="iso_meting"/></label>
+              <div style={{fontSize:10,color:K.muted,marginBottom:8}}>Alleen invullen als de ISO totaal-meting (stap hierboven) een afwijking toont en je deze groep wilt narekenen.</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {isoVelden.map(({k,l})=>{
                   const val = gv(cag.id,k);
@@ -1314,11 +1488,15 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                   return (
                     <div key={k}>
                       <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
-                      <input style={{...S.input,fontSize:15,fontWeight:700,
-                        background:val?(ok?K.greenDim:K.redDim):K.surface,
-                        border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-                        type="text" inputMode="decimal" placeholder="0,5"
-                        value={val} onChange={e=>sg(cag.id,k,e.target.value)}/>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+                          background:val?(ok?K.greenDim:K.redDim):K.surface,
+                          border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
+                          type="text" inputMode="decimal" placeholder="0,5"
+                          value={val} onChange={e=>sg(cag.id,k,e.target.value)}
+                          onFocus={e=>e.target.select()}/>
+                        <span style={{fontSize:12,fontWeight:700,color:K.muted,whiteSpace:"nowrap"}}>MΩ</span>
+                      </div>
                     </div>
                   );
                 })}
@@ -1671,6 +1849,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const [status, setStatus] = useState("idle");
   const [pdfHtml, setPdfHtml] = useState("");
+  const [bijlageHtml, setBijlageHtml] = useState("");
   const [mailStatus, setMailStatus] = useState("idle"); // idle | sending | sent | error
   const [mailError, setMailError] = useState("");
   const disc = DISCIPLINES.find(d=>d.id===discipline);
@@ -1790,9 +1969,77 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <h2>Opmerkingen</h2>
       <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap">${data.notitie}</div>` : "";
 
+    // ── GROEPENSCHEMA — boomstructuur per aardlekschakelaar ─────────────────
+    // Wordt automatisch gegenereerd uit aardlekgroep → eindgroep data.
+    // De installateur kan dit per rapport aan/uit zetten via data.toonGroepenschema (default: true).
+    const eindgroepIcoon = (type) => EINDGROEP_TYPES.find(t=>t.id===type)?.icon || "";
+    const groepenschemaHtml = () => {
+      if (data.toonGroepenschema === false) return "";
+      if (!aardlekgroepen?.length) return "";
+      // Bouw per aardlekschakelaar een kolom met eindgroepen eronder
+      const kolommen = aardlekgroepen.map(ag => {
+        const rcdLabel = ag.rcdType === "geen"
+          ? "Zonder RCD"
+          : `RCD ${ag.rcdMa}mA · type-${ag.rcdType}`;
+        const rcdKleur = ag.rcdType === "geen" ? "#999" : "#1565C0";
+        const eindGroepen = (ag.eindgroepen||[]).map((e, idx) => `
+          <div style="border:1px solid #ccc;padding:6px 8px;margin-top:4px;background:#fff;border-radius:3px;font-size:9px">
+            <div style="font-weight:700;color:#333">${idx+1}. ${eindgroepIcoon(e.type)} ${e.naam||"—"}</div>
+            <div style="color:#666;font-size:8px;margin-top:2px">${e.kar||"B"}${e.ampere||"16A"}</div>
+          </div>`).join("");
+        return `
+          <div style="flex:1;min-width:120px;page-break-inside:avoid">
+            <div style="background:${rcdKleur};color:#fff;padding:6px 8px;border-radius:3px;font-size:10px;font-weight:700;text-align:center">
+              ${ag.naam}<br><span style="font-size:8px;font-weight:500;opacity:0.9">${rcdLabel}</span>
+            </div>
+            <div style="border-left:2px dashed #ccc;margin-left:50%;height:8px"></div>
+            ${eindGroepen}
+          </div>`;
+      }).join("");
+      return `
+      <h2 style="page-break-before:always">Groepenschema</h2>
+      <p style="font-size:9px;color:#555;margin-bottom:10px">Automatisch gegenereerd uit de meetregistratie. Toont de structuur van aardlekschakelaars met onderliggende eindgroepen.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${kolommen}</div>`;
+    };
+
+    // ── UITKNIPBARE LABELS — voor in de meterkast ───────────────────────────
+    // Aparte pagina met labels per eindgroep, in een raster met snijlijnen.
+    const labelsHtml = () => {
+      if (data.toonLabels === false) return "";
+      if (!aardlekgroepen?.length) return "";
+      const alleLabels = [];
+      aardlekgroepen.forEach(ag => {
+        (ag.eindgroepen||[]).forEach((e, idx) => {
+          alleLabels.push({
+            nummer: `${ag.naam.replace(/[^A-Z]/g,"")||"?"}${idx+1}`,
+            naam: `${eindgroepIcoon(e.type)} ${e.naam || "—"}`.trim(),
+            kar: `${e.kar||"B"}${e.ampere||"16A"}`,
+          });
+        });
+      });
+      if (!alleLabels.length) return "";
+      // 4 kolommen × n rijen, met snijlijnen (dashed border) tussen labels
+      const labelHtml = alleLabels.map(l => `
+        <div style="border:1px dashed #999;padding:6px 8px;text-align:center;background:#fff;page-break-inside:avoid;height:52px;display:flex;flex-direction:column;justify-content:center">
+          <div style="font-weight:800;font-size:10px;color:#000;letter-spacing:0.5px">${l.nummer} · ${l.naam}</div>
+          <div style="font-size:8px;color:#666;margin-top:2px">${l.kar}</div>
+        </div>`).join("");
+      return `
+      <h2 style="page-break-before:always">Uitknipbare labels meterkast</h2>
+      <p style="font-size:9px;color:#555;margin-bottom:10px">Knip langs de stippellijnen en plak op de bijbehorende eindgroep in de meterkast. Het is aan te raden de pagina op stickerpapier af te drukken.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0">${labelHtml}</div>`;
+    };
+
     const fotosHtml = (checkpoints) => {
       const fotos = data.fotos||{};
-      const metFoto = (checkpoints||[]).filter(cp => fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image"));
+      const inRapport = data.fotoInRapport||{};
+      const metFoto = (checkpoints||[]).filter(cp => {
+        const heeftFoto = fotos[cp.id] && typeof fotos[cp.id]==="string" && fotos[cp.id].startsWith("data:image");
+        if (!heeftFoto) return false;
+        // Foto's met 'optioneelInRapport' alleen tonen als vinkje aan staat (default: aan)
+        if (cp.optioneelInRapport && inRapport[cp.id] === false) return false;
+        return true;
+      });
       if (metFoto.length === 0) return "";
       return `
       <!--FOTOSECTIE-START-->
@@ -1832,7 +2079,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     if (discipline === "groepenkast") {
       const accentGK = "#1565C0";
       const statusGK = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
-      const karFacRap = { B:5, C:10, D:20 };
+      const karFacRap = { B:5, C:10, D:20, gG:4 };
       const vKarRap = instMet.voorzekerKar || data.voorzekerKarMat || "B";
       const vARap   = toNum(instMet.voorzekering) || toNum(data.voorzekerAmp);
       const zMaxVoorzekRap = (!isNaN(vARap) && vARap>0) ? 230/((karFacRap[vKarRap]||5)*vARap) : null;
@@ -1852,8 +2099,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         <h2>Gegevens installatie</h2>
         <table>
-          <tr><td><strong>Kastmodel</strong></td><td>${data.kast||"—"}</td>
-              <td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td></tr>
+          <tr><td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td>
+              <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td></tr>
           <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||"—"}</td></tr>
           <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${ag.naam}: geen RCD`:`${ag.naam}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
         </table>
@@ -1861,7 +2108,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table>
           <tr>
             <td><strong>Voorzekering</strong></td><td>${instMet.voorzekering||"—"} A (kar. ${instMet.voorzekerKar||"B"})</td>
-            <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}</td>
+            <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}${instMet.stelsel==="Anders"&&instMet.stelselAnders?` (${instMet.stelselAnders})`:""}</td>
+          </tr>
+          <tr>
+            <td><strong>Hoofdzekering</strong></td><td>${instMet.hoofdzekering||"—"} A</td>
+            <td><strong>Hoofdschakelaar</strong></td><td>${instMet.hoofdschakelaar||"—"}</td>
           </tr>
           <tr>
             <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zln||"—"} Ω ${instMet.zln&&!isNaN(toNum(instMet.zln))?`(Icc≈${(230/toNum(instMet.zln)).toFixed(0)}A)`:""}</td>
@@ -1872,8 +2123,9 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td></td><td></td>
           </tr>` : ""}
           <tr>
-            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=(aardlekgroepen.some(a=>a.fase==="3")?0.40:0.23))}>${instMet.isoTot||"—"} MΩ</td>
-            <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td>
+            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=1)}>${instMet.isoTot||"—"} MΩ
+              ${(instMet.isoTotProblemGroepen||[]).length ? `<br><span style="font-size:8px;color:#92400e">⚠ Probleemgroep(en): ${(instMet.isoTotProblemGroepen||[]).map(id=>aardlekgroepen.find(a=>a.id===id)?.naam||"?").join(", ")}${instMet.isoTotProblemen?` — ${instMet.isoTotProblemen}`:""}</span>` : ""}</td>
+            <td colspan="2"></td>
           </tr>
           <tr>
             <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
@@ -2182,6 +2434,39 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     }
 
     setPdfHtml(html);
+    trackEvent("rapport_gegenereerd", {
+      discipline,
+      aantal_aardlekgroepen: (data.aardlekgroepen || []).length,
+      ai_gebruikt: !!data.aiAnalyse,
+    });
+
+    // ── BIJLAGE (alleen voor groepenkast) — groepenschema en uitknipbare labels
+    // Apart document zodat het hoofdrapport compact blijft en de bijlage los
+    // af te drukken/op te slaan is. Wordt alleen gegenereerd als er aardlekgroepen zijn
+    // én tenminste één van de twee vinkjes aan staat.
+    if (discipline === "groepenkast"
+        && aardlekgroepen?.length > 0
+        && (data.toonGroepenschema !== false || data.toonLabels !== false)) {
+      const accentGK = "#1565C0";
+      const schemaSectie = data.toonGroepenschema !== false ? groepenschemaHtml() : "";
+      const labelsSectie = data.toonLabels !== false ? labelsHtml() : "";
+      // De helper-functies beginnen met "page-break-before:always" — voor de eerste
+      // sectie in een los document hoeven we die page break niet, dus die strippen we.
+      const schemaSchoon = schemaSectie.replace('<h2 style="page-break-before:always">', '<h1>');
+      const labelsSchoon = labelsSectie;
+      const bijlage = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${data.projectId}-bijlage</title>
+        <style>${css(accentGK)}</style></head><body>
+        ${logoHtml()}
+        <h1>Bijlage opleverrapport</h1>
+        <p style="font-size:11px;color:#555;margin-bottom:16px">Behoort bij rapport <strong>${data.projectId||""}</strong> · ${data.straat||""} ${data.huisnummer||""}, ${data.plaats||""}</p>
+        ${schemaSchoon}
+        ${labelsSchoon}
+        </body></html>`;
+      setBijlageHtml(bijlage);
+    } else {
+      setBijlageHtml("");
+    }
     setStatus("done");
   };
 
@@ -2264,9 +2549,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
 
       if (!resp.ok || json.error) throw new Error(json.error || `Versturen mislukt (status ${resp.status})`);
       setMailStatus("sent");
+      trackEvent("mail_verstuurd", { discipline, success: true });
     } catch (e) {
       setMailStatus("error");
       setMailError(e.message || "Onbekende fout");
+      trackEvent("mail_verstuurd", { discipline, success: false });
     }
   };
 
@@ -2360,6 +2647,28 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <button style={{...S.btn,background:K.green,color:"#fff"}} onClick={download}>
               🖨️ Openen &amp; opslaan als PDF
             </button>
+
+            {/* Bijlage met groepenschema + uitknipbare labels (alleen GK) */}
+            {bijlageHtml && (
+              <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`}} onClick={() => {
+                const win = window.open("", "_blank");
+                win.document.write(`
+                  <!DOCTYPE html><html><head>
+                    <title>${data.projectId||"rapport"}-bijlage</title>
+                    <style>@media print { .print-btn { display:none !important; } body { margin:0; } }</style>
+                  </head><body>
+                    <div class="print-btn" style="position:fixed;top:12px;right:12px;z-index:999;display:flex;gap:8px;">
+                      <button onclick="window.print()" style="background:#F5C518;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">🖨️ Opslaan als PDF</button>
+                      <button onclick="window.close()" style="background:#2E3347;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">✕ Sluiten</button>
+                    </div>
+                    ${bijlageHtml}
+                  </body></html>
+                `);
+                win.document.close();
+              }}>
+                📎 Bijlage openen (groepenschema &amp; labels)
+              </button>
+            )}
 
             {/* Mail rapport naar klant — via Resend */}
             {mailStatus==="idle" && (
@@ -2460,12 +2769,12 @@ function DisciplineKiezer({ onKies, onBack }) {
 }
 
 // ─── HOME SCHERM ──────────────────────────────────────────────────────────────
-function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
+function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar }) {
   const [projecten, setProjecten] = useState([]);
 
   useEffect(() => {
     setProjecten(laadProjecten());
-  }, []);
+  }, [idbKlaar]);
 
   const verwijder = (id, e) => {
     e?.stopPropagation();
@@ -2551,6 +2860,128 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder }) {
             <div style={{fontSize:13,color:K.muted}}>Nog geen projecten — start hierboven je eerste registratie.</div>
           </div>
         )}
+
+        {/* Back-up & herstel */}
+        <div style={{...S.sTitle,marginTop:24}}>💾 Back-up &amp; herstel</div>
+        <div style={S.card}>
+          <div style={{fontSize:11,color:K.muted,lineHeight:1.5,marginBottom:12}}>
+            Bewaar al je projecten als één bestand op je telefoon, in iCloud, Google Drive of Dropbox. Bij verlies of nieuwe telefoon kun je ze hier weer importeren.
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+            <button onClick={() => {
+              try {
+                const n = exporteerProjecten();
+                trackEvent("backup_gemaakt", { methode: "json", aantal: n });
+                alert(`✅ Back-up gemaakt van ${n} project${n===1?"":"en"}. Sla het JSON-bestand op in iCloud/Drive/Dropbox.`);
+              } catch (e) {
+                alert(`Back-up mislukt: ${e.message}`);
+              }
+            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:"none",background:K.yellow,color:"#000",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+              📥 Back-up downloaden
+            </button>
+            <button onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file"; input.accept = "application/json,.json";
+              input.onchange = async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const r = importeerProjecten(text);
+                  alert(`✅ Geïmporteerd: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt (totaal in back-up: ${r.totaal}).`);
+                  setProjecten(laadProjecten());
+                } catch (err) {
+                  alert(`Importeren mislukt: ${err.message}`);
+                }
+              };
+              input.click();
+            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+              📤 Back-up herstellen
+            </button>
+          </div>
+
+          {/* Dropbox koppeling — werkt zonder OAuth via Dropbox Saver/Chooser widgets.
+              Vereist Dropbox App Key (zie https://www.dropbox.com/developers/apps).
+              Tot die er is, vervang DROPBOX_APP_KEY door je echte key. */}
+          <div style={{borderTop:`1px solid ${K.border}`,paddingTop:10,marginTop:4}}>
+            <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+              <strong style={{color:K.text}}>📦 Dropbox</strong> — sla direct op in of laad uit je Dropbox (2GB gratis, ~1.300 projecten).
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={() => {
+                // Dropbox Saver werkt via een URL die Dropbox zelf ophaalt.
+                // blob:// URLs bestaan alleen in de browser en kunnen niet door Dropbox worden opgehaald.
+                // Oplossing: data-URL — bevat de data direct in de URL zelf.
+                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || "";
+                if (!DROPBOX_APP_KEY) {
+                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig en upload zelf naar Dropbox.");
+                  return;
+                }
+                const lijst = laadProjecten();
+                const jsonText = JSON.stringify({version:1,exportedAt:new Date().toISOString(),projecten:lijst},null,2);
+                const groottMB = (jsonText.length / (1024*1024)).toFixed(2);
+                const datum = new Date().toISOString().slice(0,10);
+                const filename = `yourwkb-backup-${datum}.json`;
+
+                // Data URL — werkt tot ~150MB, ruim genoeg voor typische back-ups
+                const dataUrl = "data:application/json;base64," + btoa(unescape(encodeURIComponent(jsonText)));
+
+                const startSave = () => {
+                  if (!window.Dropbox?.save) {
+                    alert("⚠️ Dropbox SDK niet correct geladen — probeer nogmaals of gebruik de handmatige back-up-knop.");
+                    return;
+                  }
+                  window.Dropbox.save({
+                    files: [{ url: dataUrl, filename }],
+                    success: () => alert(`✅ Opgeslagen in Dropbox (${groottMB} MB, ${lijst.length} project${lijst.length===1?"":"en"})`),
+                    error: (msg) => alert(`Dropbox-opslag mislukt: ${msg}`),
+                    cancel: () => {},
+                  });
+                };
+
+                if (!window.Dropbox) {
+                  const s = document.createElement("script");
+                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
+                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
+                  s.onload = startSave;
+                  s.onerror = () => alert("Kon Dropbox SDK niet laden — controleer je internetverbinding.");
+                  document.body.appendChild(s);
+                } else startSave();
+              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+                ☁️ Opslaan in Dropbox
+              </button>
+              <button onClick={() => {
+                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || "";
+                if (!DROPBOX_APP_KEY) {
+                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig uit Dropbox en gebruik 'Herstellen'.");
+                  return;
+                }
+                const open = () => window.Dropbox.choose({
+                  linkType: "direct", extensions: [".json"], multiselect: false,
+                  success: async (files) => {
+                    try {
+                      const resp = await fetch(files[0].link);
+                      const text = await resp.text();
+                      const r = importeerProjecten(text);
+                      alert(`✅ Geïmporteerd uit Dropbox: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt.`);
+                      setProjecten(laadProjecten());
+                    } catch (err) {
+                      alert(`Importeren uit Dropbox mislukt: ${err.message}`);
+                    }
+                  }
+                });
+                if (!window.Dropbox) {
+                  const s = document.createElement("script");
+                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
+                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
+                  s.onload = open; document.body.appendChild(s);
+                } else open();
+              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
+                ☁️ Laden uit Dropbox
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div style={{fontSize:11,color:K.muted,textAlign:"center",marginTop:16,lineHeight:1.6}}>
           🔒 Projecten staan alleen op dit toestel opgeslagen.<br/>Wij bewaren niets op een server.
@@ -3058,13 +3489,109 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── PROJECT OPSLAG HELPERS ───────────────────────────────────────────────────
 // Alle projecten staan lokaal op de telefoon van de installateur (geen server, geen AVG-risico).
+// ─── PROJECT-OPSLAG ──────────────────────────────────────────────────────────
+// We gebruiken IndexedDB als primaire opslag (veel grotere capaciteit, robuuster),
+// met automatische fallback naar localStorage. De data wordt 1× bij eerste laad
+// vanuit localStorage gemigreerd naar IndexedDB en daarna parallel weggeschreven.
 const PROJ_KEY   = "ywkb_projecten";
 const ACTIEF_KEY = "ywkb_actief_id";
+const IDB_NAME   = "yourwkb";
+const IDB_VERSION = 1;
+const IDB_STORE_PROJ = "projecten";
+const IDB_STORE_FOTOS = "fotos";
 
+// IndexedDB open (asynchroon, maar we cachen de connectie)
+let _idbPromise = null;
+function openIDB() {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE_PROJ)) db.createObjectStore(IDB_STORE_PROJ, { keyPath: "id" });
+        if (!db.objectStoreNames.contains(IDB_STORE_FOTOS)) db.createObjectStore(IDB_STORE_FOTOS, { keyPath: "id" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => resolve(null);
+    } catch { resolve(null); }
+  });
+  return _idbPromise;
+}
+
+// Sync-helper: in-memory cache van wat IndexedDB ooit terug-las (asynchroon),
+// zodat onze synchrone laadProjecten()-API behouden blijft (compatibel met de rest van de app).
+let _idbCache = null; // null = nog niet geladen; [] of array = geladen
+let _idbFotosCache = {}; // {id: fotosObject}
+
+async function _initIDBCache() {
+  const db = await openIDB();
+  if (!db) { _idbCache = []; return; }
+  await new Promise((resolve) => {
+    const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readonly");
+    const projStore = tx.objectStore(IDB_STORE_PROJ);
+    const fotoStore = tx.objectStore(IDB_STORE_FOTOS);
+    const reqP = projStore.getAll();
+    const reqF = fotoStore.getAll();
+    let done = 0;
+    const klaar = () => { if (++done === 2) resolve(); };
+    reqP.onsuccess = () => { _idbCache = reqP.result || []; klaar(); };
+    reqP.onerror   = () => { _idbCache = []; klaar(); };
+    reqF.onsuccess = () => { (reqF.result||[]).forEach(f => _idbFotosCache[f.id] = f.fotos); klaar(); };
+    reqF.onerror   = () => klaar();
+  });
+  // Eerste keer: migreer eventuele oude localStorage data naar IndexedDB
+  if (_idbCache.length === 0) {
+    try {
+      const oude = JSON.parse(localStorage.getItem(PROJ_KEY) || "[]");
+      if (oude.length > 0) {
+        for (const p of oude) {
+          try {
+            const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`) || "null");
+            if (fotos) { p.job = p.job || {}; p.job.fotos = fotos; _idbFotosCache[p.id] = fotos; }
+          } catch {}
+        }
+        _idbCache = oude;
+        _persistAllToIDB(oude);
+      }
+    } catch {}
+  }
+}
+
+function _persistAllToIDB(projecten) {
+  openIDB().then(db => {
+    if (!db) return;
+    try {
+      const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readwrite");
+      const projStore = tx.objectStore(IDB_STORE_PROJ);
+      const fotoStore = tx.objectStore(IDB_STORE_FOTOS);
+      projStore.clear();
+      fotoStore.clear();
+      for (const p of projecten) {
+        const fotos = p.job?.fotos;
+        const { fotos: _f, ...jobZonderFotos } = p.job || {};
+        projStore.put({ ...p, job: jobZonderFotos });
+        if (fotos) fotoStore.put({ id: p.id, fotos });
+      }
+    } catch {}
+  });
+}
+
+// Synchrone laadProjecten — leest uit de cache (na _initIDBCache).
+// Bij eerste call vóór async-init zijn klaar, valt automatisch terug op localStorage.
 function laadProjecten() {
+  // Cache geladen? → die gebruiken
+  if (_idbCache !== null) {
+    return _idbCache.map(p => {
+      const fotos = _idbFotosCache[p.id];
+      if (fotos && p.job) return { ...p, job: { ...p.job, fotos } };
+      return p;
+    });
+  }
+  // Fallback: lees direct uit localStorage (eerste laad, vóór IDB-init)
   try {
     const lijst = JSON.parse(localStorage.getItem(PROJ_KEY)||"[]");
-    // Foto's worden apart opgeslagen onder ywkb_fotos_{id} — laad ze hier terug in
     return lijst.map(p => {
       try {
         const fotos = JSON.parse(localStorage.getItem(`ywkb_fotos_${p.id}`)||"null");
@@ -3076,29 +3603,87 @@ function laadProjecten() {
 }
 
 function bewaarProjecten(lijst) {
+  // Update in-memory cache
+  _idbCache = lijst.map(p => {
+    if (p.job?.fotos) {
+      _idbFotosCache[p.id] = p.job.fotos;
+      const { fotos, ...rest } = p.job;
+      return { ...p, job: rest };
+    }
+    return p;
+  });
+  // Persistent in IndexedDB (async, fire-and-forget)
+  _persistAllToIDB(lijst);
+  // Parallel ook in localStorage voor compatibiliteit + fallback bij geen IDB
   try {
-    // Sla projecten op zonder foto's in het hoofd-object (foto's apart)
     const lijstZonderFotos = lijst.map(p => {
       if (!p.job?.fotos) return p;
       const { fotos, ...jobZonderFotos } = p.job;
-      // Sla foto's apart op per project-id
-      try {
-        localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos));
-      } catch {
-        console.warn("YourWkb: foto-opslag vol — foto's niet bewaard voor project", p.id);
-      }
+      try { localStorage.setItem(`ywkb_fotos_${p.id}`, JSON.stringify(fotos)); }
+      catch { /* localStorage vol — IndexedDB heeft het al, dus geen alert nodig */ }
       return { ...p, job: jobZonderFotos };
     });
     localStorage.setItem(PROJ_KEY, JSON.stringify(lijstZonderFotos));
-  } catch (e) {
-    // Toon een zichtbare waarschuwing als ook de rest niet past
-    console.warn("YourWkb: localStorage vol — project niet opgeslagen:", e.message);
-    alert("⚠️ Onvoldoende opslagruimte op dit toestel. Maak ruimte vrij of lever het project direct op.");
+  } catch {
+    // localStorage vol — IndexedDB heeft het al, dus geen blocker
+    console.warn("YourWkb: localStorage vol, maar IndexedDB werkt nog");
   }
 }
 
 function verwijderProjectOpslag(id) {
+  delete _idbFotosCache[id];
   try { localStorage.removeItem(`ywkb_fotos_${id}`); } catch {}
+  openIDB().then(db => {
+    if (!db) return;
+    try {
+      const tx = db.transaction([IDB_STORE_PROJ, IDB_STORE_FOTOS], "readwrite");
+      tx.objectStore(IDB_STORE_PROJ).delete(id);
+      tx.objectStore(IDB_STORE_FOTOS).delete(id);
+    } catch {}
+  });
+}
+
+// ─── BACK-UP / EXPORT / IMPORT ───────────────────────────────────────────────
+// Eén JSON-bestand met alle projecten + foto's. Werkt offline, geen server.
+// Format: { version: 1, exportedAt: "...", projecten: [{...met fotos erin}] }
+function exporteerProjecten() {
+  const lijst = laadProjecten(); // bevat foto's al re-gemerged
+  const blob = new Blob([JSON.stringify({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    projecten: lijst,
+  }, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const datum = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `yourwkb-backup-${datum}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  return lijst.length;
+}
+
+function importeerProjecten(jsonText) {
+  let data;
+  try { data = JSON.parse(jsonText); }
+  catch { throw new Error("Ongeldig JSON-bestand"); }
+  const inkomend = Array.isArray(data) ? data : data.projecten;
+  if (!Array.isArray(inkomend)) throw new Error("Geen geldig YourWkb back-up bestand");
+  const bestaand = laadProjecten();
+  const bestaandIds = new Set(bestaand.map(p => p.id));
+  // Bestaande projecten met dezelfde id krijgen voorrang als ze nieuwer zijn,
+  // anders importeren we de back-up versie (laatst-bewerkt wint)
+  const samengevoegd = [...bestaand];
+  let nieuw = 0, vervangen = 0;
+  for (const p of inkomend) {
+    if (!p?.id) continue;
+    const idx = samengevoegd.findIndex(x => x.id === p.id);
+    if (idx === -1) { samengevoegd.unshift(p); nieuw++; }
+    else if ((p.updatedAt||0) > (samengevoegd[idx].updatedAt||0)) {
+      samengevoegd[idx] = p; vervangen++;
+    }
+  }
+  bewaarProjecten(samengevoegd);
+  return { nieuw, vervangen, totaal: inkomend.length };
 }
 function upsertProject(lijst, proj) {
   const i = lijst.findIndex(p=>p.id===proj.id);
@@ -3113,6 +3698,13 @@ export default function App() {
   const [step,       setStep]       = useState(0);
   const [job,        setJob]        = useState({});
   const [actiefId,   setActiefId]   = useState(null);
+  const [idbKlaar,   setIdbKlaar]   = useState(false);
+
+  // Initialiseer IndexedDB-cache bij app-start (eenmalig).
+  // Doet ook automatisch migratie van localStorage → IndexedDB.
+  useEffect(() => {
+    _initIDBCache().finally(() => setIdbKlaar(true));
+  }, []);
 
   // Schrijf de huidige staat van het actieve project terug naar de projectenlijst
   const persist = (jobData, disc, st, status) => {
@@ -3140,6 +3732,7 @@ export default function App() {
     const nieuwStep = step + 1;
     setStep(nieuwStep);
     persist(job, discipline, nieuwStep);
+    trackEvent("stap_bereikt", { discipline, stap: nieuwStep });
   };
   const prev = () => {
     const nieuwStep = step - 1;
@@ -3158,6 +3751,7 @@ export default function App() {
       setScreen("job");
       const lijst = laadProjecten();
       bewaarProjecten(upsertProject(lijst, {id:nieuwId,discipline:discId,job:{},step:0,status:"concept",updatedAt:Date.now()}));
+      trackEvent("discipline_gekozen", { discipline: discId });
     } else {
       setScreen("kiezen");
     }
@@ -3183,6 +3777,7 @@ export default function App() {
     setStep(0);
     setScreen("job");
     persist(job, d, 0);
+    trackEvent("discipline_gekozen", { discipline: d });
   };
 
   // Bij oplevering: status van het project op 'opgeleverd' zetten, data blijft bewaard zodat
@@ -3251,11 +3846,14 @@ export default function App() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
-        {screen==="home"   && <HomeScreen onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
+        {screen==="home"   && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {screen==="job"    && (
           <div>
-            <StepBar step={step} steps={stepLabels}/>
+            <StepBar step={step} steps={stepLabels} onJump={(i) => {
+              setStep(i);
+              persist(job, discipline, i);
+            }}/>
             {screens[step]}
           </div>
         )}
