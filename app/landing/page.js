@@ -401,11 +401,10 @@ export default function LandingPage() {
         <p>Altijd gratis te gebruiken. Tijdens de testfase ook rapporten gratis.<br />
         <span style={{ fontSize:14 }}>Daarna €2,50 per rapport — je wordt van tevoren op de hoogte gesteld.</span></p>
         <div style={{ maxWidth: 400, margin: '0 auto' }}>
-          <input type="email" className="email-input" placeholder="jouw@emailadres.nl" />
           <a href="/app" className="btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', marginBottom: 12 }}>
             Start project →
           </a>
-          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Daarna direct toegang tot de app. Geen wachttijd.</p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Geen account, geen registratie — direct aan de slag.</p>
         </div>
       </div>
 
