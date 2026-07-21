@@ -1,6 +1,28 @@
 export const metadata = {
-  title: 'YourWkb — NEN1010 opleverrapport voor elektriciens',
-  description: 'Leg foto\'s, meetwaarden en materialen vast op je telefoon. Automatisch een professioneel NEN1010 rapport naar je klant.',
+  metadataBase: new URL('https://yourwkb.nl'),
+  title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
+  description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon. Voor zzp-elektriciens, PV-, cv- en warmtepompinstallateurs. Automatische normcheck, klaar in minuten.',
+  keywords: ['Wkb opleverrapport', 'NEN1010 app', 'opleverdossier elektricien', 'Wkb consumentendossier', 'groepenkast opleverrapport', 'installateur software'],
+  alternates: {
+    canonical: 'https://yourwkb.nl',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+  openGraph: {
+    title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
+    description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon. Automatische normcheck, klaar in minuten.',
+    url: 'https://yourwkb.nl',
+    siteName: 'YourWkb',
+    locale: 'nl_NL',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
+    description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon.',
+  },
 }
 
 export default function RootLayout({ children }) {

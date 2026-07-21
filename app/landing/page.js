@@ -15,8 +15,39 @@ export default function LandingPage() {
     { q: 'Wat kost het na de testperiode?', a: 'De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
   ]
 
+  // Structured data voor Google — helpt de pagina beter te begrijpen en
+  // geeft kans op rijke zoekresultaten (bijv. uitklapbare FAQ direct in Google).
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "YourWkb",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "Wkb-opleverdossier en NEN1010-rapport maken op je telefoon, voor zzp-installateurs elektra, PV, cv en warmtepomp.",
+        "url": "https://yourwkb.nl",
+        "offers": {
+          "@type": "Offer",
+          "price": "2.50",
+          "priceCurrency": "EUR",
+          "description": "Per definitief rapport, na de gratis testfase"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": faqs.map(f => ({
+          "@type": "Question",
+          "name": f.q,
+          "acceptedAnswer": { "@type": "Answer", "text": f.a }
+        }))
+      }
+    ]
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
@@ -174,6 +205,7 @@ export default function LandingPage() {
           </div>
           <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
           <p className="hero-sub">Snel ingevuld op je telefoon, klaar in minuten. NEN-conform en Wkb-proof — voor elektriciens, PV-installateurs, cv- en warmtepompmonteurs.</p>
+          <p style={{ fontSize:13, color:'var(--muted)', marginTop:-8, marginBottom:20 }}>Wkb-opleverrapport en NEN1010-rapport maken, direct als installateur op locatie.</p>
           <div className="hero-cta">
             <a href="/app" className="btn-primary">Start project →</a>
             <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
