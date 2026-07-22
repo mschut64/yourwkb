@@ -1,19 +1,14 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-A
-// GROTE HERSTRUCTURERING stap 7 (meetwaarden), obv veldtest-feedback Martin:
-// A) IMPEDANTIE: Z L-N/L-PE nu ÉÉNMALIG gemeten (niet meer per aardlekgroep),
-//    op de hoogst afgaande groep van de hele installatie. Icc en maximale
-//    afschakeltijd zijn nu AFGELEIDE waarden (stelsel+karakteristiek+ampère+Z).
-//    Hoofdzekering-veld verwijderd, hoofdschakelaar blijft. 3-fase keuze
-//    toegevoegd voor Z L2-PE/L3-PE. Voorzekering uit materiaalstap verwijderd
-//    (overbodig geworden, alles zit nu in stap 7 zelf).
-// B) ISOLATIEWEERSTAND: ISO totaal (alle groepen aan, hoofdvoeding uit) is de
-//    hoofdmeting, norm nu ≥0,23 MΩ (was 1 MΩ). Bij afwijking: geleide workflow
-//    om probleemgroep(en) te identificeren, ALLEEN die groepen krijgen nog een
-//    losse ISO-meting. Spanningsmeting L1/L2/L3 blijft op installatie-niveau.
-// C) AARDLEKSCHAKELAARS: spanningsmeting en ISO-per-groep uit de standaard
-//    aardlekgroep-kaart gehaald — alleen nog RCD-type/ΔT/ΔI/testknop per groep.
-// Kalibratiedatum van meetapparatuur nu ook zichtbaar in het rapport.
+// YourWkb WkbApp.jsx — versie 2026-07-21-B
+// Bugfixes n.a.v. test v2026-07-21-A:
+// - Z L2-N en Z L3-N toegevoegd (waren vergeten, alleen L2-PE/L3-PE bestonden)
+// - Max. afschakeltijd nu ALTIJD zichtbaar (was verstopt achter de Icc-berekening
+//   die pas verschijnt zodra ampère is ingevuld — nu losgekoppeld, want afschakel-
+//   tijd hangt alleen af van het stelsel, niet van ampère)
+// - Duidelijke waarschuwing toegevoegd wanneer een Z-waarde is ingevuld maar er nog
+//   geen automatische toetsing plaatsvindt (ontbrekende ampère/karakteristiek)
+// - LeerIcoon-popup: sluitknop vergroot (36x36px ipv onzichtbaar kleine ×), plus
+//   een volledige "Sluiten"-knop onderaan en Escape-toets als extra sluitopties
 import { useState, useEffect, useRef } from "react";
 import { trackEvent } from "./analytics";
 
@@ -326,6 +321,12 @@ const LEERUITLEG = {
 const LeerIcoon = ({ onderwerp }) => {
   const [open, setOpen] = useState(false);
   const info = LEERUITLEG[onderwerp];
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   if (!info) return null;
   return (
     <>
@@ -350,13 +351,22 @@ const LeerIcoon = ({ onderwerp }) => {
         }}>
           <div onClick={e=>e.stopPropagation()} style={{
             background:K.card, borderRadius:14, padding:20, maxWidth:420, width:"100%",
-            border:`1px solid ${K.border}`, maxHeight:"80vh", overflowY:"auto",
+            border:`1px solid ${K.border}`, maxHeight:"80vh", overflowY:"auto", position:"relative",
           }}>
             <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:12}}>
               <div style={{fontWeight:700, fontSize:15, color:K.purple}}>{info.titel}</div>
-              <button onClick={()=>setOpen(false)} style={{background:"transparent", border:"none", color:K.muted, fontSize:20, cursor:"pointer", lineHeight:1, padding:0}}>×</button>
+              <button type="button" onClick={(e)=>{e.stopPropagation(); setOpen(false);}} style={{
+                background:K.surface, border:`1px solid ${K.border}`, color:K.text, fontSize:20,
+                cursor:"pointer", lineHeight:1, padding:0, width:36, height:36, borderRadius:"50%",
+                flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+              }}>×</button>
             </div>
             <div style={{fontSize:13, color:K.text, lineHeight:1.6}}>{info.tekst}</div>
+            <button type="button" onClick={()=>setOpen(false)} style={{
+              marginTop:16, width:"100%", padding:"10px 0", borderRadius:10,
+              border:`1px solid ${K.border}`, background:K.surface, color:K.muted,
+              fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+            }}>Sluiten</button>
           </div>
         </div>
       )}
@@ -1250,9 +1260,18 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
           </div>
 
+          <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
+            Maximale afschakeltijd (afgeleid uit stelsel {stelsel}): <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong>
+          </div>
+
           {zMaxVoorzek && !isTT && (
             <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
-              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong> · max. afschakeltijd = <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong> ({stelsel})
+              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+            </div>
+          )}
+          {!zMaxVoorzek && !isTT && (
+            <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10}}>
+              ⚠ Vul ampère + karakteristiek van de hoogst afgaande groep hierboven in om Z_max en de automatische toetsing te berekenen.
             </div>
           )}
 
@@ -1268,8 +1287,8 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </label>
 
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
-            {(["Z L-N","Z L-PE"].concat((inst.zDrieFase ?? heeft3faseGroep) ? ["Z L2-PE","Z L3-PE"] : [])).map(l=>{
-              const k = l==="Z L-N"?"zln":l==="Z L-PE"?"zlpe":l==="Z L2-PE"?"zl2pe":"zl3pe";
+            {(["Z L-N","Z L-PE"].concat((inst.zDrieFase ?? heeft3faseGroep) ? ["Z L2-N","Z L2-PE","Z L3-N","Z L3-PE"] : [])).map(l=>{
+              const k = l==="Z L-N"?"zln":l==="Z L-PE"?"zlpe":l==="Z L2-N"?"zl2n":l==="Z L2-PE"?"zl2pe":l==="Z L3-N"?"zl3n":"zl3pe";
               return (
                 <div key={k}><label style={S.label}>{l}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -1281,6 +1300,9 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                       </span>
                     )}
                   </div>
+                  {inst[k] && !isTT && !zMaxVoorzek && (
+                    <div style={{fontSize:10,color:K.orange,marginTop:3}}>Vul ampère + karakteristiek hierboven in voor automatische toetsing</div>
+                  )}
                 </div>
               );
             })}
@@ -2099,7 +2121,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpe||"—"} Ω ${instMet.zlpe&&!isNaN(toNum(instMet.zlpe))?`(Icc≈${(230/toNum(instMet.zlpe)).toFixed(0)}A)`:""}</td>
           </tr>
           ${instMet.zDrieFase ? `<tr>
+            <td><strong>Z L2-N</strong></td><td ${statusGK(instMet.zl2n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl2n||"—"} Ω</td>
             <td><strong>Z L2-PE</strong></td><td ${statusGK(instMet.zl2pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl2pe||"—"} Ω</td>
+          </tr>
+          <tr>
+            <td><strong>Z L3-N</strong></td><td ${statusGK(instMet.zl3n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3n||"—"} Ω</td>
             <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3pe||"—"} Ω</td>
           </tr>` : ""}
           ${instMet.zlpeAardlek ? `<tr>
