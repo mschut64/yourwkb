@@ -1,15 +1,13 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-B
-// Bugfixes n.a.v. test v2026-07-21-A:
-// - Z L2-N en Z L3-N toegevoegd (waren vergeten, alleen L2-PE/L3-PE bestonden)
-// - Max. afschakeltijd nu ALTIJD zichtbaar (was verstopt achter de Icc-berekening
-//   die pas verschijnt zodra ampère is ingevuld — nu losgekoppeld, want afschakel-
-//   tijd hangt alleen af van het stelsel, niet van ampère)
-// - Duidelijke waarschuwing toegevoegd wanneer een Z-waarde is ingevuld maar er nog
-//   geen automatische toetsing plaatsvindt (ontbrekende ampère/karakteristiek)
-// - LeerIcoon-popup: sluitknop vergroot (36x36px ipv onzichtbaar kleine ×), plus
-//   een volledige "Sluiten"-knop onderaan en Escape-toets als extra sluitopties
+// YourWkb WkbApp.jsx — versie 2026-07-21-D
+// iOS Safari fix: LeerIcoon-popup rendert nu via React Portal direct in document.body
+// i.p.v. genest binnen het <label>-element waar de ⓘ vaak in staat. Bevestigd probleem:
+// kruisje/Sluiten werkten wel op Android maar niet op iOS — klassiek iOS Safari-bug
+// patroon waarbij taps op knoppen genest binnen een <label> niet altijd doorkomen.
+// Een Portal omzeilt dit volledig doordat de popup dan nergens meer in de label-DOM-
+// boom zit, ongeacht welke stap/veld de ⓘ aanroept.
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
 
 // Robuuste numerieke parser — accepteert zowel komma als punt als decimaalteken.
@@ -344,7 +342,7 @@ const LeerIcoon = ({ onderwerp }) => {
         }}>
         ⓘ
       </button>
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div onClick={()=>setOpen(false)} style={{
           position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
           display:"flex", alignItems:"center", justifyContent:"center", padding:20,
@@ -368,7 +366,8 @@ const LeerIcoon = ({ onderwerp }) => {
               fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
             }}>Sluiten</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -1242,16 +1241,16 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
 
           <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
-            Vul de <strong style={{color:K.text}}>hoogst afgaande groep</strong> van de gehele installatie in — de verwachte kortsluitstroom en maximale afschakeltijd worden hieruit afgeleid.
+            Vul de <strong style={{color:K.text}}>voorbeveiliging (hoogst afgaande groep)</strong> van de gehele installatie in — de verwachte kortsluitstroom en maximale afschakeltijd worden hieruit afgeleid.
           </div>
 
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
             <div>
-              <label style={S.label}>Hoogst afgaande groep — Ampère</label>
+              <label style={S.label}>Voorzekering (A) — hoogst afgaande groep</label>
               <MiniInput value={hoogstAmpere} onChange={v=>si("hoogstAmpere",v)} unit="A" width={70}/>
             </div>
             <div>
-              <label style={S.label}>Karakteristiek</label>
+              <label style={S.label}>Karakteristiek voorzekering</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {["B","C","D","gG","Anders"].map(k=>(
                   <Pill key={k} small active={hoogstKar===k} onClick={()=>si("hoogstKar",k)}>{k}</Pill>
@@ -2109,7 +2108,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <h2>Meetgegevens installatie (AC)</h2>
         <table>
           <tr>
-            <td><strong>Hoogst afgaande groep</strong></td><td>${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A</td>
+            <td><strong>Voorzekering (hoogst afg. groep)</strong></td><td>${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A</td>
             <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}${instMet.stelsel==="Anders"&&instMet.stelselAnders?` (${instMet.stelselAnders})`:""}</td>
           </tr>
           <tr>
