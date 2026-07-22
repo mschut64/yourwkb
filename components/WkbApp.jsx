@@ -1,11 +1,12 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-D
-// iOS Safari fix: LeerIcoon-popup rendert nu via React Portal direct in document.body
-// i.p.v. genest binnen het <label>-element waar de ⓘ vaak in staat. Bevestigd probleem:
-// kruisje/Sluiten werkten wel op Android maar niet op iOS — klassiek iOS Safari-bug
-// patroon waarbij taps op knoppen genest binnen een <label> niet altijd doorkomen.
-// Een Portal omzeilt dit volledig doordat de popup dan nergens meer in de label-DOM-
-// boom zit, ongeacht welke stap/veld de ⓘ aanroept.
+// YourWkb WkbApp.jsx — versie 2026-07-21-F
+// BUGFIX: Z_max-toetsing (Wet van Ohm + automaatkarakteristiek) sloeg volledig over
+// bij Klasse 2 (kunststof) kast — Zln=6Ω gaf geen foutmelding. Dit was fout: de
+// toetsing gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting,
+// wat NIETS te maken heeft met het materiaal van de kast (dat gaat over aanraak-
+// beveiliging via de behuizing, een ander onderwerp). Toetsing geldt nu altijd,
+// ongeacht kastklasse — alleen TT-stelsel en onbekende/"Anders" karakteristiek
+// maken automatische toetsing onmogelijk (net als voorheen).
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -1206,8 +1207,11 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const karOnbekend  = !karFactor[hoogstKar];
   const iccMin       = !karOnbekend && toNum(hoogstAmpere)>0 ? karFactor[hoogstKar] * toNum(hoogstAmpere) : null;
   const zMaxVoorzek  = iccMin ? (230 / iccMin) : null; // grens waarbinnen Icc voldoende is voor tijdige uitschakeling
-  const isKlasse2    = (data.kastType||"klasse2") === "klasse2";
-  const zOk = v => isKlasse2 ? true : isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  // Z_max-toetsing (Wet van Ohm + automaatkarakteristiek) geldt ALTIJD, ongeacht kastklasse —
+  // dit gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting, wat niets
+  // te maken heeft met het materiaal van de kast zelf. Alleen TT-stelsel en een onbekende/
+  // "Anders" karakteristiek maken automatische toetsing onmogelijk.
+  const zOk = v => isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
   // Maximale afschakeltijd — afgeleid uit stelsel + automaatkarakteristiek (NEN1010 tabel 41.1-achtig):
   // TN-stelsel: 0,4s voor eindgroepen ≤32A (B/C/D bij normale factor), TT-stelsel: 0,2s.
@@ -1231,6 +1235,10 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
             <div><label style={S.label}>Stelsel<LeerIcoon onderwerp="stelsel_tn_tt"/></label>
               <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
+            </div>
+            <div>
+              <label style={S.label}>Hoofdzekering</label>
+              <MiniInput value={inst.hoofdzekering} onChange={v=>si("hoofdzekering",v)} unit="A" width={80} placeholder="bijv. 40"/>
             </div>
             <div>
               <label style={S.label}>Hoofdschakelaar</label>
@@ -1271,12 +1279,6 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           {!zMaxVoorzek && !isTT && (
             <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10}}>
               ⚠ Vul ampère + karakteristiek van de hoogst afgaande groep hierboven in om Z_max en de automatische toetsing te berekenen.
-            </div>
-          )}
-
-          {isKlasse2 && (
-            <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
-              ℹ️ <strong style={{color:K.text}}>Klasse 2 kast</strong> — geen automatische Z_max-toetsing (geen aardverbinding via de kast), maar de meetwaarde kan hieronder toch vastgelegd worden voor documentatie.
             </div>
           )}
 
@@ -2112,8 +2114,12 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Stelsel</strong></td><td>${instMet.stelsel||data.stelsel||"—"}${instMet.stelsel==="Anders"&&instMet.stelselAnders?` (${instMet.stelselAnders})`:""}</td>
           </tr>
           <tr>
+            <td><strong>Hoofdzekering</strong></td><td>${instMet.hoofdzekering||"—"} A</td>
             <td><strong>Hoofdschakelaar</strong></td><td>${instMet.hoofdschakelaar||"—"}</td>
+          </tr>
+          <tr>
             <td><strong>Max. afschakeltijd</strong></td><td>${maxAfschakeltijdRap}s</td>
+            <td></td><td></td>
           </tr>
           <tr>
             <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zln||"—"} Ω ${instMet.zln&&!isNaN(toNum(instMet.zln))?`(Icc≈${(230/toNum(instMet.zln)).toFixed(0)}A)`:""}</td>
