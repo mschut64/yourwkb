@@ -1,12 +1,10 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-F
-// BUGFIX: Z_max-toetsing (Wet van Ohm + automaatkarakteristiek) sloeg volledig over
-// bij Klasse 2 (kunststof) kast — Zln=6Ω gaf geen foutmelding. Dit was fout: de
-// toetsing gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting,
-// wat NIETS te maken heeft met het materiaal van de kast (dat gaat over aanraak-
-// beveiliging via de behuizing, een ander onderwerp). Toetsing geldt nu altijd,
-// ongeacht kastklasse — alleen TT-stelsel en onbekende/"Anders" karakteristiek
-// maken automatische toetsing onmogelijk (net als voorheen).
+// YourWkb WkbApp.jsx — versie 2026-07-21-H
+// BUGFIX: ISO totaal en per-aardlekgroep ISO gaven een oranje "net boven minimum"
+// waarschuwing bij waarden tot 1,5x de norm — dit vuurde onterecht ook af bij een
+// waarde PRECIES op de norm (bijv. 0,23 MΩ zelf). Een waarde op of boven de norm is
+// gewoon OK, geen nuance-waarschuwing nodig. Orange-tier verwijderd, alleen nog rood
+// (onder norm) of geen waarschuwing (op/boven norm).
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -132,12 +130,8 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
 
   // B) ISOLATIEWEERSTAND — ISO totaal is de hoofdmeting (alle groepen aan, hoofdvoeding uit)
   const isoTot = toNum(instMet.isoTot);
-  if (!isNaN(isoTot)) {
-    if (isoTot < 0.23)
-      warnings.push({ level:"red", msg:`ISO totaal ${isoTot} MΩ — ONDER NORM (≥0,23 MΩ)` });
-    else if (isoTot < 0.35)
-      warnings.push({ level:"orange", msg:`ISO totaal ${isoTot} MΩ — net boven minimum (≥0,23 MΩ)` });
-  }
+  if (!isNaN(isoTot) && isoTot < 0.23)
+    warnings.push({ level:"red", msg:`ISO totaal ${isoTot} MΩ — ONDER NORM (≥0,23 MΩ)` });
 
   const probleemGroepen = instMet.isoTotProblemGroepen || [];
   (aardlekgroepen||[]).forEach(ag => {
@@ -153,12 +147,8 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
         : [["iso_fa","Fase→Aarde"],["iso_na","Nul→Aarde"]];
       isoKeys.forEach(([k,label]) => {
         const iso = toNum(grpMeet[`${ag.id}_${k}`]);
-        if (!isNaN(iso)) {
-          if (iso < norm)
-            warnings.push({ level:"red", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
-          else if (iso < norm * 1.5)
-            warnings.push({ level:"orange", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — net boven minimum (≥${norm} MΩ), controleer bedrading` });
-        }
+        if (!isNaN(iso) && iso < norm)
+          warnings.push({ level:"red", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
       });
     }
 
@@ -190,7 +180,9 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
 
   // A) IMPEDANTIE — Z L-N/L-PE check op basis van hoogst afgaande groep (EN 60898)
   // Z_max = 230 / (factor × In)  factor: B=5, C=10, D=20, gG=4
-  if (!isTT) {
+  // Geldt voor ELK stelsel, dus ook TT — de fysica van de automaat verandert niet
+  // door het stelsel, ongeacht of er een aardlekschakelaar achter zit.
+  {
     const karFac = { B:5, C:10, D:20, gG:4 };
     const vKar = instMet.hoogstKar || "B";
     const vA   = toNum(instMet.hoogstAmpere);
@@ -295,7 +287,7 @@ const LEERUITLEG = {
   },
   stelsel_tn_tt: {
     titel: "TN vs. TT-stelsel",
-    tekst: "Het verschil zit in hoe de installatie beveiligd is tegen een fout naar aarde. Bij een TN-stelsel (TN-C-S of TN-S, in Nederland het meest voorkomend) loopt de retourstroom bij een fout via een vaste PE-verbinding terug naar de bron — de automaat/zekering lost dan snel op door de hoge kortsluitstroom. Bij een TT-stelsel is er geen vaste PE-verbinding naar de bron; de beveiliging verloopt dan via de aardlekschakelaar (RCD), niet via de kortsluitstroom. Daardoor kan de lus-impedantie (Z L-PE) bij TT-installaties hoog zijn zonder dat dit een probleem is — dat is dan geen afwijking maar normaal voor dat stelsel.",
+    tekst: "Het verschil zit in hoe de installatie beveiligd is tegen een fout naar aarde. Bij een TN-stelsel (TN-C-S of TN-S, in Nederland het meest voorkomend) loopt de retourstroom bij een fout via een vaste PE-verbinding terug naar de bron — de automaat/zekering lost dan snel op door de hoge kortsluitstroom. Bij een TT-stelsel is er geen vaste PE-verbinding naar de bron; de RCD is daar de praktische hoofdbeveiliging omdat de lus-impedantie via aarde vaak te hoog is om alleen op de automaat te vertrouwen. Dat betekent niet dat de Z_max-toetsing bij TT irrelevant is — die geldt voor elk stelsel, ongeacht of er een RCD achter zit.",
   },
   aardlekgroep: {
     titel: "Aardlekgroep & hoogst afgaande groep",
@@ -829,7 +821,7 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           )}
           <div style={{fontSize:11,color:K.muted,padding:"8px 10px",background:K.surface,borderRadius:8,marginBottom:14,marginTop:6}}>
             {data.stelsel==="TT"
-              ? "TT-stelsel: beveiliging via RCD — Z L-PE kan hoog zijn. ΔT-norm altijd ≤300ms (EN 61008)."
+              ? "TT-stelsel: RCD is de praktische hoofdbeveiliging, maar Z_max-toetsing geldt ook hier. ΔT-norm altijd ≤300ms (EN 61008)."
               : data.stelsel==="Anders"
                 ? "Aangepast stelsel: controleer zelf welke normen van toepassing zijn."
                 : "TN-stelsel: beveiliging via kortsluitstroom. ΔT-norm altijd ≤300ms (EN 61008)."}
@@ -1211,7 +1203,13 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // dit gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting, wat niets
   // te maken heeft met het materiaal van de kast zelf. Alleen TT-stelsel en een onbekende/
   // "Anders" karakteristiek maken automatische toetsing onmogelijk.
-  const zOk = v => isTT ? true : karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+  // Z_max-toetsing (Wet van Ohm + veelvoud nominale stroom + max. afschakeltijd) geldt
+  // voor ELK stelsel, dus ook TT — ongeacht of er een aardlekschakelaar achter zit.
+  // De fysica van de automaat (Icc=U/Z, karakteristiek-tijd) verandert niet door het
+  // stelsel. Bij TT is de RCD vaak de praktische hoofdbeveiliging omdat de lus-
+  // impedantie via aarde meestal te hoog is voor de automaat alleen, maar de toetsing
+  // zelf blijft relevante informatie en is geen vrijblijvende uitzondering.
+  const zOk = v => karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
   // Maximale afschakeltijd — afgeleid uit stelsel + automaatkarakteristiek (NEN1010 tabel 41.1-achtig):
   // TN-stelsel: 0,4s voor eindgroepen ≤32A (B/C/D bij normale factor), TT-stelsel: 0,2s.
@@ -1271,12 +1269,12 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             Maximale afschakeltijd (afgeleid uit stelsel {stelsel}): <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong>
           </div>
 
-          {zMaxVoorzek && !isTT && (
+          {zMaxVoorzek && (
             <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
               {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
             </div>
           )}
-          {!zMaxVoorzek && !isTT && (
+          {!zMaxVoorzek && (
             <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10}}>
               ⚠ Vul ampère + karakteristiek van de hoogst afgaande groep hierboven in om Z_max en de automatische toetsing te berekenen.
             </div>
@@ -1294,14 +1292,14 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                 <div key={k}><label style={S.label}>{l}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
                     <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="Ω" width={70}/>
-                    {inst[k] && zMaxVoorzek && !isTT && <StatusTag level={zOk(inst[k])?"ok":"red"}/>}
-                    {inst[k] && !isTT && (
+                    {inst[k] && zMaxVoorzek && <StatusTag level={zOk(inst[k])?"ok":"red"}/>}
+                    {inst[k] && (
                       <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
                         Icc≈{(230/toNum(inst[k])).toFixed(0)}A
                       </span>
                     )}
                   </div>
-                  {inst[k] && !isTT && !zMaxVoorzek && (
+                  {inst[k] && !zMaxVoorzek && (
                     <div style={{fontSize:10,color:K.orange,marginTop:3}}>Vul ampère + karakteristiek hierboven in voor automatische toetsing</div>
                   )}
                 </div>
