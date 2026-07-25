@@ -15,39 +15,8 @@ export default function LandingPage() {
     { q: 'Wat kost het na de testperiode?', a: 'De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
   ]
 
-  // Structured data voor Google — helpt de pagina beter te begrijpen en
-  // geeft kans op rijke zoekresultaten (bijv. uitklapbare FAQ direct in Google).
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "SoftwareApplication",
-        "name": "YourWkb",
-        "applicationCategory": "BusinessApplication",
-        "operatingSystem": "Web",
-        "description": "Wkb-opleverdossier en NEN1010-rapport maken op je telefoon, voor zzp-installateurs elektra, PV, cv en warmtepomp.",
-        "url": "https://yourwkb.nl",
-        "offers": {
-          "@type": "Offer",
-          "price": "2.50",
-          "priceCurrency": "EUR",
-          "description": "Per definitief rapport, na de gratis testfase"
-        }
-      },
-      {
-        "@type": "FAQPage",
-        "mainEntity": faqs.map(f => ({
-          "@type": "Question",
-          "name": f.q,
-          "acceptedAnswer": { "@type": "Answer", "text": f.a }
-        }))
-      }
-    ]
-  };
-
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
@@ -190,7 +159,7 @@ export default function LandingPage() {
         <div className="nav-right">
           <a href="#stappen" className="nav-link">Hoe werkt het</a>
           <a href="#prijzen" className="nav-link">Privacy &amp; kosten</a>
-          <a href="/app" className="btn-nav">Gratis starten</a>
+          <a href="/app" className="btn-nav">Start project</a>
         </div>
       </nav>
 
@@ -364,7 +333,7 @@ export default function LandingPage() {
             </div>
             <div className="price-desc">Eenmalig — gratis tijdens testfase.</div>
             <ul className="price-features">
-              {[['✓','PDF zonder watermerk'],['✓','Conform NEN1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Archivering op server'],['✓','Direct naar klant']].map(([i,l])=>(
+              {[['✓','PDF zonder watermerk'],['✓','Conform NEN1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Data blijft op jouw toestel'],['✓','Direct naar klant']].map(([i,l])=>(
                 <li key={l}><span className="feat-check">{i}</span>{l}</li>
               ))}
             </ul>
@@ -396,7 +365,7 @@ export default function LandingPage() {
             {[
               { title:'Geen advertenties', desc:'Nooit. Nergens. Punt.' },
               { title:'Data wordt nooit verkocht', desc:'Jouw klantdata is van jou.' },
-              { title:'AVG-proof', desc:'Server staat in de EU.' },
+              { title:'AVG-proof', desc:'Geen serveropslag, geen risico.' },
               { title:'Geen abonnement', desc:'Betaal alleen wat je gebruikt.' },
             ].map(b => (
               <div key={b.title} style={{ display:'flex', gap:12, alignItems:'flex-start' }}>

@@ -34,9 +34,51 @@ export default function RootLayout({ children }) {
   const posthogKey  = process.env.NEXT_PUBLIC_POSTHOG_KEY  || ""
   const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.posthog.com"
 
+  // Structured data voor Google (SoftwareApplication + FAQPage) — hier server-side
+  // in layout.js gerenderd i.p.v. in de 'use client' landingspagina zelf. Dat laatste
+  // veroorzaakte React hydration errors (#418/#423/#425): een <script>-tag met
+  // dangerouslySetInnerHTML binnen een client-component kan een mismatch geven
+  // tussen server-HTML en client-render. Server-side renderen voorkomt dit structureel.
+  // FAQ-inhoud hier bewust hetzelfde gehouden als de faqs-array in app/landing/page.js —
+  // bij het aanpassen van een FAQ-vraag/antwoord dus op BEIDE plekken bijwerken.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "YourWkb",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": "Wkb-opleverdossier en NEN1010-rapport maken op je telefoon, voor zzp-installateurs elektra, PV, cv en warmtepomp.",
+        "url": "https://yourwkb.nl",
+        "offers": {
+          "@type": "Offer",
+          "price": "2.50",
+          "priceCurrency": "EUR",
+          "description": "Per definitief rapport, na de gratis testfase"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Moet ik iets installeren?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates." } },
+          { "@type": "Question", "name": "Is het rapport echt NEN1010-compliant?", "acceptedAnswer": { "@type": "Answer", "text": "Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden." } },
+          { "@type": "Question", "name": "Hoe lang worden mijn dossiers bewaard?", "acceptedAnswer": { "@type": "Answer", "text": "Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie (JSON-export of gratis Dropbox-koppeling) om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn." } },
+          { "@type": "Question", "name": "Worden er advertenties getoond of wordt mijn data verkocht?", "acceptedAnswer": { "@type": "Answer", "text": "Nooit. YourWkb verdient geen geld met advertenties en verkoopt geen data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn van jou. We verdienen alleen aan definitieve rapporten (€2,50 per stuk). Dat is ons volledige verdienmodel." } },
+          { "@type": "Question", "name": "Werkt het ook voor andere disciplines?", "acceptedAnswer": { "@type": "Answer", "text": "Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Specifieke wensen? Mail naar info@yourwkb.nl." } },
+          { "@type": "Question", "name": "Wat kost het na de testperiode?", "acceptedAnswer": { "@type": "Answer", "text": "De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen." } }
+        ]
+      }
+    ]
+  };
+
   return (
     <html lang="nl">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `window.__YWKB_DROPBOX_KEY__ = ${JSON.stringify(dropboxKey)};`,
