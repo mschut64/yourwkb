@@ -1,10 +1,10 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-H
-// BUGFIX: ISO totaal en per-aardlekgroep ISO gaven een oranje "net boven minimum"
-// waarschuwing bij waarden tot 1,5x de norm — dit vuurde onterecht ook af bij een
-// waarde PRECIES op de norm (bijv. 0,23 MΩ zelf). Een waarde op of boven de norm is
-// gewoon OK, geen nuance-waarschuwing nodig. Orange-tier verwijderd, alleen nog rood
-// (onder norm) of geen waarschuwing (op/boven norm).
+// YourWkb WkbApp.jsx — versie 2026-07-21-J
+// Megger toegevoegd aan de tester-instelhulp (nu 5 merken: Metrel, Fluke, Benning,
+// Kyoritsu, Megger). Bugfix discipline_gekozen-event (notitie #22) geverifieerd —
+// stond al correct op beide plekken (directe disciplinekaart-klik én keuzedialoog),
+// geen wijziging nodig. JSON-LD hydration-fix (notitie #28) NIET meegenomen in deze
+// versie — die zit in app/landing/page.js, welke niet beschikbaar was in deze sessie.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -307,6 +307,47 @@ const LEERUITLEG = {
   },
 };
 
+// Korte instelhulp per testermerk — helpt vooral onervaren installateurs snel de
+// juiste meetfunctie te vinden. Matcht op merknaam in de vrije-tekst "apparTester"-
+// invoer (hoofdletterongevoelig). Volgorde: Metrel, Fluke, Benning, Kyoritsu, Megger.
+// Let op: exacte menubewoording kan per model/firmwareversie verschillen — dit is een
+// algemene wegwijzer, geen vervanging van de handleiding van het specifieke toestel.
+const TESTERHULP = {
+  metrel: {
+    merk: "Metrel",
+    titel: "Metrel-installatietester instellen",
+    tekst: "Metrel-testers (bijv. MI3105, MI3125, MI3102 BT) werken met een draaiknop voor de hoofdfunctie, gevolgd door een submenu op het scherm.\n\n• ISO-meting (250V): draaiknop naar 'Insulation' / 'RISO', testspanning instellen op 250V via de functietoets, daarna START.\n• RCD-test type A/AC/B: draaiknop naar 'RCD', kies eerst het type (AC/A/B/F) in het submenu vóórdat je meet — dit bepaalt de golfvorm van de teststroom.\n• Lus-impedantie Z L-N/L-PE: draaiknop naar 'Loop' of 'Zloop', kies 'No trip' (RCD-vriendelijke meting) als er een RCD in het circuit zit, anders schakelt de RCD tijdens de meting uit.",
+  },
+  fluke: {
+    merk: "Fluke",
+    titel: "Fluke-installatietester instellen",
+    tekst: "Fluke-testers (bijv. 1664 FC, 1654B, 1653B) navigeer je met de centrale draaischijf plus functietoetsen (F1-F4) onder het scherm.\n\n• ISO-meting (250V): draaischijf naar het isolatie-symbool (Ω met pijl), testspanning wisselen met de functietoets tot 250V verschijnt.\n• RCD-test type A/AC/B: draaischijf naar het RCD-symbool, het type wordt met een functietoets gewisseld (staat rechtsonder in beeld) — controleer dat dit overeenkomt met het type dat op de RCD zelf staat.\n• Lus-impedantie Z L-N/L-PE: draaischijf naar 'Z LOOP', bij een geïnstalleerde RCD de 'i' (RCD-safe / non-trip) variant kiezen zodat de RCD niet ongewenst afslaat tijdens de meting.",
+  },
+  benning: {
+    merk: "Benning",
+    titel: "Benning-installatietester instellen",
+    tekst: "Benning-testers (bijv. IT 130, IT 100, IT 120) hebben een draaischakelaar met duidelijke pictogrammen per functie, plus een paar pijltjestoetsen voor submenu's.\n\n• ISO-meting (250V): draaischakelaar naar het ISO-symbool, met de pijltjestoetsen de testspanning naar 250V bladeren.\n• RCD-test type A/AC/B: draaischakelaar naar RCD-symbool, type selecteren in het submenu (AC/A/B) vóór de meting — dit staat vaak als eerste keuze in beeld na het draaien.\n• Lus-impedantie Z L-N/L-PE: draaischakelaar naar 'Loop' of 'ZL-PE', bij RCD-beveiligde groepen de laagstroom-variant (vaak aangeduid met een RCD-symbooltje erbij) gebruiken om ongewenst afschakelen te voorkomen.",
+  },
+  kyoritsu: {
+    merk: "Kyoritsu",
+    titel: "Kyoritsu-installatietester instellen",
+    tekst: "Kyoritsu-testers (bijv. KEW 6016, 6011, 6516BT) hebben een draaiknop met genummerde functies en een 'SELECT'-toets voor submenu's.\n\n• ISO-meting (250V): draaiknop naar 'INSULATION', met SELECT de spanning naar 250V bladeren.\n• RCD-test type A/AC/B: draaiknop naar 'RCD', met SELECT het type (AC/A/B) instellen vóór de meting.\n• Lus-impedantie Z L-N/L-PE: draaiknop naar 'LOOP', bij een RCD-beveiligde groep de 'non-trip'-stand (vaak los aangegeven op de knop of in het submenu) kiezen zodat de RCD niet afslaat tijdens de meting.",
+  },
+  megger: {
+    merk: "Megger",
+    titel: "Megger-installatietester instellen",
+    tekst: "Megger-testers (bijv. MFT1741, MFT1835) hebben een draaiknop met hoofdfuncties en een display met softkeys (F1-F4) eronder voor submenu's.\n\n• ISO-meting (250V): draaiknop naar 'Insulation' / 'RISO', met de softkeys de testspanning naar 250V bladeren, daarna TEST ingedrukt houden.\n• RCD-test type A/AC/B: draaiknop naar 'RCD', het type wordt met een softkey gewisseld (staat onderin het scherm aangegeven) — controleer dat dit overeenkomt met het type op de RCD zelf.\n• Lus-impedantie Z L-N/L-PE: draaiknop naar 'Loop' of 'Zs/Loop', bij een RCD-beveiligde groep de 'no-trip' variant kiezen zodat de RCD niet ongewenst afslaat tijdens de meting.",
+  },
+};
+
+// Matcht de vrije-tekst tester-invoer tegen bekende merken (case-insensitive).
+// Geeft null terug als er geen match is — dan verschijnt er simpelweg geen icoontje.
+function vindTesterHulp(apparTesterTekst) {
+  if (!apparTesterTekst) return null;
+  const tekst = apparTesterTekst.toLowerCase();
+  return Object.values(TESTERHULP).find(t => tekst.includes(t.merk.toLowerCase())) || null;
+}
+
 // Klein ⓘ-icoontje dat een popup met uitleg toont. Toon alleen als het
 // onderwerp in LEERUITLEG bestaat — voorkomt lege popups per ongeluk.
 const LeerIcoon = ({ onderwerp }) => {
@@ -353,6 +394,67 @@ const LeerIcoon = ({ onderwerp }) => {
               }}>×</button>
             </div>
             <div style={{fontSize:13, color:K.text, lineHeight:1.6}}>{info.tekst}</div>
+            <button type="button" onClick={()=>setOpen(false)} style={{
+              marginTop:16, width:"100%", padding:"10px 0", borderRadius:10,
+              border:`1px solid ${K.border}`, background:K.surface, color:K.muted,
+              fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit",
+            }}>Sluiten</button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
+// Zelfde patroon als LeerIcoon, maar dan voor tester-instelhulp: neemt het volledige
+// info-object direct als prop (i.p.v. een lookup-key) omdat het merk pas bekend is
+// nadat vindTesterHulp() de vrije tekst heeft gematcht. whiteSpace:pre-line zorgt
+// dat de regeleinden/opsomming in de tekst zichtbaar blijven.
+const TesterIcoon = ({ info }) => {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  if (!info) return null;
+  return (
+    <>
+      <button type="button"
+        onClick={e => { e.stopPropagation(); setOpen(true); }}
+        title={info.titel}
+        style={{
+          display:"inline-flex", alignItems:"center", justifyContent:"center",
+          width:16, height:16, borderRadius:"50%",
+          background:K.purpleDim, color:K.purple,
+          fontSize:11, fontWeight:700, textDecoration:"none",
+          marginLeft:5, flexShrink:0, verticalAlign:"middle",
+          border:`1px solid ${K.purple}55`, cursor:"pointer", padding:0,
+          fontFamily:"inherit",
+        }}>
+        ⓘ
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div onClick={()=>setOpen(false)} style={{
+          position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
+          display:"flex", alignItems:"center", justifyContent:"center", padding:20,
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            background:K.card, borderRadius:14, padding:20, maxWidth:420, width:"100%",
+            border:`1px solid ${K.border}`, maxHeight:"80vh", overflowY:"auto", position:"relative",
+          }}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:12}}>
+              <div style={{fontWeight:700, fontSize:15, color:K.purple}}>{info.titel}</div>
+              <button type="button" onClick={(e)=>{e.stopPropagation(); setOpen(false);}} style={{
+                background:K.surface, border:`1px solid ${K.border}`, color:K.text, fontSize:20,
+                cursor:"pointer", lineHeight:1, padding:0, width:36, height:36, borderRadius:"50%",
+                flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+              }}>×</button>
+            </div>
+            <div style={{fontSize:13, color:K.text, lineHeight:1.6, whiteSpace:"pre-line"}}>{info.tekst}</div>
+            <div style={{fontSize:10, color:K.muted, marginTop:10, fontStyle:"italic"}}>Exacte menubewoording kan per model/firmwareversie verschillen — check bij twijfel de handleiding van je toestel.</div>
             <button type="button" onClick={()=>setOpen(false)} style={{
               marginTop:16, width:"100%", padding:"10px 0", borderRadius:10,
               border:`1px solid ${K.border}`, background:K.surface, color:K.muted,
@@ -763,14 +865,17 @@ function StapMeetapparatuur({ data, onChange, onNext, onBack, discipline }) {
       <div style={S.body}>
         <div style={{ fontSize:12, color:K.muted, marginBottom:14 }}>Verplicht te vermelden in het rapport. Tik "Onthouden" om dezelfde apparatuur volgende keer automatisch in te vullen.</div>
         <div style={S.card}>
-          {velden.map(({k,l,ph})=>(
-            <div key={k} style={{ marginBottom:16, paddingBottom:14, borderBottom:`1px solid ${K.border}` }}>
-              <label style={S.label}>{l}</label>
-              <input style={{...S.input,marginBottom:8}} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
-              <label style={{...S.label,fontSize:10}}>Kalibratiedatum</label>
-              <input style={S.input} type="date" value={data[`${k}_cal`]||""} onChange={e=>onChange(`${k}_cal`,e.target.value)}/>
-            </div>
-          ))}
+          {velden.map(({k,l,ph})=>{
+            const hulp = k === "apparTester" ? vindTesterHulp(data[k]) : null;
+            return (
+              <div key={k} style={{ marginBottom:16, paddingBottom:14, borderBottom:`1px solid ${K.border}` }}>
+                <label style={S.label}>{l}{hulp && <TesterIcoon info={hulp}/>}</label>
+                <input style={{...S.input,marginBottom:8}} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
+                <label style={{...S.label,fontSize:10}}>Kalibratiedatum</label>
+                <input style={S.input} type="date" value={data[`${k}_cal`]||""} onChange={e=>onChange(`${k}_cal`,e.target.value)}/>
+              </div>
+            );
+          })}
         </div>
         <button style={{ ...S.btn, background:K.yellow, color:"#000" }} onClick={onNext}>Volgende →</button>
       </div>
