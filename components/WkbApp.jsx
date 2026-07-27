@@ -1,14 +1,11 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-27-E
-// gG-smeltzekering: echte tijd-stroomkromme tabel geïmplementeerd (i.p.v. de
-// eerdere vaste factor 4× In), obv de door Martin gedeelde tabel "D-patronen
-// Traag gG". Tabel-kolommen (5s/1s/0,4s/0,2s) sluiten exact aan op de bestaande
-// kastklasse × stelsel-afschakeltijden. Doorgevoerd in: GK_StapMeten (live
-// toetsing tijdens invoer), gkCrossChecks (rapport-waarschuwingen), en de
-// rapport-generatie zelf (Z_max-berekening). Bekende datafout in de brontabel
-// (In=20A bij 0,2s: 43,3 — lager dan de 0,4s-waarde, fysisch onlogisch) wordt
-// gemarkeerd met een expliciete waarschuwing i.p.v. stil een mogelijk foute
-// toetsing te tonen.
+// YourWkb WkbApp.jsx — versie 2026-07-27-F
+// BUGFIX: Veldmeting-data (Z L-N/L-PE op verste WCD + berekende kabellengte) werd
+// wel correct verzameld en berekend in stap 7B, maar stond NERGENS in het PDF-
+// rapport — een omissie. Nieuwe sectie "Veldmeting — verste/buitengroep"
+// toegevoegd aan het rapport, direct na Sectie B (Isolatieweerstand), met per
+// geselecteerde aardlekgroep: kabeldikte, gemeten Z-waarden, en de berekende
+// indicatieve lengte.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -2524,7 +2521,40 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td></td><td></td>
           </tr>` : ""}
         </table>
-        <h2>Aardlekgroepen — RCD-test (sectie C)</h2>
+
+        ${(() => {
+          const veld = data.veldmeting || {};
+          const geselecteerdRap = aardlekgroepen.filter(ag => ag.veldmetingSelectie);
+          if (geselecteerdRap.length === 0) return "";
+          const RHO_RAP = 0.023;
+          const rijenRap = geselecteerdRap.map(ag => {
+            const dikte = toNum(veld[`${ag.id}_dikte`]) || 2.5;
+            const zlnV = veld[`${ag.id}_zln`];
+            const zlpeV = veld[`${ag.id}_zlpe`];
+            const lenZln = toNum(zlnV) > 0 ? ((toNum(zlnV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
+            const lenZlpe = toNum(zlpeV) > 0 ? ((toNum(zlpeV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
+            return `<tr>
+              <td><strong>${ag.naam}</strong></td>
+              <td>${dikte} mm²</td>
+              <td>${zlnV||"—"} Ω</td>
+              <td>${lenZln}m</td>
+              <td>${zlpeV||"—"} Ω</td>
+              <td>${lenZlpe}m</td>
+            </tr>`;
+          }).join("");
+          return `
+          <h2>Veldmeting — verste/buitengroep</h2>
+          <p style="font-size:8px;color:#666;margin-bottom:4px">
+            Z L-N en Z L-PE gemeten op de verste wandcontactdoos van de geselecteerde groep(en). Indicatieve kabellengte berekend via L = Z × A ÷ (2 × ρ), met ρ = 0,023 Ω·mm²/m. Dit is een indicatie, geen exacte meting.
+          </p>
+          <table>
+            <tr>
+              <th>Aardlekgroep</th><th>Kabeldikte</th><th>Z L-N</th><th>Lengte (Z L-N)</th><th>Z L-PE</th><th>Lengte (Z L-PE)</th>
+            </tr>
+            ${rijenRap}
+          </table>`;
+        })()}
+
         <p style="font-size:8px;color:#666;margin-bottom:4px">
           ΔT-norm: ≤300ms (EN 61008 apparaatnorm bij 1× In). ΔI-norm: type AC ≤1× In · type A ≤1,4× In · type B ≤2× In. Isolatieweerstand is gemeten als ISO totaal (zie sectie B) — per-groep ISO alleen indien daar een probleemgroep is geïdentificeerd.
         </p>
