@@ -1,21 +1,18 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-27-A
-// WKB veldtest 27-7-2026 (M&H) — grote reeks aanpassingen:
-// 1. Rookmelder + Centraal Aardpunt badkamer volledig weggehaald (UI/cross-checks/rapport)
-// 2. Testknop NOK geeft nu een rode cross-check waarschuwing ("vervang de RCD")
-// 3. Mail-bug gefixt: reply_to wordt gevalideerd op geldig e-mailformaat vóór
-//    versturen (voorkwam eerder een Resend "Invalid reply_to field" fout)
-// 4. ISO totaal gesplitst in Fase→Aarde en Nul→Aarde, beide getoetst aan 0,23 MΩ
-// 5. Spanning uitgebreid: fase-fase metingen (L1/L2, L2/L3, L1/L3) bij 3-fase +
-//    frequentie-veld (tolerantie ±10%, puur registratief) — 7 metingen bij 3-fase
-// 6. Z L-PE achter aardlek herstructureerd: Ja/Nee-vinkje "achter RCD?" — bij Ja
-//    default 300mA/166Ω, bij Nee wordt de automaatformule van de hoogst afgaande
-//    groep (uit Sectie A) gebruikt i.p.v. de Ra-formule
-// 7. "Meest ongunstige punt"-toelichting toegevoegd bij de voorzekering-sectie
-// 8. Terminologie-verwarring opgelost: "hoogst afgaande groep" werd op twee
-//    niveaus gebruikt (per aardlekgroep-cluster vs. hele installatie) — cluster-
-//    niveau nu hernoemd naar "zwaarst belast in dit cluster" om ze te onderscheiden
-// Groep-zonder-RCD-optie bleek al te bestaan (Pill "Geen RCD" bij aanmaken groep).
+// YourWkb WkbApp.jsx — versie 2026-07-27-B
+// Vervolg op WKB veldtest 27-7-2026 (M&H):
+// 1. Z L-PE achter aardlek: van handmatige Ja/Nee-vraag naar volledig automatisch
+//    afgeleid uit stap 6-data. Vraag "zijn alle groepen achter een aardlek?" wordt
+//    nu passief getoond (afgeleid uit of er aardlekgroepen met rcdType='geen'
+//    bestaan), geen keuze meer nodig. Voor "vrije" groepen (zonder RCD) wordt de
+//    Wet van Ohm-toetsing per groep automatisch berekend met de kar/ampère die al
+//    in stap 6 bij de eindgroep is ingevuld — geen nieuwe invoer nodig.
+// 2. ISO-probleemgroep pills tonen al alleen de vrije naam (geen RCD-info) — was
+//    al correct, geen wijziging nodig.
+// 3. Max. afschakeltijd is nu ook afhankelijk van kastklasse (naast stelsel):
+//    Klasse 1 (metaal, doorgaans verdeler-niveau) = 5s TN / 1s TT.
+//    Klasse 2 (kunststof, doorgaans eindgroep-niveau) = 0,4s TN / 0,2s TT.
+//    (NEN1010 tabel 41.1 onderscheid distributie- vs eindcircuits.)
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -1333,10 +1330,13 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // zelf blijft relevante informatie en is geen vrijblijvende uitzondering.
   const zOk = v => karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
-  // Maximale afschakeltijd — afgeleid uit stelsel + automaatkarakteristiek (NEN1010 tabel 41.1-achtig):
-  // TN-stelsel: 0,4s voor eindgroepen ≤32A (B/C/D bij normale factor), TT-stelsel: 0,2s.
-  // Dit is de installatienorm-afschakeltijd (verschillend van de RCD-apparaatnorm ΔT ≤300ms hieronder bij C!).
-  const maxAfschakeltijd = isTT ? 0.2 : 0.4;
+  // Maximale afschakeltijd — afgeleid uit stelsel + kastklasse (NEN1010 tabel 41.1):
+  // Klasse 1 (metaal) zit doorgaans op verdeler-niveau → langere toegestane tijd
+  // (TN 5s / TT 1s). Klasse 2 (kunststof) zit doorgaans op eindgroep-niveau → kortere
+  // vereiste tijd (TN 0,4s / TT 0,2s). Dit is de installatienorm-afschakeltijd
+  // (verschillend van de RCD-apparaatnorm ΔT ≤300ms hieronder bij C!).
+  const isKlasse1 = data.kastType === "klasse1";
+  const maxAfschakeltijd = isKlasse1 ? (isTT ? 1 : 5) : (isTT ? 0.2 : 0.4);
 
   const cag = null; // niet meer gebruikt voor Z — Z wordt niet meer per aardlekgroep getoond
   const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
@@ -1388,7 +1388,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
 
           <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
-            Maximale afschakeltijd (afgeleid uit stelsel {stelsel}): <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong>
+            Maximale afschakeltijd (afgeleid uit stelsel {stelsel} + {isKlasse1?"Klasse 1 — verdeler-niveau":"Klasse 2 — eindgroep-niveau"}): <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong>
           </div>
 
           {zMaxVoorzek && (
@@ -1429,63 +1429,83 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             })}
           </div>
 
-          {/* Z L-PE achter aardlek — twee mogelijke situaties op dit meetpunt */}
-          <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
-            <label style={S.label}>Z L-PE op de hoogst afgaande groep</label>
-            <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-              Zit dit meetpunt achter een aardlekschakelaar?
-            </div>
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <Pill small active={inst.zlpeAchterAardlek==="ja"} onClick={()=>si("zlpeAchterAardlek","ja")}>Ja, achter RCD</Pill>
-              <Pill small active={inst.zlpeAchterAardlek==="nee"} onClick={()=>si("zlpeAchterAardlek","nee")}>Nee, direct op automaat</Pill>
-            </div>
+          {/* Z L-PE achter aardlek — werkt op de achtergrond: wordt automatisch afgeleid
+              uit de aardlekgroepen die al in stap 6 zijn aangemaakt. Geen aparte vraag
+              nodig — als er een aardlekgroep zonder RCD bestaat ("vrije groep"), gebruikt
+              de toetsing voor die groep(en) de automaatformule (Wet van Ohm) met de kar/
+              ampère die al per eindgroep is ingevuld. Zijn alle groepen wél achter een RCD
+              beveiligd, dan geldt de Ra-formule (50V/IΔn) voor de hele installatie. */}
+          {(() => {
+            const vrijeGroepen = aardlekgroepen.filter(ag => ag.rcdType === "geen");
+            const alleAchterRCD = aardlekgroepen.length > 0 && vrijeGroepen.length === 0;
+            return (
+              <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
+                <label style={S.label}>Z L-PE op de hoogst afgaande groep</label>
+                <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5}}>
+                  Zijn alle groepen achter een aardlekschakelaar? <strong style={{color:alleAchterRCD?K.green:K.orange}}>
+                    {aardlekgroepen.length===0 ? "—" : alleAchterRCD ? "Ja" : `Nee — ${vrijeGroepen.length} groep${vrijeGroepen.length!==1?"en":""} zonder RCD`}
+                  </strong> <span style={{color:K.muted}}>(automatisch afgeleid uit stap 6)</span>
+                </div>
 
-            {inst.zlpeAchterAardlek==="ja" && (
-              <>
-                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-                  Ra_max = 50V ÷ IΔn — bij het gangbare 300mA hoofd-RCD is dat ≤166Ω<br/>
-                  {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
-                    <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
-                  {["10","30","100","300","500"].map(mA=>(
-                    <Pill key={mA} small active={(inst.rcdMaZlpe||"300")===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
-                  ))}
-                </div>
-                <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
-                  background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
-                  Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {(50/(toNum(inst.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω
-                </div>
-                <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-                  <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
-                  {inst.zlpeAardlek && (
-                    <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
-                  )}
-                </div>
-              </>
-            )}
-
-            {inst.zlpeAchterAardlek==="nee" && (
-              <>
-                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-                  Geen RCD op dit punt — de toetsing gebruikt dezelfde automaatkarakteristiek en ampèrewaarde die je hierboven bij "Voorzekering" hebt ingevuld ({hoogstKar}{hoogstAmpere||"?"}A).
-                </div>
-                {zMaxVoorzek ? (
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 1.5"/>
-                    {inst.zlpeAardlek && (
-                      <StatusTag level={toNum(inst.zlpeAardlek)<=zMaxVoorzek?"ok":"red"}/>
-                    )}
-                    <span style={{fontSize:10,color:K.muted}}>Z_max={zMaxVoorzek.toFixed(2)}Ω</span>
-                  </div>
-                ) : (
-                  <div style={{fontSize:10,color:K.orange}}>Vul eerst ampère + karakteristiek in bij "Voorzekering" hierboven.</div>
+                {alleAchterRCD && (
+                  <>
+                    <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                      Ra_max = 50V ÷ IΔn — bij het gangbare 300mA hoofd-RCD is dat ≤166Ω<br/>
+                      {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
+                        <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
+                      {["10","30","100","300","500"].map(mA=>(
+                        <Pill key={mA} small active={(inst.rcdMaZlpe||"300")===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
+                      ))}
+                    </div>
+                    <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
+                      background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
+                      Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {(50/(toNum(inst.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω
+                    </div>
+                    <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                      <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
+                      {inst.zlpeAardlek && (
+                        <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
+                      )}
+                    </div>
+                  </>
                 )}
-              </>
-            )}
-          </div>
+
+                {!alleAchterRCD && vrijeGroepen.length > 0 && (
+                  <div>
+                    <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                      Voor groep(en) zonder RCD geldt de automaatformule — kar/ampère per groep is al bekend uit stap 6, geen nieuwe invoer nodig.
+                    </div>
+                    {vrijeGroepen.map(ag => {
+                      const hoogstEind = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
+                      const kar = hoogstEind?.kar || "B";
+                      const amp = toNum((hoogstEind?.ampere||"").replace("A",""));
+                      const factor = karFactor[kar];
+                      const zMaxGroep = factor && amp>0 ? 230/(factor*amp) : null;
+                      const veldKey = `zlpeVrij_${ag.id}`;
+                      return (
+                        <div key={ag.id} style={{marginBottom:10,padding:"8px 10px",background:K.card,borderRadius:8}}>
+                          <div style={{fontSize:11,fontWeight:700,color:K.text,marginBottom:4}}>{ag.naam} — {hoogstEind?.naam||"?"} ({kar}{hoogstEind?.ampere||"?"})</div>
+                          {zMaxGroep ? (
+                            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                              <MiniInput value={inst[veldKey]} onChange={v=>si(veldKey,v)} unit="Ω" width={80} placeholder="bijv. 1.5"/>
+                              {inst[veldKey] && <StatusTag level={toNum(inst[veldKey])<=zMaxGroep?"ok":"red"}/>}
+                              <span style={{fontSize:10,color:K.muted}}>Z_max={zMaxGroep.toFixed(2)}Ω</span>
+                            </div>
+                          ) : (
+                            <div style={{fontSize:10,color:K.orange}}>Vul kar/ampère in bij de eindgroep in stap 6.</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* B) ISOLATIEWEERSTAND */}
@@ -2238,7 +2258,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const vKarRap = instMet.hoogstKar || "B";
       const vARap   = toNum(instMet.hoogstAmpere);
       const zMaxVoorzekRap = (karFacRap[vKarRap] && !isNaN(vARap) && vARap>0) ? 230/(karFacRap[vKarRap]*vARap) : null;
-      const maxAfschakeltijdRap = (instMet.stelsel||data.stelsel)==="TT" ? 0.2 : 0.4;
+      const isKlasse1Rap = data.kastType === "klasse1";
+      const maxAfschakeltijdRap = isKlasse1Rap
+        ? ((instMet.stelsel||data.stelsel)==="TT" ? 1 : 5)
+        : ((instMet.stelsel||data.stelsel)==="TT" ? 0.2 : 0.4);
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -2271,7 +2294,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Hoofdschakelaar</strong></td><td>${instMet.hoofdschakelaar||"—"}</td>
           </tr>
           <tr>
-            <td><strong>Max. afschakeltijd</strong></td><td>${maxAfschakeltijdRap}s</td>
+            <td><strong>Max. afschakeltijd</strong></td><td>${maxAfschakeltijdRap}s (${isKlasse1Rap?"Klasse 1, verdeler-niveau":"Klasse 2, eindgroep-niveau"})</td>
             <td></td><td></td>
           </tr>
           <tr>
@@ -2286,13 +2309,21 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Z L3-N</strong></td><td ${statusGK(instMet.zl3n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3n||"—"} Ω</td>
             <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3pe||"—"} Ω</td>
           </tr>` : ""}
-          ${instMet.zlpeAardlek ? (instMet.zlpeAchterAardlek==="nee" ? `<tr>
-            <td><strong>Z L-PE (hoogst afg. groep, geen RCD)</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpeAardlek} Ω (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2):"?"}Ω obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A)</td>
+          ${instMet.zlpeAardlek ? `<tr>
+            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (alle groepen achter RCD · ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${(50/(toNum(instMet.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω)</td>
             <td></td><td></td>
-          </tr>` : `<tr>
-            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (RCD ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${(50/(toNum(instMet.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω)</td>
-            <td></td><td></td>
-          </tr>`) : ""}
+          </tr>` : ""}
+          ${aardlekgroepen.filter(ag=>ag.rcdType==="geen" && instMet[`zlpeVrij_${ag.id}`]).map(ag=>{
+            const hoogstEind = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
+            const kar = hoogstEind?.kar||"B"; const amp = toNum((hoogstEind?.ampere||"").replace("A",""));
+            const factor = {B:5,C:10,D:20,gG:4}[kar];
+            const zMaxG = factor && amp>0 ? 230/(factor*amp) : null;
+            const val = instMet[`zlpeVrij_${ag.id}`];
+            return `<tr>
+              <td><strong>Z L-PE ${ag.naam} (geen RCD)</strong></td><td ${statusGK(val, v=>zMaxG?toNum(v)<=zMaxG:true)}>${val} Ω (Z_max=${zMaxG?zMaxG.toFixed(2):"?"}Ω obv ${kar}${hoogstEind?.ampere||"—"})</td>
+              <td></td><td></td>
+            </tr>`;
+          }).join("")}
           <tr>
             <td><strong>ISO totaal Fase→Aarde</strong></td><td ${statusGK(instMet.isoTotFA, v=>toNum(v)>=0.23)}>${instMet.isoTotFA||"—"} MΩ</td>
             <td><strong>ISO totaal Nul→Aarde</strong></td><td ${statusGK(instMet.isoTotNA, v=>toNum(v)>=0.23)}>${instMet.isoTotNA||"—"} MΩ</td>
