@@ -1,18 +1,14 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-27-B
-// Vervolg op WKB veldtest 27-7-2026 (M&H):
-// 1. Z L-PE achter aardlek: van handmatige Ja/Nee-vraag naar volledig automatisch
-//    afgeleid uit stap 6-data. Vraag "zijn alle groepen achter een aardlek?" wordt
-//    nu passief getoond (afgeleid uit of er aardlekgroepen met rcdType='geen'
-//    bestaan), geen keuze meer nodig. Voor "vrije" groepen (zonder RCD) wordt de
-//    Wet van Ohm-toetsing per groep automatisch berekend met de kar/ampère die al
-//    in stap 6 bij de eindgroep is ingevuld — geen nieuwe invoer nodig.
-// 2. ISO-probleemgroep pills tonen al alleen de vrije naam (geen RCD-info) — was
-//    al correct, geen wijziging nodig.
-// 3. Max. afschakeltijd is nu ook afhankelijk van kastklasse (naast stelsel):
-//    Klasse 1 (metaal, doorgaans verdeler-niveau) = 5s TN / 1s TT.
-//    Klasse 2 (kunststof, doorgaans eindgroep-niveau) = 0,4s TN / 0,2s TT.
-//    (NEN1010 tabel 41.1 onderscheid distributie- vs eindcircuits.)
+// YourWkb WkbApp.jsx — versie 2026-07-27-E
+// gG-smeltzekering: echte tijd-stroomkromme tabel geïmplementeerd (i.p.v. de
+// eerdere vaste factor 4× In), obv de door Martin gedeelde tabel "D-patronen
+// Traag gG". Tabel-kolommen (5s/1s/0,4s/0,2s) sluiten exact aan op de bestaande
+// kastklasse × stelsel-afschakeltijden. Doorgevoerd in: GK_StapMeten (live
+// toetsing tijdens invoer), gkCrossChecks (rapport-waarschuwingen), en de
+// rapport-generatie zelf (Z_max-berekening). Bekende datafout in de brontabel
+// (In=20A bij 0,2s: 43,3 — lager dan de 0,4s-waarde, fysisch onlogisch) wordt
+// gemarkeerd met een expliciete waarschuwing i.p.v. stil een mogelijk foute
+// toetsing te tonen.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -72,6 +68,47 @@ const RCD_MA = ["10","30","100","300","500"];
 const RCD_TYPE = ["A","B","AC","F"];
 const KAR_TYPE = ["B","C","D"];
 const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
+
+// ── gG-smeltzekering (trage patroon, D-patronen) — tijd-stroomkromme tabel ──
+// In tegenstelling tot B/C/D-automaten (vaste factor × In) heeft een gG-zekering
+// een niet-lineaire tijd-stroomkromme: de vereiste uitschakelstroom (Ia) per
+// stroomwaarde moet per In en per tijdsduur worden opgezocht, niet berekend met
+// een simpele factor. Bron: door Martin aangeleverde tabel "D-patronen Traag gG".
+// Kolommen komen exact overeen met de vier afschakeltijden die de app al
+// gebruikt (kastklasse × stelsel: Klasse1 TN=5s/TT=1s, Klasse2 TN=0,4s/TT=0,2s).
+const GG_TABEL = {
+  2:  { 5:5.6,   1:6.6,   0.4:7.5,   0.2:8.3   },
+  4:  { 5:11.1,  1:14.2,  0.4:15.7,  0.2:17.5  },
+  6:  { 5:17.1,  1:22.0,  0.4:26.7,  0.2:33.7  },
+  10: { 5:39.4,  1:50.0,  0.4:58.8,  0.2:67.1  },
+  16: { 5:53.1,  1:73.3,  0.4:90.0,  0.2:110.5 },
+  // LET OP: 20A/0,2s-waarde (43,3) is lager dan de 0,4s-waarde op dezelfde rij —
+  // dat kan niet kloppen (kortere tijd vereist altijd méér stroom, niet minder).
+  // Vermoedelijk een lees/fotografiefout in de brontabel. Gemarkeerd als
+  // onbetrouwbaar ("gg20_02_onbetrouwbaar") zodat de app hier een waarschuwing
+  // toont i.p.v. een stil mogelijk foute toetsing.
+  20: { 5:75.7,  1:105.3, 0.4:130.0, 0.2:43.3, gg20_02_onbetrouwbaar:true },
+  25: { 5:92.0,  1:131.6, 0.4:164.3, 0.2:196.4 },
+  35: { 5:139.5, 1:196.4, 0.4:260.0, 0.2:328.0 },
+  50: { 5:206.6, 1:307.3, 0.4:362.5, 0.2:400.0 },
+  63: { 5:274.3, 1:362.5, 0.4:423.8, 0.2:486.5 },
+};
+const GG_IN_WAARDEN = Object.keys(GG_TABEL).map(Number).sort((a,b)=>a-b);
+
+// Zoekt de dichtstbijzijnde In-waarde in de tabel (niet elke stroomwaarde is
+// een standaard gG-maat) en geeft de vereiste Ia terug voor de gevraagde tijd.
+// Retourneert ook een 'onbetrouwbaar'-vlag voor de bekende foute cel.
+function ggIaVoorTijd(ampere, tijd) {
+  const amp = toNum(ampere);
+  if (isNaN(amp) || amp <= 0) return null;
+  const dichtstbij = GG_IN_WAARDEN.reduce((best,cur) =>
+    Math.abs(cur-amp) < Math.abs(best-amp) ? cur : best
+  , GG_IN_WAARDEN[0]);
+  const rij = GG_TABEL[dichtstbij];
+  if (!rij || rij[tijd] === undefined) return null;
+  return { ia: rij[tijd], inGebruikt: dichtstbij, onbetrouwbaar: !!rij.gg20_02_onbetrouwbaar && tijd===0.2 && dichtstbij===20 };
+}
+
 // Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
 // Laadgroep/thuisbatterij ook relevant wanneer die via de hoofdgroepenkast gevoed worden
 // i.p.v. als losse discipline.
@@ -196,16 +233,33 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
   }
 
-  // A) IMPEDANTIE — Z L-N/L-PE check op basis van hoogst afgaande groep (EN 60898)
-  // Z_max = 230 / (factor × In)  factor: B=5, C=10, D=20, gG=4
-  // Geldt voor ELK stelsel, dus ook TT — de fysica van de automaat verandert niet
-  // door het stelsel, ongeacht of er een aardlekschakelaar achter zit.
+  // A) IMPEDANTIE — Z L-N/L-PE check op basis van hoogst afgaande groep (EN 60898/60269)
+  // Z_max = 230 / Icc_min. Voor B/C/D: Icc_min = factor × In (B=5, C=10, D=20).
+  // Voor gG (trage smeltzekering): Icc_min komt uit de tijd-stroomkromme tabel
+  // (GG_TABEL), afhankelijk van de max. afschakeltijd (die zelf weer afhangt van
+  // kastklasse × stelsel — zie maxAfschakeltijd-logica). Geldt voor ELK stelsel,
+  // dus ook TT — de fysica van de automaat/zekering verandert niet door het stelsel.
   {
-    const karFac = { B:5, C:10, D:20, gG:4 };
+    const karFac = { B:5, C:10, D:20 };
     const vKar = instMet.hoogstKar || "B";
     const vA   = toNum(instMet.hoogstAmpere);
-    if (!isNaN(vA) && vA > 0 && karFac[vKar]) {
-      const zMax = 230 / (karFac[vKar] * vA);
+    const isKlasse1Chk = instMet.kastType === "klasse1";
+    const isTTChk = (instMet.stelsel||"TN-C-S") === "TT";
+    const maxAfschakeltijdChk = isKlasse1Chk ? (isTTChk ? 1 : 5) : (isTTChk ? 0.2 : 0.4);
+
+    let zMax = null;
+    if (vKar === "gG") {
+      const ggLookupChk = ggIaVoorTijd(vA, maxAfschakeltijdChk);
+      if (ggLookupChk) {
+        zMax = 230 / ggLookupChk.ia;
+        if (ggLookupChk.onbetrouwbaar)
+          warnings.push({ level:"orange", msg:`gG-tabelwaarde voor ${ggLookupChk.inGebruikt}A bij ${maxAfschakeltijdChk}s lijkt onbetrouwbaar — controleer handmatig` });
+      }
+    } else if (!isNaN(vA) && vA > 0 && karFac[vKar]) {
+      zMax = 230 / (karFac[vKar] * vA);
+    }
+
+    if (zMax) {
       const zlpe = toNum(instMet.zlpe);
       const zln  = toNum(instMet.zln);
       if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
@@ -1103,6 +1157,10 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                     </div>
                   </div>
                 ))}
+                <label style={{display:"flex",alignItems:"center",gap:8,marginTop:10,padding:"8px 10px",background:K.surface,borderRadius:8,cursor:"pointer"}}>
+                  <input type="checkbox" checked={!!ag.veldmetingSelectie} onChange={()=>updAG(ag.id,"veldmetingSelectie",!ag.veldmetingSelectie)}/>
+                  <span style={{fontSize:11,color:K.muted}}>Verste of buitengroep — meenemen in veldmeting stap 8</span>
+                </label>
               </div>
             ) : (
               <div style={{cursor:"pointer"}} onClick={()=>setEditId(ag.id)}>
@@ -1312,11 +1370,25 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // waarden — geen losse invulvelden — op basis van: stelsel + automaat-
   // karakteristiek (B/C/D/gG) + ampèrewaarde van de hoogst afgaande groep,
   // gecombineerd met de gemeten Z-waarde zelf (Wet van Ohm: Icc = U / Z).
-  const karFactor = { B:5, C:10, D:20, gG:4 }; // gG: trage smeltzekering, factor ~4× In (NEN-EN 60269)
+  const karFactor = { B:5, C:10, D:20 }; // B/C/D: vaste factor × In (NEN-EN 60898). gG heeft een eigen tabel-lookup, zie GG_TABEL.
   const hoogstKar    = inst.hoogstKar || "B";
   const hoogstAmpere = inst.hoogstAmpere || "";
-  const karOnbekend  = !karFactor[hoogstKar];
-  const iccMin       = !karOnbekend && toNum(hoogstAmpere)>0 ? karFactor[hoogstKar] * toNum(hoogstAmpere) : null;
+  const karOnbekend  = hoogstKar!=="gG" && !karFactor[hoogstKar];
+
+  // Maximale afschakeltijd — afgeleid uit stelsel + kastklasse (NEN1010 tabel 41.1):
+  // Klasse 1 (metaal) zit doorgaans op verdeler-niveau → langere toegestane tijd
+  // (TN 5s / TT 1s). Klasse 2 (kunststof) zit doorgaans op eindgroep-niveau → kortere
+  // vereiste tijd (TN 0,4s / TT 0,2s). Dit is de installatienorm-afschakeltijd
+  // (verschillend van de RCD-apparaatnorm ΔT ≤300ms hieronder bij C!).
+  const isKlasse1 = data.kastType === "klasse1";
+  const maxAfschakeltijd = isKlasse1 ? (isTT ? 1 : 5) : (isTT ? 0.2 : 0.4);
+
+  // Icc_min en Z_max: voor B/C/D een vaste factor × In. Voor gG een tabel-lookup
+  // (tijd-stroomkromme is niet-lineair) op basis van de al-berekende maxAfschakeltijd.
+  const ggLookup = hoogstKar==="gG" ? ggIaVoorTijd(hoogstAmpere, maxAfschakeltijd) : null;
+  const iccMin = hoogstKar==="gG"
+    ? (ggLookup ? ggLookup.ia : null)
+    : (!karOnbekend && toNum(hoogstAmpere)>0 ? karFactor[hoogstKar] * toNum(hoogstAmpere) : null);
   const zMaxVoorzek  = iccMin ? (230 / iccMin) : null; // grens waarbinnen Icc voldoende is voor tijdige uitschakeling
   // Z_max-toetsing (Wet van Ohm + automaatkarakteristiek) geldt ALTIJD, ongeacht kastklasse —
   // dit gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting, wat niets
@@ -1330,18 +1402,10 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // zelf blijft relevante informatie en is geen vrijblijvende uitzondering.
   const zOk = v => karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
 
-  // Maximale afschakeltijd — afgeleid uit stelsel + kastklasse (NEN1010 tabel 41.1):
-  // Klasse 1 (metaal) zit doorgaans op verdeler-niveau → langere toegestane tijd
-  // (TN 5s / TT 1s). Klasse 2 (kunststof) zit doorgaans op eindgroep-niveau → kortere
-  // vereiste tijd (TN 0,4s / TT 0,2s). Dit is de installatienorm-afschakeltijd
-  // (verschillend van de RCD-apparaatnorm ΔT ≤300ms hieronder bij C!).
-  const isKlasse1 = data.kastType === "klasse1";
-  const maxAfschakeltijd = isKlasse1 ? (isTT ? 1 : 5) : (isTT ? 0.2 : 0.4);
-
   const cag = null; // niet meer gebruikt voor Z — Z wordt niet meer per aardlekgroep getoond
   const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
   useEffect(()=>{ if (inst.stelsel!==stelsel) si("stelsel",stelsel); }, [stelsel]);
-  const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel});
+  const warnings = gkCrossChecks(aardlekgroepen, grpMeet, {...inst, stelsel, kastType:data.kastType});
 
   return (
     <div>
@@ -1393,7 +1457,12 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
           {zMaxVoorzek && (
             <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
-              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(0)}A → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(1)}A{hoogstKar==="gG" && ggLookup ? ` (tabel gG bij ${ggLookup.inGebruikt}A, ${maxAfschakeltijd}s)` : ""} → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+            </div>
+          )}
+          {hoogstKar==="gG" && ggLookup?.onbetrouwbaar && (
+            <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10,lineHeight:1.5}}>
+              ⚠ De brontabel voor gG 20A bij 0,2s lijkt een fout te bevatten (waarde lager dan bij 0,4s, wat niet logisch is). Controleer deze uitkomst handmatig of vraag de juiste tabelwaarde na.
             </div>
           )}
           {!zMaxVoorzek && (
@@ -1463,12 +1532,12 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                     </div>
                     <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
                       background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
-                      Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {(50/(toNum(inst.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω
+                      Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {Math.floor(50/(toNum(inst.rcdMaZlpe||"300")/1000))}Ω
                     </div>
                     <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
                       <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
                       {inst.zlpeAardlek && (
-                        <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
+                        <StatusTag level={toNum(inst.zlpeAardlek)<=Math.floor(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
                       )}
                     </div>
                   </>
@@ -1764,13 +1833,117 @@ ${aardlekgroepen.map((ag,i)=>{
 CROSS-CHECK SIGNALEN: ${warnings.length>0?warnings.map(w=>w.msg).join("; "):"geen"}`}
         />
 
-        <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende: versturen →</button>
+        {/* Samenvatting: welke groepen zijn geselecteerd voor de veldmeting in stap 8
+            (verste/buitengroep-metingen Z L-N/L-PE, kabellengte-indicatie) */}
+        {aardlekgroepen.some(ag=>ag.veldmetingSelectie) && (
+          <div style={{marginTop:14,padding:"10px 12px",background:K.yellowDim,borderRadius:10,border:`1px solid ${K.yellow}44`}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.yellow,marginBottom:6}}>📋 Veldmeting — geselecteerde groepen</div>
+            <div style={{fontSize:11,color:K.text}}>
+              {aardlekgroepen.filter(ag=>ag.veldmetingSelectie).map(ag=>ag.naam).join(", ")}
+            </div>
+          </div>
+        )}
+
+        <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende: veldmeting →</button>
       </div>
     </div>
   );
 }
 
-// ─── ZONNEPANELEN STAPPEN ─────────────────────────────────────────────────────
+// ─── VELDMETING (stap 7B) — verste/buitengroep-metingen + kabellengte-indicatie ──
+// Voor de aardlekgroepen die in stap 6 zijn geselecteerd (vinkje "verste of
+// buitengroep meenemen"), meet je hier Z L-N en Z L-PE op de verste wandcontactdoos
+// van die groep. Met de kabeldikte (doorsnede) berekent de app de indicatieve
+// kabellengte: L = Z × A / (2 × ρ), met ρ = 0,023 Ω·mm²/m (koperweerstand bij
+// bedrijfstemperatuur — praktijkwaarde, bevestigd door Martin). De factor 2 komt
+// van het feit dat een lus-meting heen én terug over de kabel loopt.
+function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
+  const [veld, setVeld] = useState(data.veldmeting || {});
+  const aardlekgroepen = data.aardlekgroepen || [];
+  const geselecteerd = aardlekgroepen.filter(ag => ag.veldmetingSelectie);
+  const RHO = 0.023; // Ω·mm²/m — koperweerstand bij bedrijfstemperatuur (praktijkwaarde)
+  const KABELDIKTES = ["1.5","2.5","4","6","10"];
+
+  const sv = (agId, k, v) => {
+    const u = { ...veld, [`${agId}_${k}`]: v };
+    setVeld(u);
+    onChange("veldmeting", u);
+  };
+  const gv = (agId, k) => veld[`${agId}_${k}`] || "";
+
+  const berekenLengte = (agId) => {
+    const dikte = toNum(gv(agId,"dikte")) || 2.5;
+    const zln = toNum(gv(agId,"zln"));
+    const zlpe = toNum(gv(agId,"zlpe"));
+    const lengteZln = !isNaN(zln) && zln>0 ? (zln*dikte)/(2*RHO) : null;
+    const lengteZlpe = !isNaN(zlpe) && zlpe>0 ? (zlpe*dikte)/(2*RHO) : null;
+    return { lengteZln, lengteZlpe };
+  };
+
+  return (
+    <div>
+      <div style={S.hdr}>
+        <button style={S.backBtn} onClick={onBack}>←</button>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:700,fontSize:15}}>Veldmeting</div>
+          <div style={{fontSize:11,color:K.muted}}>Stap 7B · verste/buitengroep-metingen</div>
+        </div>
+      </div>
+      <div style={S.body}>
+        {geselecteerd.length === 0 ? (
+          <div style={S.card}>
+            <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
+              Geen groepen geselecteerd voor veldmeting. Ga terug naar stap 6 (Groepen) en vink daar bij de gewenste aardlekgroep(en) "Verste of buitengroep meenemen in veldmeting stap 8" aan als je deze stap wilt gebruiken.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
+              Meet Z L-N en Z L-PE op de <strong style={{color:K.text}}>verste wandcontactdoos</strong> van de geselecteerde groep(en). Aan de hand van de kabeldikte berekent de app de indicatieve kabellengte.
+            </div>
+            {geselecteerd.map(ag => {
+              const { lengteZln, lengteZlpe } = berekenLengte(ag.id);
+              return (
+                <div key={ag.id} style={S.card}>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>{ag.naam}</div>
+
+                  <label style={S.label}>Kabeldikte (doorsnede)</label>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                    {KABELDIKTES.map(d=>(
+                      <Pill key={d} small active={(gv(ag.id,"dikte")||"2.5")===d} onClick={()=>sv(ag.id,"dikte",d)}>{d}mm²</Pill>
+                    ))}
+                  </div>
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
+                    <div>
+                      <label style={S.label}>Z L-N (verste WCD)</label>
+                      <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={80} placeholder="bijv. 1.2"/>
+                      {lengteZln && (
+                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZln.toFixed(1)}m kabel</div>
+                      )}
+                    </div>
+                    <div>
+                      <label style={S.label}>Z L-PE (verste WCD)</label>
+                      <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={80} placeholder="bijv. 1.3"/>
+                      {lengteZlpe && (
+                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZlpe.toFixed(1)}m kabel</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{fontSize:10,color:K.muted,lineHeight:1.4}}>
+                    Berekening: L = Z × A ÷ (2 × ρ), met ρ = 0,023 Ω·mm²/m. Dit is een indicatie — de werkelijke lengte kan afwijken door aansluitweerstanden en meetnauwkeurigheid.
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+        <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende →</button>
+      </div>
+    </div>
+  );
+}
 
 function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
   const [strings, setStrings] = useState(data.pvStrings || [{ id:1, aantalPanelen:10 }]);
@@ -2037,7 +2210,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const instMet  = data.instMetingen||{};
   const pvInstMet = data.pvInstMet||{};
 
-  const gkWarnings = discipline==="groepenkast" ? gkCrossChecks(aardlekgroepen, grpMeet, instMet) : [];
+  const gkWarnings = discipline==="groepenkast" ? gkCrossChecks(aardlekgroepen, grpMeet, {...instMet, kastType:data.kastType}) : [];
   const pvWarnings = discipline==="pv" ? pvCrossChecks(
     strings.map(s=>({...s,iso:pvMeet[`${s.id}_iso`],spanning:pvMeet[`${s.id}_spanning`]})),
     pvInstMet, {aantalPanelen:data.aantalPanelen,paneelWp:data.paneelWp,omvormerKw:data.omvormerKw}
@@ -2254,14 +2427,17 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     if (discipline === "groepenkast") {
       const accentGK = "#1565C0";
       const statusGK = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
-      const karFacRap = { B:5, C:10, D:20, gG:4 };
+      const karFacRap = { B:5, C:10, D:20 };
       const vKarRap = instMet.hoogstKar || "B";
       const vARap   = toNum(instMet.hoogstAmpere);
-      const zMaxVoorzekRap = (karFacRap[vKarRap] && !isNaN(vARap) && vARap>0) ? 230/(karFacRap[vKarRap]*vARap) : null;
       const isKlasse1Rap = data.kastType === "klasse1";
       const maxAfschakeltijdRap = isKlasse1Rap
         ? ((instMet.stelsel||data.stelsel)==="TT" ? 1 : 5)
         : ((instMet.stelsel||data.stelsel)==="TT" ? 0.2 : 0.4);
+      const ggLookupRap = vKarRap==="gG" ? ggIaVoorTijd(vARap, maxAfschakeltijdRap) : null;
+      const zMaxVoorzekRap = vKarRap==="gG"
+        ? (ggLookupRap ? 230/ggLookupRap.ia : null)
+        : ((karFacRap[vKarRap] && !isNaN(vARap) && vARap>0) ? 230/(karFacRap[vKarRap]*vARap) : null);
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -2310,7 +2486,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3pe||"—"} Ω</td>
           </tr>` : ""}
           ${instMet.zlpeAardlek ? `<tr>
-            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (alle groepen achter RCD · ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${(50/(toNum(instMet.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω)</td>
+            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=Math.floor(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (alle groepen achter RCD · ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${Math.floor(50/(toNum(instMet.rcdMaZlpe||"300")/1000))}Ω)</td>
             <td></td><td></td>
           </tr>` : ""}
           ${aardlekgroepen.filter(ag=>ag.rcdType==="geen" && instMet[`zlpeVrij_${ag.id}`]).map(ag=>{
@@ -3991,7 +4167,7 @@ export default function App() {
   };
 
   // Stappen per discipline
-  const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Foto's (nieuw)","Versturen"];
+  const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Veldmeting","Foto's (nieuw)","Versturen"];
   const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
 
   const gkScreens = [
@@ -4002,6 +4178,7 @@ export default function App() {
     <GK_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapGroepen     key="groepen"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <GK_StapVeldmeting  key="veldmeting" data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={GK_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
