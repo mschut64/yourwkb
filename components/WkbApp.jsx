@@ -1,10 +1,21 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-21-J
-// Megger toegevoegd aan de tester-instelhulp (nu 5 merken: Metrel, Fluke, Benning,
-// Kyoritsu, Megger). Bugfix discipline_gekozen-event (notitie #22) geverifieerd —
-// stond al correct op beide plekken (directe disciplinekaart-klik én keuzedialoog),
-// geen wijziging nodig. JSON-LD hydration-fix (notitie #28) NIET meegenomen in deze
-// versie — die zit in app/landing/page.js, welke niet beschikbaar was in deze sessie.
+// YourWkb WkbApp.jsx — versie 2026-07-27-A
+// WKB veldtest 27-7-2026 (M&H) — grote reeks aanpassingen:
+// 1. Rookmelder + Centraal Aardpunt badkamer volledig weggehaald (UI/cross-checks/rapport)
+// 2. Testknop NOK geeft nu een rode cross-check waarschuwing ("vervang de RCD")
+// 3. Mail-bug gefixt: reply_to wordt gevalideerd op geldig e-mailformaat vóór
+//    versturen (voorkwam eerder een Resend "Invalid reply_to field" fout)
+// 4. ISO totaal gesplitst in Fase→Aarde en Nul→Aarde, beide getoetst aan 0,23 MΩ
+// 5. Spanning uitgebreid: fase-fase metingen (L1/L2, L2/L3, L1/L3) bij 3-fase +
+//    frequentie-veld (tolerantie ±10%, puur registratief) — 7 metingen bij 3-fase
+// 6. Z L-PE achter aardlek herstructureerd: Ja/Nee-vinkje "achter RCD?" — bij Ja
+//    default 300mA/166Ω, bij Nee wordt de automaatformule van de hoogst afgaande
+//    groep (uit Sectie A) gebruikt i.p.v. de Ra-formule
+// 7. "Meest ongunstige punt"-toelichting toegevoegd bij de voorzekering-sectie
+// 8. Terminologie-verwarring opgelost: "hoogst afgaande groep" werd op twee
+//    niveaus gebruikt (per aardlekgroep-cluster vs. hele installatie) — cluster-
+//    niveau nu hernoemd naar "zwaarst belast in dit cluster" om ze te onderscheiden
+// Groep-zonder-RCD-optie bleek al te bestaan (Pill "Geen RCD" bij aanmaken groep).
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -129,9 +140,13 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const dtNorm = 300; // EN 61008: apparaatnorm altijd 300ms bij 1× In, ongeacht stelsel
 
   // B) ISOLATIEWEERSTAND — ISO totaal is de hoofdmeting (alle groepen aan, hoofdvoeding uit)
-  const isoTot = toNum(instMet.isoTot);
-  if (!isNaN(isoTot) && isoTot < 0.23)
-    warnings.push({ level:"red", msg:`ISO totaal ${isoTot} MΩ — ONDER NORM (≥0,23 MΩ)` });
+  // Twee losse metingen: Fase→Aarde en Nul→Aarde, beide getoetst aan 0,23 MΩ.
+  const isoTotFA = toNum(instMet.isoTotFA);
+  const isoTotNA = toNum(instMet.isoTotNA);
+  if (!isNaN(isoTotFA) && isoTotFA < 0.23)
+    warnings.push({ level:"red", msg:`ISO totaal (Fase→Aarde) ${isoTotFA} MΩ — ONDER NORM (≥0,23 MΩ)` });
+  if (!isNaN(isoTotNA) && isoTotNA < 0.23)
+    warnings.push({ level:"red", msg:`ISO totaal (Nul→Aarde) ${isoTotNA} MΩ — ONDER NORM (≥0,23 MΩ)` });
 
   const probleemGroepen = instMet.isoTotProblemGroepen || [];
   (aardlekgroepen||[]).forEach(ag => {
@@ -166,6 +181,12 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
         if (di > diMax)
           warnings.push({ level:"red", msg:`${ag.naam}: ΔI ${di}mA boven norm voor type-${ag.rcdType} (≤${diMax.toFixed(0)}mA bij ${mA}mA RCD)` });
       }
+
+      // Testknop NOK betekent dat de RCD niet mechanisch/elektrisch reageert op de
+      // ingebouwde testfunctie — dit is een directe afkeuring, RCD moet vervangen worden.
+      const testknop = grpMeet[`${ag.id}_testknop`];
+      if (testknop === "NOK")
+        warnings.push({ level:"red", msg:`${ag.naam}: Testknop RCD geeft NOK — RCD reageert niet op de testfunctie, vervang de RCD` });
     }
   });
 
@@ -210,10 +231,6 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     if (instMet[k] === "NOK")
       warnings.push({ level:"red", msg:`${label}: NIET in orde bevonden — herstel vereist vóór ingebruikname` });
   });
-  if (instMet.badkamerCAP === "Nee")
-    warnings.push({ level:"orange", msg:`Badkamer niet voorzien van Centraal Aardpunt — controleer of dit vereist is` });
-  if (instMet.rookmelder === "Ja" && instMet.rookmelderProjectie === "Nee")
-    warnings.push({ level:"orange", msg:`Rookmelder niet juist geprojecteerd volgens NEN2555` });
 
   return warnings;
 }
@@ -290,8 +307,8 @@ const LEERUITLEG = {
     tekst: "Het verschil zit in hoe de installatie beveiligd is tegen een fout naar aarde. Bij een TN-stelsel (TN-C-S of TN-S, in Nederland het meest voorkomend) loopt de retourstroom bij een fout via een vaste PE-verbinding terug naar de bron — de automaat/zekering lost dan snel op door de hoge kortsluitstroom. Bij een TT-stelsel is er geen vaste PE-verbinding naar de bron; de RCD is daar de praktische hoofdbeveiliging omdat de lus-impedantie via aarde vaak te hoog is om alleen op de automaat te vertrouwen. Dat betekent niet dat de Z_max-toetsing bij TT irrelevant is — die geldt voor elk stelsel, ongeacht of er een RCD achter zit.",
   },
   aardlekgroep: {
-    titel: "Aardlekgroep & hoogst afgaande groep",
-    tekst: "Een aardlekgroep is een cluster van eindgroepen die allemaal door dezelfde aardlekschakelaar (RCD) worden beveiligd. Binnen zo'n cluster meet je niet elke eindgroep apart door — je meet op de 'hoogst afgaande groep': de eindgroep met de hoogste stroomsterkte (bijvoorbeeld de 32A-groep in plaats van een 16A-lichtgroep). Als die hoogst belaste groep binnen de norm valt, geldt dat als representatief voor de rest van het cluster, omdat die minder zwaar belast worden.",
+    titel: "Aardlekgroep & zwaarst belaste eindgroep",
+    tekst: "Een aardlekgroep is een cluster van eindgroepen die allemaal door dezelfde aardlekschakelaar (RCD) worden beveiligd. Binnen zo'n cluster meet je de RCD-test (ΔT/ΔI) niet op elke eindgroep apart — je meet op de zwaarst belaste eindgroep van dát cluster (bijvoorbeeld de 32A-groep in plaats van een 16A-lichtgroep). Let op: dit is een ander begrip dan de 'hoogst afgaande groep van de installatie' die in stap 7 wordt gebruikt voor de Z-toetsing — die gaat over de hele installatie, niet over één aardlekgroep-cluster.",
   },
   delta_t_i: {
     titel: "ΔT en ΔI van de aardlekschakelaar",
@@ -1023,7 +1040,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
       </div>
       <div style={S.body}>
         <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
-          Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. Je meet straks 1× per aardlekgroep — op de <strong>hoogst afgaande groep</strong> (de zwaarst belaste eindgroep in dat cluster). <LeerIcoon onderwerp="aardlekgroep"/>
+          Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. De RCD-test (ΔT/ΔI) doe je 1× per aardlekgroep — op de <strong>zwaarst belaste eindgroep in dat cluster</strong>. Dit is een ander begrip dan de "hoogst afgaande groep van de installatie" die je straks in stap 7 gebruikt voor de Z-toetsing (dat gaat over de hele installatie, niet over één cluster). <LeerIcoon onderwerp="aardlekgroep"/>
         </div>
         {aardlekgroepen.map((ag,i)=>{
           const hoogstId = ag.hoogstId || autoHoogst(ag);
@@ -1083,7 +1100,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                       {ag.eindgroepen.length>1 && (
                         <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:hoogstId===eg.id?K.yellow:K.muted,cursor:"pointer",marginLeft:"auto"}}>
                           <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId===eg.id} onChange={()=>updAG(ag.id,"hoogstId",eg.id)}/>
-                          hoogst afgaand
+                          zwaarst belast in dit cluster
                         </label>
                       )}
                     </div>
@@ -1352,7 +1369,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
 
           <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5,padding:"7px 10px",background:K.surface,borderRadius:8}}>
-            Vul de <strong style={{color:K.text}}>voorbeveiliging (hoogst afgaande groep)</strong> van de gehele installatie in — de verwachte kortsluitstroom en maximale afschakeltijd worden hieruit afgeleid.
+            Vul de <strong style={{color:K.text}}>voorbeveiliging (hoogst afgaande groep)</strong> van de gehele installatie in — de verwachte kortsluitstroom en maximale afschakeltijd worden hieruit afgeleid. Meet altijd op het <strong style={{color:K.text}}>meest ongunstige punt</strong> van het circuit (het verst afgelegen of zwaarst belaste punt) — dat geeft de betrouwbaarste indicatie of de beveiliging overal in de installatie voldoet.
           </div>
 
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
@@ -1412,33 +1429,62 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             })}
           </div>
 
-          {/* Z L-PE achter aardlek — Ra_max = 50V / IΔn */}
+          {/* Z L-PE achter aardlek — twee mogelijke situaties op dit meetpunt */}
           <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
-            <label style={S.label}>Z L-PE achter aardlekschakelaar</label>
+            <label style={S.label}>Z L-PE op de hoogst afgaande groep</label>
             <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-              Als de hoogst afgaande groep achter een RCD zit: Ra_max = 50V ÷ IΔn<br/>
-              {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
-                <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
-              ))}
+              Zit dit meetpunt achter een aardlekschakelaar?
             </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
-              {["10","30","100","300","500"].map(mA=>(
-                <Pill key={mA} small active={inst.rcdMaZlpe===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
-              ))}
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <Pill small active={inst.zlpeAchterAardlek==="ja"} onClick={()=>si("zlpeAchterAardlek","ja")}>Ja, achter RCD</Pill>
+              <Pill small active={inst.zlpeAchterAardlek==="nee"} onClick={()=>si("zlpeAchterAardlek","nee")}>Nee, direct op automaat</Pill>
             </div>
-            {inst.rcdMaZlpe && (
-              <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
-                background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
-                Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe)/1000}A = {(50/(toNum(inst.rcdMaZlpe)/1000)).toFixed(0)}Ω
-              </div>
+
+            {inst.zlpeAchterAardlek==="ja" && (
+              <>
+                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                  Ra_max = 50V ÷ IΔn — bij het gangbare 300mA hoofd-RCD is dat ≤166Ω<br/>
+                  {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
+                    <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
+                  {["10","30","100","300","500"].map(mA=>(
+                    <Pill key={mA} small active={(inst.rcdMaZlpe||"300")===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
+                  ))}
+                </div>
+                <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
+                  background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
+                  Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {(50/(toNum(inst.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω
+                </div>
+                <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
+                  <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
+                  {inst.zlpeAardlek && (
+                    <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
+                  )}
+                </div>
+              </>
             )}
-            <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-              <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
-              {inst.zlpeAardlek && inst.rcdMaZlpe && (
-                <StatusTag level={toNum(inst.zlpeAardlek)<=(50/(toNum(inst.rcdMaZlpe)/1000))?"ok":"red"}/>
-              )}
-            </div>
+
+            {inst.zlpeAchterAardlek==="nee" && (
+              <>
+                <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
+                  Geen RCD op dit punt — de toetsing gebruikt dezelfde automaatkarakteristiek en ampèrewaarde die je hierboven bij "Voorzekering" hebt ingevuld ({hoogstKar}{hoogstAmpere||"?"}A).
+                </div>
+                {zMaxVoorzek ? (
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 1.5"/>
+                    {inst.zlpeAardlek && (
+                      <StatusTag level={toNum(inst.zlpeAardlek)<=zMaxVoorzek?"ok":"red"}/>
+                    )}
+                    <span style={{fontSize:10,color:K.muted}}>Z_max={zMaxVoorzek.toFixed(2)}Ω</span>
+                  </div>
+                ) : (
+                  <div style={{fontSize:10,color:K.orange}}>Vul eerst ampère + karakteristiek in bij "Voorzekering" hierboven.</div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -1449,11 +1495,18 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.4}}>
             Meet met alle aardlekgroepen ingeschakeld en de voeding zelf uit.
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <MiniInput value={inst.isoTot} onChange={v=>si("isoTot",v)} unit="MΩ" width={80}/>
-            {inst.isoTot && <StatusTag level={isoOk(inst.isoTot)?"ok":"red"}/>}
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:4}}>
+            {[["Fase → Aarde","isoTotFA"],["Nul → Aarde","isoTotNA"]].map(([l,k])=>(
+              <div key={k}>
+                <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="MΩ" width={80}/>
+                  {inst[k] && <StatusTag level={toNum(inst[k])>=0.23?"ok":"red"}/>}
+                </div>
+              </div>
+            ))}
           </div>
-          {inst.isoTot && !isoOk(inst.isoTot) && (
+          {(inst.isoTotFA || inst.isoTotNA) && (toNum(inst.isoTotFA)<0.23 || toNum(inst.isoTotNA)<0.23) && (
             <div style={{marginTop:10,padding:"10px 12px",background:K.orangeDim,borderRadius:10,border:`1px solid ${K.orange}44`}}>
               <div style={{fontSize:11,color:K.orange,lineHeight:1.6,marginBottom:10}}>
                 ⚠ <strong>Waarde onder 0,23 MΩ.</strong> Zoek de boosdoener zo op:
@@ -1524,10 +1577,11 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8,marginTop:8}}>
           <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
             <input type="checkbox" checked={inst.toon3fase ?? heeft3faseGroep} onChange={e=>si("toon3fase",e.target.checked)}/>
-            <span style={{fontSize:12,color:K.muted}}>Ook L2/N en L3/N meten (3-fase aansluiting aanwezig)</span>
+            <span style={{fontSize:12,color:K.muted}}>Ook L2/N, L3/N en fase-fase meten (3-fase aansluiting aanwezig)</span>
           </label>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+        <div style={{fontSize:10,color:K.muted,marginBottom:4}}>Fase → Aarde/Nul</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
           {(["L1/N"].concat((inst.toon3fase ?? heeft3faseGroep) ? ["L2/N","L3/N"] : [])).map(f=>(
             <div key={f}><label style={S.label}>{f}</label>
               <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -1536,6 +1590,30 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             </div>
           ))}
+        </div>
+        {(inst.toon3fase ?? heeft3faseGroep) && (
+          <>
+            <div style={{fontSize:10,color:K.muted,marginBottom:4}}>Fase → Fase</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+              {["L1/L2","L2/L3","L1/L3"].map(f=>(
+                <div key={f}><label style={S.label}>{f}</label>
+                  <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                    <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
+                    {inst[`span_${f}`]&&<StatusTag level={toNum(inst[`span_${f}`])>=360&&toNum(inst[`span_${f}`])<=440?"ok":"red"}/>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <div style={{fontSize:10,color:K.muted,marginBottom:4}}>Frequentie — registratie op meetmoment, tolerantie ±10% (45-55Hz)</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+          <div><label style={S.label}>Frequentie</label>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <MiniInput value={inst.frequentie} onChange={v=>si("frequentie",v)} unit="Hz" width={65} placeholder="50"/>
+              {inst.frequentie&&<StatusTag level={toNum(inst.frequentie)>=45&&toNum(inst.frequentie)<=55?"ok":"red"}/>}
+            </div>
+          </div>
         </div>
 
         {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
@@ -1559,34 +1637,6 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           ))}
           <div style={{fontSize:10,color:K.muted,marginTop:8}}>Tik om te wisselen: ? → ✓ OK → ✗ NOK → ?</div>
 
-          <div style={{height:1,background:K.border,margin:"14px 0"}}/>
-
-          <label style={S.label}>Badkamer voorzien van Centraal Aardpunt</label>
-          <div style={{display:"flex",gap:8,marginBottom:14}}>
-            <Pill small active={inst.badkamerCAP==="Ja"} onClick={()=>si("badkamerCAP","Ja")}>Ja</Pill>
-            <Pill small active={inst.badkamerCAP==="Nee"} onClick={()=>si("badkamerCAP","Nee")}>Nee</Pill>
-            <Pill small active={inst.badkamerCAP==="n.v.t."} onClick={()=>si("badkamerCAP","n.v.t.")}>n.v.t.</Pill>
-          </div>
-
-          <label style={S.label}>Rookmelder aanwezig</label>
-          <div style={{display:"flex",gap:8,marginBottom:10}}>
-            <Pill small active={inst.rookmelder==="Ja"} onClick={()=>si("rookmelder","Ja")}>Ja</Pill>
-            <Pill small active={inst.rookmelder==="Nee"} onClick={()=>si("rookmelder","Nee")}>Nee</Pill>
-          </div>
-          {inst.rookmelder==="Ja" && (
-            <>
-              <label style={S.label}>Voeding rookmelder</label>
-              <div style={{display:"flex",gap:8,marginBottom:10}}>
-                <Pill small active={inst.rookmelderVoeding==="Batterij"} onClick={()=>si("rookmelderVoeding","Batterij")}>Batterij</Pill>
-                <Pill small active={inst.rookmelderVoeding==="230V"} onClick={()=>si("rookmelderVoeding","230V")}>230V</Pill>
-              </div>
-              <label style={S.label}>Juist geprojecteerd</label>
-              <div style={{display:"flex",gap:8}}>
-                <Pill small active={inst.rookmelderProjectie==="Ja"} onClick={()=>si("rookmelderProjectie","Ja")}>Ja</Pill>
-                <Pill small active={inst.rookmelderProjectie==="Nee"} onClick={()=>si("rookmelderProjectie","Nee")}>Nee</Pill>
-              </div>
-            </>
-          )}
         </div>
 
         {/* C) AARDLEKSCHAKELAARS */}
@@ -1681,8 +1731,8 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
 STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
 HOOGST AFGAANDE GROEP: ${inst.hoogstKar||"—"}${inst.hoogstAmpere||"—"}A
-Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal: ${inst.isoTot||"—"} MOhm
-SPANNINGEN: L1 ${inst["span_L1/N"]||"—"}V / L2 ${inst["span_L2/N"]||"—"}V / L3 ${inst["span_L3/N"]||"—"}V
+Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal Fase-Aarde: ${inst.isoTotFA||"—"} MOhm | ISO totaal Nul-Aarde: ${inst.isoTotNA||"—"} MOhm
+SPANNINGEN: L1/N ${inst["span_L1/N"]||"—"}V / L2/N ${inst["span_L2/N"]||"—"}V / L3/N ${inst["span_L3/N"]||"—"}V / L1/L2 ${inst["span_L1/L2"]||"—"}V / L2/L3 ${inst["span_L2/L3"]||"—"}V / L1/L3 ${inst["span_L1/L3"]||"—"}V | FREQUENTIE: ${inst.frequentie||"—"}Hz
 AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
   const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
@@ -2236,23 +2286,36 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Z L3-N</strong></td><td ${statusGK(instMet.zl3n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3n||"—"} Ω</td>
             <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3pe||"—"} Ω</td>
           </tr>` : ""}
-          ${instMet.zlpeAardlek ? `<tr>
-            <td><strong>Z L-PE achter aardlek</strong></td><td>${instMet.zlpeAardlek} Ω (RCD ${instMet.rcdMaZlpe||"?"}mA · Ra_max=${instMet.rcdMaZlpe?(50/(toNum(instMet.rcdMaZlpe)/1000)).toFixed(0):"?"}Ω)</td>
+          ${instMet.zlpeAardlek ? (instMet.zlpeAchterAardlek==="nee" ? `<tr>
+            <td><strong>Z L-PE (hoogst afg. groep, geen RCD)</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpeAardlek} Ω (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2):"?"}Ω obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A)</td>
             <td></td><td></td>
-          </tr>` : ""}
+          </tr>` : `<tr>
+            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (RCD ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${(50/(toNum(instMet.rcdMaZlpe||"300")/1000)).toFixed(0)}Ω)</td>
+            <td></td><td></td>
+          </tr>`) : ""}
           <tr>
-            <td><strong>ISO totaal</strong></td><td ${statusGK(instMet.isoTot, v=>toNum(v)>=0.23)}>${instMet.isoTot||"—"} MΩ
-              ${(instMet.isoTotProblemGroepen||[]).length ? `<br><span style="font-size:8px;color:#92400e">⚠ Probleemgroep(en): ${(instMet.isoTotProblemGroepen||[]).map(id=>aardlekgroepen.find(a=>a.id===id)?.naam||"?").join(", ")}${instMet.isoTotProblemen?` — ${instMet.isoTotProblemen}`:""}</span>` : ""}</td>
-            <td colspan="2"></td>
+            <td><strong>ISO totaal Fase→Aarde</strong></td><td ${statusGK(instMet.isoTotFA, v=>toNum(v)>=0.23)}>${instMet.isoTotFA||"—"} MΩ</td>
+            <td><strong>ISO totaal Nul→Aarde</strong></td><td ${statusGK(instMet.isoTotNA, v=>toNum(v)>=0.23)}>${instMet.isoTotNA||"—"} MΩ</td>
           </tr>
+          ${(instMet.isoTotProblemGroepen||[]).length ? `<tr>
+            <td colspan="4" style="font-size:8px;color:#92400e">⚠ Probleemgroep(en): ${(instMet.isoTotProblemGroepen||[]).map(id=>aardlekgroepen.find(a=>a.id===id)?.naam||"?").join(", ")}${instMet.isoTotProblemen?` — ${instMet.isoTotProblemen}`:""}</td>
+          </tr>` : ""}
           <tr>
             <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
             <td><strong>L2/N</strong></td><td ${statusGK(instMet["span_L2/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L2/N"]||"—"} V</td>
           </tr>
           <tr>
             <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
-            <td></td><td></td>
+            <td><strong>Frequentie</strong></td><td ${statusGK(instMet.frequentie, v=>toNum(v)>=45&&toNum(v)<=55)}>${instMet.frequentie||"—"} Hz</td>
           </tr>
+          ${instMet.zDrieFase || instMet["span_L1/L2"] ? `<tr>
+            <td><strong>L1/L2</strong></td><td ${statusGK(instMet["span_L1/L2"], v=>toNum(v)>=360&&toNum(v)<=440)}>${instMet["span_L1/L2"]||"—"} V</td>
+            <td><strong>L2/L3</strong></td><td ${statusGK(instMet["span_L2/L3"], v=>toNum(v)>=360&&toNum(v)<=440)}>${instMet["span_L2/L3"]||"—"} V</td>
+          </tr>
+          <tr>
+            <td><strong>L1/L3</strong></td><td ${statusGK(instMet["span_L1/L3"], v=>toNum(v)>=360&&toNum(v)<=440)}>${instMet["span_L1/L3"]||"—"} V</td>
+            <td></td><td></td>
+          </tr>` : ""}
         </table>
         <h2>Aardlekgroepen — RCD-test (sectie C)</h2>
         <p style="font-size:8px;color:#666;margin-bottom:4px">
@@ -2300,8 +2363,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
               <td ${instMet.leidingberekeningen==="OK"?'class="ok"':instMet.leidingberekeningen==="NOK"?'class="nok"':''}>${instMet.leidingberekeningen==="OK"?"✓ OK":instMet.leidingberekeningen==="NOK"?"✗ NOK":"—"}</td></tr>
           <tr><td>Beveiligingen (incl. selectiviteit) op alle punten gecontroleerd</td>
               <td ${instMet.beveiligingen==="OK"?'class="ok"':instMet.beveiligingen==="NOK"?'class="nok"':''}>${instMet.beveiligingen==="OK"?"✓ OK":instMet.beveiligingen==="NOK"?"✗ NOK":"—"}</td></tr>
-          <tr><td>Badkamer voorzien van Centraal Aardpunt</td><td>${instMet.badkamerCAP||"—"}</td></tr>
-          <tr><td>Rookmelder aanwezig</td><td>${instMet.rookmelder||"—"}${instMet.rookmelder==="Ja"?` (voeding: ${instMet.rookmelderVoeding||"—"}, juist geprojecteerd: ${instMet.rookmelderProjectie||"—"})`:""}</td></tr>
+
         </table>
         ${waarschuwingHtml()}
         ${fotosHtml(GK_FOTO_CPS)}
@@ -2632,12 +2694,18 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <p>Hierbij ontvangt u het opleverrapport van de werkzaamheden uitgevoerd door ${data.instNaam||"uw installateur"}. Dit rapport voldoet aan de geldende normen en is automatisch gegenereerd via YourWkb.</p>
         </div>`
       );
+      // Simpele e-mailvalidatie voor reply_to — Resend wijst het hele verzoek af met
+      // "Invalid 'reply_to' field" als hier iets staat dat geen geldig e-mailadres is
+      // (bijv. een spatie, tikfout, of auto-fill dat niet volledig is ingevuld).
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const geldigeReplyTo = data.instEmail && emailRegex.test(data.instEmail.trim()) ? data.instEmail.trim() : undefined;
+
       const resp = await fetch("/api/verstuur-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: data.email,
-          replyTo: data.instEmail || undefined,
+          replyTo: geldigeReplyTo,
           subject: `Opleverrapport ${data.projectId||""} – ${data.straat||""} ${data.huisnummer||""}`.trim(),
           html: introHtml,
         }),
