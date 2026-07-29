@@ -1,11 +1,24 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-27-F
-// BUGFIX: Veldmeting-data (Z L-N/L-PE op verste WCD + berekende kabellengte) werd
-// wel correct verzameld en berekend in stap 7B, maar stond NERGENS in het PDF-
-// rapport — een omissie. Nieuwe sectie "Veldmeting — verste/buitengroep"
-// toegevoegd aan het rapport, direct na Sectie B (Isolatieweerstand), met per
-// geselecteerde aardlekgroep: kabeldikte, gemeten Z-waarden, en de berekende
-// indicatieve lengte.
+// YourWkb WkbApp.jsx — versie 2026-07-29-A
+// Aanpassingen 29-7-2026 (veldtest-feedback, in één release gebundeld):
+// 1. STAP 7 label: achter de schuine streep aangepast naar "Hoogst afgaande groep
+//    (klasse 2)" (was "Hoofdzekering afgaande groep (klasse 2) — hoogst afgaande
+//    groep"). Deel vóór de streep ("Voorzekering (klasse 1)") ongewijzigd.
+// 2. STAP 7 aardlekschakelaar-keuze + enkel Z L-PE-veld: het dubbele Z L-PE-veld
+//    (grid-meting + los "achter aardlek"-vak) is samengevoegd tot ÉÉN Z L-PE-veld.
+//    Nieuwe keuzeknop "Aardlekschakelaar aanwezig" bepaalt nu de toetsing:
+//      • aangevinkt  → Z L-PE OK bij ≤166Ω (aanraakspanningsnorm, RCD schakelt af)
+//      • uitgevinkt  → foutstroom-norm (Z_max obv automaatkarakteristiek) geldt
+//    Van toepassing op Z L-PE én de 3-fase varianten Z L2-PE / Z L3-PE. De L-N-
+//    metingen blijven altijd tegen Z_max (automaat) getoetst.
+// 3. STAP 7 spanningsmeting: L1/PE toegevoegd; bij 3-fase ook L2/PE en L3/PE.
+// 4. STAP 8 veldmeting: Z L-PE krijgt nu óók het "achter aardlek"-systeem — per
+//    groep een keuzeknop aardlekschakelaar (default afgeleid uit RCD-type), met
+//    ≤166Ω bij RCD en Z_max-norm zonder RCD, net als in sectie A.
+// 5. STAP 7 isolatieweerstand: de vaste ISO-invoer per aardlekschakelaar is
+//    vervangen door een dynamische lijst "per groep" — met de knop "+ Extra groep"
+//    voeg je een tweede/derde groep enz. toe. 1-fase (≥0,23 MΩ) en 3-fase
+//    (≥0,40 MΩ) per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -79,12 +92,10 @@ const GG_TABEL = {
   6:  { 5:17.1,  1:22.0,  0.4:26.7,  0.2:33.7  },
   10: { 5:39.4,  1:50.0,  0.4:58.8,  0.2:67.1  },
   16: { 5:53.1,  1:73.3,  0.4:90.0,  0.2:110.5 },
-  // LET OP: 20A/0,2s-waarde (43,3) is lager dan de 0,4s-waarde op dezelfde rij —
-  // dat kan niet kloppen (kortere tijd vereist altijd méér stroom, niet minder).
-  // Vermoedelijk een lees/fotografiefout in de brontabel. Gemarkeerd als
-  // onbetrouwbaar ("gg20_02_onbetrouwbaar") zodat de app hier een waarschuwing
-  // toont i.p.v. een stil mogelijk foute toetsing.
-  20: { 5:75.7,  1:105.3, 0.4:130.0, 0.2:43.3, gg20_02_onbetrouwbaar:true },
+  // 20A/0,2s gecorrigeerd naar 153,3A (was 43,3 — fout in brontabel, gecorrigeerd
+  // door Martin op 28-7-2026 via 230/1,5 = 153,3, consistent met de stijgende
+  // trend van de rest van de rij).
+  20: { 5:75.7,  1:105.3, 0.4:130.0, 0.2:153.3 },
   25: { 5:92.0,  1:131.6, 0.4:164.3, 0.2:196.4 },
   35: { 5:139.5, 1:196.4, 0.4:260.0, 0.2:328.0 },
   50: { 5:206.6, 1:307.3, 0.4:362.5, 0.2:400.0 },
@@ -94,7 +105,6 @@ const GG_IN_WAARDEN = Object.keys(GG_TABEL).map(Number).sort((a,b)=>a-b);
 
 // Zoekt de dichtstbijzijnde In-waarde in de tabel (niet elke stroomwaarde is
 // een standaard gG-maat) en geeft de vereiste Ia terug voor de gevraagde tijd.
-// Retourneert ook een 'onbetrouwbaar'-vlag voor de bekende foute cel.
 function ggIaVoorTijd(ampere, tijd) {
   const amp = toNum(ampere);
   if (isNaN(amp) || amp <= 0) return null;
@@ -103,7 +113,7 @@ function ggIaVoorTijd(ampere, tijd) {
   , GG_IN_WAARDEN[0]);
   const rij = GG_TABEL[dichtstbij];
   if (!rij || rij[tijd] === undefined) return null;
-  return { ia: rij[tijd], inGebruikt: dichtstbij, onbetrouwbaar: !!rij.gg20_02_onbetrouwbaar && tijd===0.2 && dichtstbij===20 };
+  return { ia: rij[tijd], inGebruikt: dichtstbij };
 }
 
 // Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
@@ -179,24 +189,22 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   if (!isNaN(isoTotNA) && isoTotNA < 0.23)
     warnings.push({ level:"red", msg:`ISO totaal (Nul→Aarde) ${isoTotNA} MΩ — ONDER NORM (≥0,23 MΩ)` });
 
-  const probleemGroepen = instMet.isoTotProblemGroepen || [];
+  // ISO per groep (dynamische lijst) — waarschuw bij een waarde onder de norm.
+  (instMet.isoGroepen || []).forEach((g, idx) => {
+    const naam = g.naam || `Groep ${idx+1}`;
+    const norm = g.driefase ? 0.40 : 0.23;
+    const velden = g.driefase
+      ? [["l1a","L1→Aarde"],["l2a","L2→Aarde"],["l3a","L3→Aarde"],["na","N→Aarde"]]
+      : [["fa","Fase→Aarde"],["na","Nul→Aarde"]];
+    velden.forEach(([k,label]) => {
+      const iso = toNum(g[k]);
+      if (!isNaN(iso) && iso < norm)
+        warnings.push({ level:"red", msg:`${naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
+    });
+  });
+
   (aardlekgroepen||[]).forEach(ag => {
     const geenRcd = ag.rcdType === "geen";
-    const hoogst = (ag.eindgroepen||[]).find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
-
-    // ISO per aardlekgroep alleen toetsen als deze groep als probleemgroep is aangemerkt
-    // (dus alleen relevant nadat de ISO totaal-meting een afwijking toonde)
-    if (probleemGroepen.includes(ag.id)) {
-      const norm = ag.fase==="3" ? 0.40 : 0.23;
-      const isoKeys = ag.fase==="3"
-        ? [["iso_l1a","L1→Aarde"],["iso_l2a","L2→Aarde"],["iso_l3a","L3→Aarde"],["iso_na","N→Aarde"]]
-        : [["iso_fa","Fase→Aarde"],["iso_na","Nul→Aarde"]];
-      isoKeys.forEach(([k,label]) => {
-        const iso = toNum(grpMeet[`${ag.id}_${k}`]);
-        if (!isNaN(iso) && iso < norm)
-          warnings.push({ level:"red", msg:`${ag.naam} (${label}): ISO ${iso} MΩ — ONDER NORM (≥${norm} MΩ)` });
-      });
-    }
 
     if (!geenRcd) {
       const dt = toNum(grpMeet[`${ag.id}_dt`]);
@@ -247,23 +255,26 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     let zMax = null;
     if (vKar === "gG") {
       const ggLookupChk = ggIaVoorTijd(vA, maxAfschakeltijdChk);
-      if (ggLookupChk) {
-        zMax = 230 / ggLookupChk.ia;
-        if (ggLookupChk.onbetrouwbaar)
-          warnings.push({ level:"orange", msg:`gG-tabelwaarde voor ${ggLookupChk.inGebruikt}A bij ${maxAfschakeltijdChk}s lijkt onbetrouwbaar — controleer handmatig` });
-      }
+      if (ggLookupChk) zMax = Math.round((230 / ggLookupChk.ia) * 100) / 100;
     } else if (!isNaN(vA) && vA > 0 && karFac[vKar]) {
-      zMax = 230 / (karFac[vKar] * vA);
+      zMax = Math.round((230 / (karFac[vKar] * vA)) * 100) / 100;
     }
 
-    if (zMax) {
+    {
+      const rcdAanwezig = instMet.rcdAanwezig ?? true;
       const zlpe = toNum(instMet.zlpe);
       const zln  = toNum(instMet.zln);
-      if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
-        warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten` });
-      if (!isNaN(zlpe) && zlpe > zMax)
-        warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
-      if (!isNaN(zln) && zln > zMax)
+      if (rcdAanwezig) {
+        // Achter een aardlekschakelaar geldt de aanraakspanningsnorm Ra ≤166Ω i.p.v. de foutstroom-norm.
+        if (!isNaN(zlpe) && zlpe > 166)
+          warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven 166Ω (aanraakspanningsnorm achter aardlekschakelaar)` });
+      } else if (zMax) {
+        if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
+          warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten` });
+        if (!isNaN(zlpe) && zlpe > zMax)
+          warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+      }
+      if (zMax && !isNaN(zln) && zln > zMax)
         warnings.push({ level:"red", msg:`Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
     }
   }
@@ -1360,6 +1371,15 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const dtOk   = v => toNum(v)<=dtNorm;
   const spanOk = v => toNum(v)>=207&&toNum(v)<=253;
 
+  // Isolatieweerstand PER GROEP — dynamische lijst (i.p.v. vaste invoer per
+  // aardlekschakelaar). Elke groep: vrije naam + FA/NA (1-fase) of L1/L2/L3/N→A
+  // (3-fase). Groepen toevoegen/verwijderen via de knoppen hieronder.
+  const isoGroepen = inst.isoGroepen || [];
+  const setIsoGroepen = arr => si("isoGroepen", arr);
+  const addIsoGroep = () => setIsoGroepen([...isoGroepen, { id:Date.now(), naam:"", driefase:false, fa:"", na:"", l1a:"", l2a:"", l3a:"" }]);
+  const updIsoGroep = (id,k,v) => setIsoGroepen(isoGroepen.map(g=>g.id===id?{...g,[k]:v}:g));
+  const remIsoGroep = id => setIsoGroepen(isoGroepen.filter(g=>g.id!==id));
+
   // ── A) IMPEDANTIE ────────────────────────────────────────────────────────
   // Z L-N en Z L-PE worden ÉÉN KEER gemeten, op de hoogst afgaande groep van
   // de gehele installatie (niet meer per aardlekgroep). De verwachte kort-
@@ -1386,7 +1406,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   const iccMin = hoogstKar==="gG"
     ? (ggLookup ? ggLookup.ia : null)
     : (!karOnbekend && toNum(hoogstAmpere)>0 ? karFactor[hoogstKar] * toNum(hoogstAmpere) : null);
-  const zMaxVoorzek  = iccMin ? (230 / iccMin) : null; // grens waarbinnen Icc voldoende is voor tijdige uitschakeling
+  const zMaxVoorzek  = iccMin ? Math.round((230 / iccMin) * 100) / 100 : null; // afgerond op 2 decimalen bij de bron — voorkomt dat weergave (bijv. 1,65Ω) en OK/NOK-toetsing van elkaar afwijken door drijvendekomma-afronding
   // Z_max-toetsing (Wet van Ohm + automaatkarakteristiek) geldt ALTIJD, ongeacht kastklasse —
   // dit gaat over of de automaat/zekering snel genoeg afschakelt bij kortsluiting, wat niets
   // te maken heeft met het materiaal van de kast zelf. Alleen TT-stelsel en een onbekende/
@@ -1398,6 +1418,18 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   // impedantie via aarde meestal te hoog is voor de automaat alleen, maar de toetsing
   // zelf blijft relevante informatie en is geen vrijblijvende uitzondering.
   const zOk = v => karOnbekend ? true : (zMaxVoorzek ? toNum(v) <= zMaxVoorzek : true);
+
+  // ── Aardlekschakelaar-keuze bepaalt de Z L-PE-toetsing ────────────────────
+  // Achter een aardlekschakelaar schakelt de RCD de aardfout af → dan geldt de
+  // aanraakspanningsnorm Ra ≤166Ω. Zonder aardlekschakelaar moet de automaat/
+  // zekering de aardfout zelf afschakelen → dan geldt de foutstroom-norm (Z_max
+  // obv de automaatkarakteristiek, hetzelfde als voor Z L-N). Dit geldt voor
+  // Z L-PE én de 3-fase varianten Z L2-PE / Z L3-PE. Default: aardlek aanwezig.
+  const rcdAanwezig = inst.rcdAanwezig ?? true;
+  const zPeMax = rcdAanwezig ? 166 : zMaxVoorzek;                    // getal of null
+  const zPeToetsbaar = rcdAanwezig ? true : !!zMaxVoorzek;           // kunnen we een oordeel tonen?
+  const zPeOk = v => rcdAanwezig ? toNum(v) <= 166 : zOk(v);
+  const isPeKey = k => k.endsWith("pe");
 
   const cag = null; // niet meer gebruikt voor Z — Z wordt niet meer per aardlekgroep getoond
   const [activeAG,setActiveAG] = useState(aardlekgroepen[0]?.id||null);
@@ -1435,7 +1467,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
             <div>
-              <label style={S.label}>Voorzekering (A) — hoogst afgaande groep</label>
+              <label style={S.label}>Voorzekering (klasse 1) / Hoogst afgaande groep (klasse 2)</label>
               <MiniInput value={hoogstAmpere} onChange={v=>si("hoogstAmpere",v)} unit="A" width={70}/>
             </div>
             <div>
@@ -1457,11 +1489,6 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(1)}A{hoogstKar==="gG" && ggLookup ? ` (tabel gG bij ${ggLookup.inGebruikt}A, ${maxAfschakeltijd}s)` : ""} → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
             </div>
           )}
-          {hoogstKar==="gG" && ggLookup?.onbetrouwbaar && (
-            <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10,lineHeight:1.5}}>
-              ⚠ De brontabel voor gG 20A bij 0,2s lijkt een fout te bevatten (waarde lager dan bij 0,4s, wat niet logisch is). Controleer deze uitkomst handmatig of vraag de juiste tabelwaarde na.
-            </div>
-          )}
           {!zMaxVoorzek && (
             <div style={{fontSize:11,color:K.orange,padding:"7px 10px",background:K.orangeDim,borderRadius:8,marginBottom:10}}>
               ⚠ Vul ampère + karakteristiek van de hoogst afgaande groep hierboven in om Z_max en de automatische toetsing te berekenen.
@@ -1473,105 +1500,42 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             <span style={{fontSize:12,color:K.muted}}>3-fase — ook L2 en L3 meten</span>
           </label>
 
+          {/* Aardlekschakelaar-keuze — bepaalt de toetsing van Z L-PE (zie helpers boven) */}
+          <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10,cursor:"pointer",padding:"8px 10px",background:K.surface,borderRadius:8}}>
+            <input type="checkbox" checked={rcdAanwezig} onChange={e=>si("rcdAanwezig",e.target.checked)} style={{marginTop:2}}/>
+            <span style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
+              <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> achter de hoogst afgaande groep. Voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan de norm <strong style={{color:K.text}}>≤166Ω</strong> (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVoorzek?` (Z_max ≤${zMaxVoorzek.toFixed(2)}Ω)`:" (Z_max obv karakteristiek)"} geldt.
+            </span>
+          </label>
+
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
             {(["Z L-N","Z L-PE"].concat((inst.zDrieFase ?? heeft3faseGroep) ? ["Z L2-N","Z L2-PE","Z L3-N","Z L3-PE"] : [])).map(l=>{
               const k = l==="Z L-N"?"zln":l==="Z L-PE"?"zlpe":l==="Z L2-N"?"zl2n":l==="Z L2-PE"?"zl2pe":l==="Z L3-N"?"zl3n":"zl3pe";
+              const pe = isPeKey(k);
+              const okFn = pe ? zPeOk : zOk;
+              const toetsbaar = pe ? zPeToetsbaar : !!zMaxVoorzek;
+              const normTxt = pe ? (rcdAanwezig ? "norm ≤166Ω" : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2)}Ω`:"")) : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2)}Ω`:"");
               return (
                 <div key={k}><label style={S.label}>{l}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
                     <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="Ω" width={70}/>
-                    {inst[k] && zMaxVoorzek && <StatusTag level={zOk(inst[k])?"ok":"red"}/>}
+                    {inst[k] && toetsbaar && <StatusTag level={okFn(inst[k])?"ok":"red"}/>}
                     {inst[k] && (
                       <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
                         Icc≈{(230/toNum(inst[k])).toFixed(0)}A
                       </span>
                     )}
+                    {inst[k] && toetsbaar && normTxt && (
+                      <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>· {normTxt}</span>
+                    )}
                   </div>
-                  {inst[k] && !zMaxVoorzek && (
+                  {inst[k] && !toetsbaar && (
                     <div style={{fontSize:10,color:K.orange,marginTop:3}}>Vul ampère + karakteristiek hierboven in voor automatische toetsing</div>
                   )}
                 </div>
               );
             })}
           </div>
-
-          {/* Z L-PE achter aardlek — werkt op de achtergrond: wordt automatisch afgeleid
-              uit de aardlekgroepen die al in stap 6 zijn aangemaakt. Geen aparte vraag
-              nodig — als er een aardlekgroep zonder RCD bestaat ("vrije groep"), gebruikt
-              de toetsing voor die groep(en) de automaatformule (Wet van Ohm) met de kar/
-              ampère die al per eindgroep is ingevuld. Zijn alle groepen wél achter een RCD
-              beveiligd, dan geldt de Ra-formule (50V/IΔn) voor de hele installatie. */}
-          {(() => {
-            const vrijeGroepen = aardlekgroepen.filter(ag => ag.rcdType === "geen");
-            const alleAchterRCD = aardlekgroepen.length > 0 && vrijeGroepen.length === 0;
-            return (
-              <div style={{marginTop:8,padding:"10px 12px",background:K.surface,borderRadius:10}}>
-                <label style={S.label}>Z L-PE op de hoogst afgaande groep</label>
-                <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.5}}>
-                  Zijn alle groepen achter een aardlekschakelaar? <strong style={{color:alleAchterRCD?K.green:K.orange}}>
-                    {aardlekgroepen.length===0 ? "—" : alleAchterRCD ? "Ja" : `Nee — ${vrijeGroepen.length} groep${vrijeGroepen.length!==1?"en":""} zonder RCD`}
-                  </strong> <span style={{color:K.muted}}>(automatisch afgeleid uit stap 6)</span>
-                </div>
-
-                {alleAchterRCD && (
-                  <>
-                    <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-                      Ra_max = 50V ÷ IΔn — bij het gangbare 300mA hoofd-RCD is dat ≤166Ω<br/>
-                      {[["30mA","1667Ω"],["100mA","500Ω"],["300mA","166Ω"],["500mA","100Ω"]].map(([rcd,ra])=>(
-                        <span key={rcd} style={{marginRight:12}}>• {rcd} RCD → ≤{ra}</span>
-                      ))}
-                    </div>
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      <div style={{fontSize:12,color:K.muted,whiteSpace:"nowrap"}}>RCD:</div>
-                      {["10","30","100","300","500"].map(mA=>(
-                        <Pill key={mA} small active={(inst.rcdMaZlpe||"300")===mA} onClick={()=>si("rcdMaZlpe",mA)}>{mA}mA</Pill>
-                      ))}
-                    </div>
-                    <div style={{marginTop:8,padding:"6px 10px",borderRadius:8,
-                      background:K.greenDim,border:`1px solid ${K.green}44`,fontSize:12,color:K.green,fontWeight:700}}>
-                      Ra_max = 50V ÷ {toNum(inst.rcdMaZlpe||"300")/1000}A = {Math.floor(50/(toNum(inst.rcdMaZlpe||"300")/1000))}Ω
-                    </div>
-                    <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-                      <MiniInput value={inst.zlpeAardlek} onChange={v=>si("zlpeAardlek",v)} unit="Ω" width={80} placeholder="bijv. 120"/>
-                      {inst.zlpeAardlek && (
-                        <StatusTag level={toNum(inst.zlpeAardlek)<=Math.floor(50/(toNum(inst.rcdMaZlpe||"300")/1000))?"ok":"red"}/>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {!alleAchterRCD && vrijeGroepen.length > 0 && (
-                  <div>
-                    <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-                      Voor groep(en) zonder RCD geldt de automaatformule — kar/ampère per groep is al bekend uit stap 6, geen nieuwe invoer nodig.
-                    </div>
-                    {vrijeGroepen.map(ag => {
-                      const hoogstEind = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
-                      const kar = hoogstEind?.kar || "B";
-                      const amp = toNum((hoogstEind?.ampere||"").replace("A",""));
-                      const factor = karFactor[kar];
-                      const zMaxGroep = factor && amp>0 ? 230/(factor*amp) : null;
-                      const veldKey = `zlpeVrij_${ag.id}`;
-                      return (
-                        <div key={ag.id} style={{marginBottom:10,padding:"8px 10px",background:K.card,borderRadius:8}}>
-                          <div style={{fontSize:11,fontWeight:700,color:K.text,marginBottom:4}}>{ag.naam} — {hoogstEind?.naam||"?"} ({kar}{hoogstEind?.ampere||"?"})</div>
-                          {zMaxGroep ? (
-                            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                              <MiniInput value={inst[veldKey]} onChange={v=>si(veldKey,v)} unit="Ω" width={80} placeholder="bijv. 1.5"/>
-                              {inst[veldKey] && <StatusTag level={toNum(inst[veldKey])<=zMaxGroep?"ok":"red"}/>}
-                              <span style={{fontSize:10,color:K.muted}}>Z_max={zMaxGroep.toFixed(2)}Ω</span>
-                            </div>
-                          ) : (
-                            <div style={{fontSize:10,color:K.orange}}>Vul kar/ampère in bij de eindgroep in stap 6.</div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
         </div>
 
         {/* B) ISOLATIEWEERSTAND */}
@@ -1594,70 +1558,73 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
           {(inst.isoTotFA || inst.isoTotNA) && (toNum(inst.isoTotFA)<0.23 || toNum(inst.isoTotNA)<0.23) && (
             <div style={{marginTop:10,padding:"10px 12px",background:K.orangeDim,borderRadius:10,border:`1px solid ${K.orange}44`}}>
-              <div style={{fontSize:11,color:K.orange,lineHeight:1.6,marginBottom:10}}>
-                ⚠ <strong>Waarde onder 0,23 MΩ.</strong> Zoek de boosdoener zo op:
-                <ol style={{margin:"6px 0 0 18px",padding:0}}>
-                  <li>Zet de groepen één voor één uit</li>
-                  <li>Meet steeds opnieuw, totdat de waarde weer ≥ 0,23 MΩ wordt</li>
-                  <li>De laatst uitgezette groep is de probleemgroep — vink 'm hieronder aan en meet die apart (zie hieronder)</li>
-                </ol>
+              <div style={{fontSize:11,color:K.orange,lineHeight:1.6}}>
+                ⚠ <strong>Waarde onder 0,23 MΩ.</strong> Zet de groepen één voor één uit en meet steeds opnieuw, tot de waarde weer ≥ 0,23 MΩ wordt — de laatst uitgezette groep is de boosdoener. Leg die (of alle groepen) hieronder per groep vast.
               </div>
-              <label style={S.label}>Geïdentificeerde probleemgroep(en)</label>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                {aardlekgroepen.map(ag=>{
-                  const geselecteerd = (inst.isoTotProblemGroepen||[]).includes(ag.id);
-                  return (
-                    <Pill key={ag.id} small active={geselecteerd} onClick={()=>{
-                      const huidige = inst.isoTotProblemGroepen||[];
-                      si("isoTotProblemGroepen", geselecteerd ? huidige.filter(id=>id!==ag.id) : [...huidige, ag.id]);
-                    }}>{ag.naam}</Pill>
-                  );
-                })}
-              </div>
-
-              {/* Alleen de geselecteerde probleemgroep(en) krijgen een losse ISO-meting */}
-              {(inst.isoTotProblemGroepen||[]).map(agId=>{
-                const ag = aardlekgroepen.find(a=>a.id===agId);
-                if (!ag) return null;
-                const norm = ag.fase==="3" ? 0.40 : 0.23;
-                const isoVelden = ag.fase==="3"
-                  ? [{k:"iso_l1a",l:"L1 → Aarde"},{k:"iso_l2a",l:"L2 → Aarde"},{k:"iso_l3a",l:"L3 → Aarde"},{k:"iso_na",l:"N → Aarde"}]
-                  : [{k:"iso_fa",l:"Fase → Aarde"},{k:"iso_na",l:"Nul → Aarde"}];
-                return (
-                  <div key={agId} style={{marginTop:10,padding:"10px 12px",background:K.surface,borderRadius:10}}>
-                    <div style={{fontSize:12,fontWeight:700,color:K.text,marginBottom:8}}>{ag.naam} — norm ≥ {norm} MΩ</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      {isoVelden.map(({k,l})=>{
-                        const val = gv(ag.id,k);
-                        const ok = val && toNum(val)>=norm;
-                        return (
-                          <div key={k}>
-                            <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
-                                background:val?(ok?K.greenDim:K.redDim):K.surface,
-                                border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
-                                type="text" inputMode="decimal" placeholder="0,5"
-                                value={val} onChange={e=>sg(ag.id,k,e.target.value)}
-                                onFocus={e=>e.target.select()}/>
-                              <span style={{fontSize:12,fontWeight:700,color:K.muted,whiteSpace:"nowrap"}}>MΩ</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-
-              <label style={{...S.label,marginTop:10}}>Toelichting (optioneel)</label>
-              <input style={S.input} type="text"
-                placeholder="bijv. vochtige leiding badkamer, defect apparaat"
-                value={inst.isoTotProblemen||""}
-                onChange={e=>si("isoTotProblemen",e.target.value)}
-                onFocus={e=>e.target.select()}/>
             </div>
           )}
+
+          {/* Isolatieweerstand per groep — dynamische lijst, groepen toevoegen via de knop */}
+          <div style={{marginTop:14}}>
+            <label style={S.label}>Isolatieweerstand per groep — norm ≥ 0,23 MΩ (1-fase) / ≥ 0,40 MΩ (3-fase)</label>
+            <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.4}}>
+              Voeg per groep een meting toe met de knop hieronder. Handig om een probleemgroep vast te leggen of om alle eindgroepen los te documenteren.
+            </div>
+
+            {isoGroepen.length===0 && (
+              <div style={{fontSize:11,color:K.muted,marginBottom:10,padding:"8px 10px",background:K.surface,borderRadius:8}}>
+                Nog geen groepen toegevoegd.
+              </div>
+            )}
+
+            {isoGroepen.map((g,idx)=>{
+              const norm = g.driefase ? 0.40 : 0.23;
+              const velden = g.driefase
+                ? [["L1 → Aarde","l1a"],["L2 → Aarde","l2a"],["L3 → Aarde","l3a"],["N → Aarde","na"]]
+                : [["Fase → Aarde","fa"],["Nul → Aarde","na"]];
+              return (
+                <div key={g.id} style={{marginBottom:10,padding:"10px 12px",background:K.surface,borderRadius:10}}>
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+                    <input style={{...S.input,flex:1}} type="text"
+                      placeholder={`Groep ${idx+1} (bijv. WCD begane grond)`}
+                      value={g.naam||""} onChange={e=>updIsoGroep(g.id,"naam",e.target.value)}
+                      onFocus={e=>e.target.select()}/>
+                    <button onClick={()=>remIsoGroep(g.id)} title="Groep verwijderen"
+                      style={{background:"none",border:"none",color:K.muted,fontSize:20,cursor:"pointer",lineHeight:1,padding:"0 6px",flexShrink:0}}>×</button>
+                  </div>
+                  <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,cursor:"pointer"}}>
+                    <input type="checkbox" checked={!!g.driefase} onChange={e=>updIsoGroep(g.id,"driefase",e.target.checked)}/>
+                    <span style={{fontSize:11,color:K.muted}}>3-fase groep (L1/L2/L3 → Aarde, norm ≥ 0,40 MΩ)</span>
+                  </label>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                    {velden.map(([l,k])=>{
+                      const val = g[k]||"";
+                      const ok = val && toNum(val)>=norm;
+                      return (
+                        <div key={k}>
+                          <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+                              background:val?(ok?K.greenDim:K.redDim):K.card,
+                              border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
+                              type="text" inputMode="decimal" placeholder="0,5"
+                              value={val} onChange={e=>updIsoGroep(g.id,k,e.target.value)}
+                              onFocus={e=>e.target.select()}/>
+                            <span style={{fontSize:12,fontWeight:700,color:K.muted,whiteSpace:"nowrap"}}>MΩ</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            <button onClick={addIsoGroep}
+              style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginTop:2,marginBottom:0}}>
+              + Extra groep
+            </button>
+          </div>
         </div>
 
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8,marginTop:8}}>
@@ -1666,9 +1633,9 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             <span style={{fontSize:12,color:K.muted}}>Ook L2/N, L3/N en fase-fase meten (3-fase aansluiting aanwezig)</span>
           </label>
         </div>
-        <div style={{fontSize:10,color:K.muted,marginBottom:4}}>Fase → Aarde/Nul</div>
+        <div style={{fontSize:10,color:K.muted,marginBottom:4}}>Fase → Nul / Fase → Aarde (PE)</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-          {(["L1/N"].concat((inst.toon3fase ?? heeft3faseGroep) ? ["L2/N","L3/N"] : [])).map(f=>(
+          {(["L1/N","L1/PE"].concat((inst.toon3fase ?? heeft3faseGroep) ? ["L2/N","L2/PE","L3/N","L3/PE"] : [])).map(f=>(
             <div key={f}><label style={S.label}>{f}</label>
               <div style={{display:"flex",gap:4,alignItems:"center"}}>
                 <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
@@ -1817,15 +1784,17 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
 STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
 HOOGST AFGAANDE GROEP: ${inst.hoogstKar||"—"}${inst.hoogstAmpere||"—"}A
-Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm | ISO totaal Fase-Aarde: ${inst.isoTotFA||"—"} MOhm | ISO totaal Nul-Aarde: ${inst.isoTotNA||"—"} MOhm
-SPANNINGEN: L1/N ${inst["span_L1/N"]||"—"}V / L2/N ${inst["span_L2/N"]||"—"}V / L3/N ${inst["span_L3/N"]||"—"}V / L1/L2 ${inst["span_L1/L2"]||"—"}V / L2/L3 ${inst["span_L2/L3"]||"—"}V / L1/L3 ${inst["span_L1/L3"]||"—"}V | FREQUENTIE: ${inst.frequentie||"—"}Hz
+Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm (aardlekschakelaar ${rcdAanwezig?"AANWEZIG → norm Z L-PE ≤166 Ohm":"AFWEZIG → norm Z L-PE = foutstroom-norm Z_max"}) | ISO totaal Fase-Aarde: ${inst.isoTotFA||"—"} MOhm | ISO totaal Nul-Aarde: ${inst.isoTotNA||"—"} MOhm
+SPANNINGEN: L1/N ${inst["span_L1/N"]||"—"}V / L1/PE ${inst["span_L1/PE"]||"—"}V / L2/N ${inst["span_L2/N"]||"—"}V / L2/PE ${inst["span_L2/PE"]||"—"}V / L3/N ${inst["span_L3/N"]||"—"}V / L3/PE ${inst["span_L3/PE"]||"—"}V / L1/L2 ${inst["span_L1/L2"]||"—"}V / L2/L3 ${inst["span_L2/L3"]||"—"}V / L1/L3 ${inst["span_L1/L3"]||"—"}V | FREQUENTIE: ${inst.frequentie||"—"}Hz
+ISO PER GROEP: ${(isoGroepen.length ? isoGroepen.map((g,i)=>{
+  const velden = g.driefase ? [["L1A","l1a"],["L2A","l2a"],["L3A","l3a"],["NA","na"]] : [["FA","fa"],["NA","na"]];
+  return `${g.naam||`Groep ${i+1}`}${g.driefase?" (3F, norm ≥0,40)":" (norm ≥0,23)"}: ${velden.map(([lbl,k])=>`${lbl} ${g[k]||"—"}`).join(" / ")}`;
+}).join(" | ") : "geen losse groepen ingevoerd")}
 AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
-  const isoKeys = ag.fase==="3" ? ["iso_l1a","iso_l2a","iso_l3a","iso_na"] : ["iso_fa","iso_na"];
-  const isoStr = isoKeys.map(k=>`${k.replace("iso_","").toUpperCase()}: ${gv(ag.id,k)||"—"}`).join(" / ");
   const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
   const eindStr = (ag.eindgroepen||[]).map(e=>`${e.naam}(${e.kar}${e.ampere})`).join(", ");
-  return `${i+1}. ${ag.naam} | ${ag.rcdType==="geen"?"geen RCD":`RCD ${ag.rcdMa}mA-${ag.rcdType}`} | ${ag.fase==="3"?"3F 400V":"1F 230V"} | eindgroepen: ${eindStr} | gemeten op: ${hoogst?.naam||"—"} | ISO(MOhm): ${isoStr} | dT: ${gv(ag.id,"dt")||"—"}ms | dI: ${gv(ag.id,"di")||"—"}mA | Testknop: ${gv(ag.id,"testknop")||"—"}`;
+  return `${i+1}. ${ag.naam} | ${ag.rcdType==="geen"?"geen RCD":`RCD ${ag.rcdMa}mA-${ag.rcdType}`} | ${ag.fase==="3"?"3F 400V":"1F 230V"} | eindgroepen: ${eindStr} | gemeten op: ${hoogst?.naam||"—"} | dT: ${gv(ag.id,"dt")||"—"}ms | dI: ${gv(ag.id,"di")||"—"}mA | Testknop: ${gv(ag.id,"testknop")||"—"}`;
 }).join("\n")}
 CROSS-CHECK SIGNALEN: ${warnings.length>0?warnings.map(w=>w.msg).join("; "):"geen"}`}
         />
@@ -1860,6 +1829,24 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
   const geselecteerd = aardlekgroepen.filter(ag => ag.veldmetingSelectie);
   const RHO = 0.023; // Ω·mm²/m — koperweerstand bij bedrijfstemperatuur (praktijkwaarde)
   const KABELDIKTES = ["1.5","2.5","4","6","10"];
+
+  // Zelfde Z_max-berekening als Sectie A (hoogst afgaande groep) — de verste WCD
+  // zit achter dezelfde automaat/zekering, dus dezelfde norm geldt hier ook.
+  const instM = data.instMetingen || {};
+  const hoogstKar = instM.hoogstKar || "B";
+  const hoogstAmpere = instM.hoogstAmpere || "";
+  const stelsel = instM.stelsel || data.stelsel || "TN-C-S";
+  const isTT = stelsel === "TT";
+  const isKlasse1 = data.kastType === "klasse1";
+  const maxAfschakeltijd = isKlasse1 ? (isTT ? 1 : 5) : (isTT ? 0.2 : 0.4);
+  const karFactorV = { B:5, C:10, D:20 };
+  let zMaxVeld = null;
+  if (hoogstKar === "gG") {
+    const ggLookupV = ggIaVoorTijd(hoogstAmpere, maxAfschakeltijd);
+    if (ggLookupV) zMaxVeld = Math.round((230/ggLookupV.ia)*100)/100;
+  } else if (karFactorV[hoogstKar] && toNum(hoogstAmpere)>0) {
+    zMaxVeld = Math.round((230/(karFactorV[hoogstKar]*toNum(hoogstAmpere)))*100)/100;
+  }
 
   const sv = (agId, k, v) => {
     const u = { ...veld, [`${agId}_${k}`]: v };
@@ -1900,6 +1887,12 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
             </div>
             {geselecteerd.map(ag => {
               const { lengteZln, lengteZlpe } = berekenLengte(ag.id);
+              // Aardlekschakelaar-keuze per groep — bepaalt de Z L-PE-toetsing, net als
+              // in sectie A. Default afgeleid uit het RCD-type van de aardlekgroep.
+              const rcdVeldRaw = veld[`${ag.id}_rcd`];
+              const rcdVeld = rcdVeldRaw === undefined ? (ag.rcdType !== "geen") : (rcdVeldRaw === true || rcdVeldRaw === "1");
+              const zlpeVeldOk = v => rcdVeld ? toNum(v) <= 166 : (zMaxVeld ? toNum(v) <= zMaxVeld : true);
+              const zlpeVeldToetsbaar = rcdVeld ? true : !!zMaxVeld;
               return (
                 <div key={ag.id} style={S.card}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>{ag.naam}</div>
@@ -1911,22 +1904,49 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                     ))}
                   </div>
 
+                  {/* Aardlekschakelaar-keuze — achter aardlek geldt Z L-PE ≤166Ω */}
+                  <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:12,cursor:"pointer",padding:"8px 10px",background:K.surface,borderRadius:8}}>
+                    <input type="checkbox" checked={rcdVeld} onChange={e=>sv(ag.id,"rcd",e.target.checked ? true : "0")} style={{marginTop:2}}/>
+                    <span style={{fontSize:11,color:K.muted,lineHeight:1.5}}>
+                      <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> — voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan ≤166Ω (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVeld?` (Z_max ≤${zMaxVeld.toFixed(2)}Ω)`:" (Z_max obv sectie A)"} geldt.
+                    </span>
+                  </label>
+
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
                     <div>
                       <label style={S.label}>Z L-N (verste WCD)</label>
-                      <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={80} placeholder="bijv. 1.2"/>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={80} placeholder="bijv. 1.2"/>
+                        {gv(ag.id,"zln") && zMaxVeld && (
+                          <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld?"ok":"red"}/>
+                        )}
+                      </div>
                       {lengteZln && (
                         <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZln.toFixed(1)}m kabel</div>
                       )}
                     </div>
                     <div>
                       <label style={S.label}>Z L-PE (verste WCD)</label>
-                      <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={80} placeholder="bijv. 1.3"/>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={80} placeholder="bijv. 1.3"/>
+                        {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
+                          <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe"))?"ok":"red"}/>
+                        )}
+                      </div>
+                      {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
+                        <div style={{fontSize:10,color:K.muted,marginTop:3}}>{rcdVeld?"norm ≤166Ω (achter aardlek)":`norm ≤${zMaxVeld.toFixed(2)}Ω`}</div>
+                      )}
                       {lengteZlpe && (
                         <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZlpe.toFixed(1)}m kabel</div>
                       )}
                     </div>
                   </div>
+                  {zMaxVeld && (
+                    <div style={{fontSize:10,color:K.muted,marginBottom:8}}>Norm Z L-N: ≤ {zMaxVeld.toFixed(2)}Ω (obv {hoogstKar}{hoogstAmpere}A, {maxAfschakeltijd}s — zelfde als sectie A){rcdVeld?" · Z L-PE ≤166Ω achter aardlek":""}</div>
+                  )}
+                  {!zMaxVeld && (
+                    <div style={{fontSize:10,color:K.orange,marginBottom:8}}>⚠ Vul ampère + karakteristiek in bij sectie A (stap 7) om Z L-N{rcdVeld?"":" en Z L-PE"} automatisch te toetsen.</div>
+                  )}
 
                   <div style={{fontSize:10,color:K.muted,lineHeight:1.4}}>
                     Berekening: L = Z × A ÷ (2 × ρ), met ρ = 0,023 Ω·mm²/m. Dit is een indicatie — de werkelijke lengte kan afwijken door aansluitweerstanden en meetnauwkeurigheid.
@@ -2433,8 +2453,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         : ((instMet.stelsel||data.stelsel)==="TT" ? 0.2 : 0.4);
       const ggLookupRap = vKarRap==="gG" ? ggIaVoorTijd(vARap, maxAfschakeltijdRap) : null;
       const zMaxVoorzekRap = vKarRap==="gG"
-        ? (ggLookupRap ? 230/ggLookupRap.ia : null)
-        : ((karFacRap[vKarRap] && !isNaN(vARap) && vARap>0) ? 230/(karFacRap[vKarRap]*vARap) : null);
+        ? (ggLookupRap ? Math.round((230/ggLookupRap.ia)*100)/100 : null)
+        : ((karFacRap[vKarRap] && !isNaN(vARap) && vARap>0) ? Math.round((230/(karFacRap[vKarRap]*vARap))*100)/100 : null);
+      // Z L-PE-norm hangt af van de aardlekschakelaar-keuze: achter aardlek ≤166Ω,
+      // anders de foutstroom-norm (Z_max). Van toepassing op L-PE en 3-fase L2/L3-PE.
+      const rcdAanwezigRap = instMet.rcdAanwezig ?? true;
+      const zPeMaxRap = rcdAanwezigRap ? 166 : zMaxVoorzekRap;
+      const zPeChkRap = v => rcdAanwezigRap ? toNum(v)<=166 : (zPeMaxRap ? toNum(v)<=zPeMaxRap : true);
+      const zPeNormTxtRap = rcdAanwezigRap ? "≤166Ω (achter aardlek)" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${data.projectId}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -2472,45 +2498,38 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </tr>
           <tr>
             <td><strong>Z L-N</strong></td><td ${statusGK(instMet.zln, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zln||"—"} Ω ${instMet.zln&&!isNaN(toNum(instMet.zln))?`(Icc≈${(230/toNum(instMet.zln)).toFixed(0)}A)`:""}</td>
-            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zlpe||"—"} Ω ${instMet.zlpe&&!isNaN(toNum(instMet.zlpe))?`(Icc≈${(230/toNum(instMet.zlpe)).toFixed(0)}A)`:""}</td>
+            <td><strong>Z L-PE</strong></td><td ${statusGK(instMet.zlpe, zPeChkRap)}>${instMet.zlpe||"—"} Ω ${instMet.zlpe&&!isNaN(toNum(instMet.zlpe))?`(Icc≈${(230/toNum(instMet.zlpe)).toFixed(0)}A · norm ${zPeNormTxtRap})`:""}</td>
           </tr>
           ${instMet.zDrieFase ? `<tr>
             <td><strong>Z L2-N</strong></td><td ${statusGK(instMet.zl2n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl2n||"—"} Ω</td>
-            <td><strong>Z L2-PE</strong></td><td ${statusGK(instMet.zl2pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl2pe||"—"} Ω</td>
+            <td><strong>Z L2-PE</strong></td><td ${statusGK(instMet.zl2pe, zPeChkRap)}>${instMet.zl2pe||"—"} Ω</td>
           </tr>
           <tr>
             <td><strong>Z L3-N</strong></td><td ${statusGK(instMet.zl3n, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3n||"—"} Ω</td>
-            <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, v=>toNum(v)<=(zMaxVoorzekRap||999))}>${instMet.zl3pe||"—"} Ω</td>
+            <td><strong>Z L3-PE</strong></td><td ${statusGK(instMet.zl3pe, zPeChkRap)}>${instMet.zl3pe||"—"} Ω</td>
           </tr>` : ""}
-          ${instMet.zlpeAardlek ? `<tr>
-            <td><strong>Z L-PE achter aardlek</strong></td><td ${statusGK(instMet.zlpeAardlek, v=>toNum(v)<=Math.floor(50/(toNum(instMet.rcdMaZlpe||"300")/1000)))}>${instMet.zlpeAardlek} Ω (alle groepen achter RCD · ${instMet.rcdMaZlpe||"300"}mA · Ra_max=${Math.floor(50/(toNum(instMet.rcdMaZlpe||"300")/1000))}Ω)</td>
-            <td></td><td></td>
-          </tr>` : ""}
-          ${aardlekgroepen.filter(ag=>ag.rcdType==="geen" && instMet[`zlpeVrij_${ag.id}`]).map(ag=>{
-            const hoogstEind = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
-            const kar = hoogstEind?.kar||"B"; const amp = toNum((hoogstEind?.ampere||"").replace("A",""));
-            const factor = {B:5,C:10,D:20,gG:4}[kar];
-            const zMaxG = factor && amp>0 ? 230/(factor*amp) : null;
-            const val = instMet[`zlpeVrij_${ag.id}`];
-            return `<tr>
-              <td><strong>Z L-PE ${ag.naam} (geen RCD)</strong></td><td ${statusGK(val, v=>zMaxG?toNum(v)<=zMaxG:true)}>${val} Ω (Z_max=${zMaxG?zMaxG.toFixed(2):"?"}Ω obv ${kar}${hoogstEind?.ampere||"—"})</td>
-              <td></td><td></td>
-            </tr>`;
-          }).join("")}
+          <tr>
+            <td colspan="4" style="font-size:8px;color:#666">Aardlekschakelaar achter hoogst afgaande groep: <strong>${rcdAanwezigRap?"aanwezig":"afwezig"}</strong> — Z L-PE getoetst aan ${zPeNormTxtRap}.</td>
+          </tr>
           <tr>
             <td><strong>ISO totaal Fase→Aarde</strong></td><td ${statusGK(instMet.isoTotFA, v=>toNum(v)>=0.23)}>${instMet.isoTotFA||"—"} MΩ</td>
             <td><strong>ISO totaal Nul→Aarde</strong></td><td ${statusGK(instMet.isoTotNA, v=>toNum(v)>=0.23)}>${instMet.isoTotNA||"—"} MΩ</td>
           </tr>
-          ${(instMet.isoTotProblemGroepen||[]).length ? `<tr>
-            <td colspan="4" style="font-size:8px;color:#92400e">⚠ Probleemgroep(en): ${(instMet.isoTotProblemGroepen||[]).map(id=>aardlekgroepen.find(a=>a.id===id)?.naam||"?").join(", ")}${instMet.isoTotProblemen?` — ${instMet.isoTotProblemen}`:""}</td>
-          </tr>` : ""}
           <tr>
             <td><strong>L1/N</strong></td><td ${statusGK(instMet["span_L1/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/N"]||"—"} V</td>
+            <td><strong>L1/PE</strong></td><td ${statusGK(instMet["span_L1/PE"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L1/PE"]||"—"} V</td>
+          </tr>
+          ${(instMet.toon3fase || instMet["span_L2/N"]) ? `<tr>
             <td><strong>L2/N</strong></td><td ${statusGK(instMet["span_L2/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L2/N"]||"—"} V</td>
+            <td><strong>L2/PE</strong></td><td ${statusGK(instMet["span_L2/PE"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L2/PE"]||"—"} V</td>
           </tr>
           <tr>
             <td><strong>L3/N</strong></td><td ${statusGK(instMet["span_L3/N"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/N"]||"—"} V</td>
+            <td><strong>L3/PE</strong></td><td ${statusGK(instMet["span_L3/PE"], v=>toNum(v)>=207&&toNum(v)<=253)}>${instMet["span_L3/PE"]||"—"} V</td>
+          </tr>` : ""}
+          <tr>
             <td><strong>Frequentie</strong></td><td ${statusGK(instMet.frequentie, v=>toNum(v)>=45&&toNum(v)<=55)}>${instMet.frequentie||"—"} Hz</td>
+            <td></td><td></td>
           </tr>
           ${instMet.zDrieFase || instMet["span_L1/L2"] ? `<tr>
             <td><strong>L1/L2</strong></td><td ${statusGK(instMet["span_L1/L2"], v=>toNum(v)>=360&&toNum(v)<=440)}>${instMet["span_L1/L2"]||"—"} V</td>
@@ -2523,6 +2542,30 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
 
         ${(() => {
+          const groepen = instMet.isoGroepen || [];
+          if (!groepen.length) return "";
+          const rijen = groepen.map((g,i)=>{
+            const norm = g.driefase ? 0.40 : 0.23;
+            const velden = g.driefase
+              ? [["L1→A","l1a"],["L2→A","l2a"],["L3→A","l3a"],["N→A","na"]]
+              : [["Fase→A","fa"],["Nul→A","na"]];
+            const cel = velden.map(([lbl,k])=>{
+              const v = g[k];
+              const st = v&&v!=="—" ? (toNum(v)>=norm?`class="ok"`:`class="nok"`) : "";
+              return `<span ${st} style="padding:1px 4px;border-radius:3px;margin-right:4px;display:inline-block">${lbl}: ${v||"—"}</span>`;
+            }).join("");
+            return `<tr><td><strong>${g.naam||`Groep ${i+1}`}</strong></td><td>${g.driefase?"3-fase":"1-fase"} (≥${norm} MΩ)</td><td>${cel}</td></tr>`;
+          }).join("");
+          return `
+          <h2>Isolatieweerstand per groep</h2>
+          <p style="font-size:8px;color:#666;margin-bottom:4px">Norm ≥0,23 MΩ (1-fase) / ≥0,40 MΩ (3-fase), gemeten op 250V.</p>
+          <table>
+            <tr><th>Groep</th><th>Type</th><th>Isolatieweerstand (MΩ)</th></tr>
+            ${rijen}
+          </table>`;
+        })()}
+
+        ${(() => {
           const veld = data.veldmeting || {};
           const geselecteerdRap = aardlekgroepen.filter(ag => ag.veldmetingSelectie);
           if (geselecteerdRap.length === 0) return "";
@@ -2533,19 +2576,24 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const zlpeV = veld[`${ag.id}_zlpe`];
             const lenZln = toNum(zlnV) > 0 ? ((toNum(zlnV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
             const lenZlpe = toNum(zlpeV) > 0 ? ((toNum(zlpeV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
+            // Z L-PE-norm per groep: achter aardlek ≤166Ω, anders foutstroom-norm (Z_max).
+            const rcdRaw = veld[`${ag.id}_rcd`];
+            const rcdVeldRap = rcdRaw === undefined ? (ag.rcdType !== "geen") : (rcdRaw === true || rcdRaw === "1");
+            const zlpeChkRap = v => rcdVeldRap ? toNum(v)<=166 : (zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true);
+            const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
             return `<tr>
               <td><strong>${ag.naam}</strong></td>
               <td>${dikte} mm²</td>
-              <td>${zlnV||"—"} Ω</td>
+              <td ${statusGK(zlnV, v=>zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true)}>${zlnV||"—"} Ω</td>
               <td>${lenZln}m</td>
-              <td>${zlpeV||"—"} Ω</td>
+              <td ${statusGK(zlpeV, zlpeChkRap)}>${zlpeV||"—"} Ω<br><span style="font-size:7px;color:#666">${rcdVeldRap?"achter aardlek":"foutstroom"} ${peNorm}</span></td>
               <td>${lenZlpe}m</td>
             </tr>`;
           }).join("");
           return `
           <h2>Veldmeting — verste/buitengroep</h2>
           <p style="font-size:8px;color:#666;margin-bottom:4px">
-            Z L-N en Z L-PE gemeten op de verste wandcontactdoos van de geselecteerde groep(en). Indicatieve kabellengte berekend via L = Z × A ÷ (2 × ρ), met ρ = 0,023 Ω·mm²/m. Dit is een indicatie, geen exacte meting.
+            Z L-N gemeten op de verste wandcontactdoos, getoetst aan de norm van sectie A (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2)+"Ω":"—"} obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A). Z L-PE: achter een aardlekschakelaar geldt ≤166Ω (aanraakspanning), anders de foutstroom-norm. Indicatieve kabellengte via L = Z × A ÷ (2 × ρ), ρ = 0,023 Ω·mm²/m — een indicatie, geen exacte meting.
           </p>
           <table>
             <tr>
@@ -2556,7 +2604,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         })()}
 
         <p style="font-size:8px;color:#666;margin-bottom:4px">
-          ΔT-norm: ≤300ms (EN 61008 apparaatnorm bij 1× In). ΔI-norm: type AC ≤1× In · type A ≤1,4× In · type B ≤2× In. Isolatieweerstand is gemeten als ISO totaal (zie sectie B) — per-groep ISO alleen indien daar een probleemgroep is geïdentificeerd.
+          ΔT-norm: ≤300ms (EN 61008 apparaatnorm bij 1× In). ΔI-norm: type AC ≤1× In · type A ≤1,4× In · type B ≤2× In. Isolatieweerstand: ISO totaal (sectie B) plus de eventueel per groep vastgelegde metingen (zie tabel "Isolatieweerstand per groep").
         </p>
         <table>
           <tr>
