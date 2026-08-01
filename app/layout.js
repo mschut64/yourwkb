@@ -10,6 +10,26 @@ export const metadata = {
     index: true,
     follow: true,
   },
+  // PWA: manifest wordt door Next automatisch gelinkt zodra app/manifest.js bestaat.
+  // We benoemen 'm hier ook expliciet voor de duidelijkheid.
+  manifest: '/manifest.webmanifest',
+  // iOS gebruikt het manifest niet voor standalone-modus; daarvoor zijn deze Apple-tags
+  // nodig. Hiermee opent de app óók op iPhone/iPad schermvullend zonder adresbalk zodra
+  // hij via Safari → Deel → "Zet op beginscherm" is toegevoegd.
+  appleWebApp: {
+    capable: true,
+    title: 'YourWkb',
+    statusBarStyle: 'default', // 'default' = lichte statusbalk, past bij de witte app
+  },
+  icons: {
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-icon-180.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
   openGraph: {
     title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
     description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon. Automatische normcheck, klaar in minuten.',
@@ -23,6 +43,16 @@ export const metadata = {
     title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
     description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon.',
   },
+}
+
+// Next.js 14: themeColor hoort in een aparte viewport-export (niet in metadata),
+// anders krijg je bij de build de waarschuwing "Unsupported metadata themeColor".
+// theme_color kleurt op Android de statusbalk-omgeving; wit past bij de lichte app.
+export const viewport = {
+  themeColor: '#ffffff',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 }
 
 export default function RootLayout({ children }) {
