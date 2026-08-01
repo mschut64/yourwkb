@@ -1,5 +1,8 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-07-29-A
+// YourWkb WkbApp.jsx — versie 2026-08-01-A
+// 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
+//               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
+//               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
 // Aanpassingen 29-7-2026 (veldtest-feedback, in één release gebundeld):
 // 1. STAP 7 label: achter de schuine streep aangepast naar "Hoogst afgaande groep
 //    (klasse 2)" (was "Hoofdzekering afgaande groep (klasse 2) — hoogst afgaande
@@ -18,7 +21,7 @@
 // 5. STAP 7 isolatieweerstand: de vaste ISO-invoer per aardlekschakelaar is
 //    vervangen door een dynamische lijst "per groep" — met de knop "+ Extra groep"
 //    voeg je een tweede/derde groep enz. toe. 1-fase (≥0,23 MΩ) en 3-fase
-//    (≥0,40 MΩ) per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
+//    per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
@@ -171,7 +174,9 @@ const PV_FOTO_CPS = [...PV_FOTO_CPS_VOOR, ...PV_FOTO_CPS_NA];
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
 // Groepenkast cross-checks — werkt op aardlekgroepen (RCD-clusters), elk met 1+ eindgroepen.
-// Norm is altijd de "bestaande installatie" norm (1000Ω/V): 0,23 MΩ bij 230V / 0,40 MΩ bij 400V.
+// Norm bestaande installatie (1000Ω/V), gemeten NAAR AARDE: altijd ≥0,23 MΩ.
+// Elke fase staat t.o.v. aarde op 230V (ook bij 3-fase); de 0,40 MΩ hoort bij
+// 400V fase-tegen-fase, wat we hier niet meten.
 // ΔT-norm is afhankelijk van het stelsel (TN of TT) — zie NEN1010 tabel 41.1:
 //   TN-eindgroep ≤ 400ms · TT-eindgroep ≤ 200ms
 function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
@@ -192,7 +197,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   // ISO per groep (dynamische lijst) — waarschuw bij een waarde onder de norm.
   (instMet.isoGroepen || []).forEach((g, idx) => {
     const naam = g.naam || `Groep ${idx+1}`;
-    const norm = g.driefase ? 0.40 : 0.23;
+    const norm = 0.23; // naar aarde: elke fase staat t.o.v. aarde op 230V → ≥0,23 MΩ, ook bij 3-fase
     const velden = g.driefase
       ? [["l1a","L1→Aarde"],["l2a","L2→Aarde"],["l3a","L3→Aarde"],["na","N→Aarde"]]
       : [["fa","Fase→Aarde"],["na","Nul→Aarde"]];
@@ -359,7 +364,7 @@ const StatusTag = ({ level }) => {
 const LEERUITLEG = {
   iso_meting: {
     titel: "Isolatieweerstand (ISO) meten",
-    tekst: "De isolatieweerstand test of de bedrading nog goed geïsoleerd is tussen de aders onderling en naar aarde. Een lage waarde wijst op vochtdoordringing, beschadigde kabelisolatie of een defect apparaat. Meet bij voorkeur met alle apparatuur losgekoppeld en verlichting uit (anders meet je mee door aangesloten apparatuur, wat de waarde kunstmatig verlaagt). Norm bestaande installatie: ≥0,23 MΩ bij 1-fase, ≥0,40 MΩ bij 3-fase, gemeten op 250V. Voor de totale installatie (vanaf de hoofdschakelaar) geldt een strengere norm van ≥1 MΩ.",
+    tekst: "De isolatieweerstand test of de bedrading nog goed geïsoleerd is tussen de aders onderling en naar aarde. Een lage waarde wijst op vochtdoordringing, beschadigde kabelisolatie of een defect apparaat. Meet bij voorkeur met alle apparatuur losgekoppeld en verlichting uit (anders meet je mee door aangesloten apparatuur, wat de waarde kunstmatig verlaagt). Norm bestaande installatie: ≥0,23 MΩ, gemeten naar aarde op 250V — ook bij 3-fase, omdat elke fase t.o.v. aarde op 230V staat (de 0,40 MΩ-norm geldt alleen fase-tegen-fase, wat hier niet wordt gemeten). Voor de totale installatie (vanaf de hoofdschakelaar) geldt een strengere norm van ≥1 MΩ.",
   },
   stelsel_tn_tt: {
     titel: "TN vs. TT-stelsel",
@@ -1566,7 +1571,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
 
           {/* Isolatieweerstand per groep — dynamische lijst, groepen toevoegen via de knop */}
           <div style={{marginTop:14}}>
-            <label style={S.label}>Isolatieweerstand per groep — norm ≥ 0,23 MΩ (1-fase) / ≥ 0,40 MΩ (3-fase)</label>
+            <label style={S.label}>Isolatieweerstand per groep — norm ≥ 0,23 MΩ (naar aarde)</label>
             <div style={{fontSize:11,color:K.muted,marginBottom:10,lineHeight:1.4}}>
               Voeg per groep een meting toe met de knop hieronder. Handig om een probleemgroep vast te leggen of om alle eindgroepen los te documenteren.
             </div>
@@ -1578,7 +1583,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             )}
 
             {isoGroepen.map((g,idx)=>{
-              const norm = g.driefase ? 0.40 : 0.23;
+              const norm = 0.23; // naar aarde: elke fase staat t.o.v. aarde op 230V → ≥0,23 MΩ, ook bij 3-fase
               const velden = g.driefase
                 ? [["L1 → Aarde","l1a"],["L2 → Aarde","l2a"],["L3 → Aarde","l3a"],["N → Aarde","na"]]
                 : [["Fase → Aarde","fa"],["Nul → Aarde","na"]];
@@ -1594,7 +1599,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                   </div>
                   <label style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,cursor:"pointer"}}>
                     <input type="checkbox" checked={!!g.driefase} onChange={e=>updIsoGroep(g.id,"driefase",e.target.checked)}/>
-                    <span style={{fontSize:11,color:K.muted}}>3-fase groep (L1/L2/L3 → Aarde, norm ≥ 0,40 MΩ)</span>
+                    <span style={{fontSize:11,color:K.muted}}>3-fase groep (L1/L2/L3 → Aarde, norm ≥ 0,23 MΩ)</span>
                   </label>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                     {velden.map(([l,k])=>{
@@ -1788,7 +1793,7 @@ Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm (aardlekschakela
 SPANNINGEN: L1/N ${inst["span_L1/N"]||"—"}V / L1/PE ${inst["span_L1/PE"]||"—"}V / L2/N ${inst["span_L2/N"]||"—"}V / L2/PE ${inst["span_L2/PE"]||"—"}V / L3/N ${inst["span_L3/N"]||"—"}V / L3/PE ${inst["span_L3/PE"]||"—"}V / L1/L2 ${inst["span_L1/L2"]||"—"}V / L2/L3 ${inst["span_L2/L3"]||"—"}V / L1/L3 ${inst["span_L1/L3"]||"—"}V | FREQUENTIE: ${inst.frequentie||"—"}Hz
 ISO PER GROEP: ${(isoGroepen.length ? isoGroepen.map((g,i)=>{
   const velden = g.driefase ? [["L1A","l1a"],["L2A","l2a"],["L3A","l3a"],["NA","na"]] : [["FA","fa"],["NA","na"]];
-  return `${g.naam||`Groep ${i+1}`}${g.driefase?" (3F, norm ≥0,40)":" (norm ≥0,23)"}: ${velden.map(([lbl,k])=>`${lbl} ${g[k]||"—"}`).join(" / ")}`;
+  return `${g.naam||`Groep ${i+1}`}${g.driefase?" (3F, norm ≥0,23)":" (norm ≥0,23)"}: ${velden.map(([lbl,k])=>`${lbl} ${g[k]||"—"}`).join(" / ")}`;
 }).join(" | ") : "geen losse groepen ingevoerd")}
 AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
@@ -2545,7 +2550,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           const groepen = instMet.isoGroepen || [];
           if (!groepen.length) return "";
           const rijen = groepen.map((g,i)=>{
-            const norm = g.driefase ? 0.40 : 0.23;
+            const norm = 0.23; // naar aarde: elke fase staat t.o.v. aarde op 230V → ≥0,23 MΩ, ook bij 3-fase
             const velden = g.driefase
               ? [["L1→A","l1a"],["L2→A","l2a"],["L3→A","l3a"],["N→A","na"]]
               : [["Fase→A","fa"],["Nul→A","na"]];
@@ -2558,7 +2563,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           }).join("");
           return `
           <h2>Isolatieweerstand per groep</h2>
-          <p style="font-size:8px;color:#666;margin-bottom:4px">Norm ≥0,23 MΩ (1-fase) / ≥0,40 MΩ (3-fase), gemeten op 250V.</p>
+          <p style="font-size:8px;color:#666;margin-bottom:4px">Norm ≥0,23 MΩ, gemeten naar aarde op 250V.</p>
           <table>
             <tr><th>Groep</th><th>Type</th><th>Isolatieweerstand (MΩ)</th></tr>
             ${rijen}

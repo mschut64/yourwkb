@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// YourWkb — Geautomatiseerde regressietest — versie 2026-07-29-A
+// YourWkb — Geautomatiseerde regressietest — versie 2026-08-01-A
 // Test de ECHTE app-logica (tests/logica.js wordt met extract-logica.js uit
 // WkbApp.jsx gegenereerd, zodat test en app niet uit elkaar kunnen lopen).
 //
@@ -104,10 +104,13 @@ bevat(gk({ isoGroepen: [{ id:1, naam:"WCD begane grond", driefase:false, fa:"0,1
   "WCD begane grond (Fase→Aarde): ISO 0.15", "4.1 1-fase groep fa 0,15 → onder 0,23 → rood");
 aantalWarnings(gk({ isoGroepen: [{ id:1, naam:"WCD", driefase:false, fa:"0,23", na:"0,30" }] }), 0,
   "4.2 1-fase groep precies op norm 0,23 → geen waarschuwing (geen oranje meer)");
-bevat(gk({ isoGroepen: [{ id:1, naam:"Kracht", driefase:true, l1a:"0,30", l2a:"0,5", l3a:"0,5", na:"0,5" }] }),
-  "Kracht (L1→Aarde): ISO 0.3", "4.3 3-fase groep L1 0,30 → onder 0,40 → rood");
-aantalWarnings(gk({ isoGroepen: [{ id:1, naam:"Kracht", driefase:true, l1a:"0,45", l2a:"0,5", l3a:"0,5", na:"0,5" }] }), 0,
-  "4.4 3-fase groep 0,45 → boven 0,40 → geen waarschuwing");
+// 3-fase wordt naar aarde gemeten → norm is óók 0,23 MΩ (niet meer 0,40).
+bevat(gk({ isoGroepen: [{ id:1, naam:"Kracht", driefase:true, l1a:"0,20", l2a:"0,5", l3a:"0,5", na:"0,5" }] }),
+  "Kracht (L1→Aarde): ISO 0.2", "4.3 3-fase groep L1 0,20 → onder 0,23 → rood");
+aantalWarnings(gk({ isoGroepen: [{ id:1, naam:"Kracht", driefase:true, l1a:"0,30", l2a:"0,5", l3a:"0,5", na:"0,5" }] }), 0,
+  "4.4 3-fase groep L1 0,30 → boven 0,23 → geen waarschuwing (voorheen fout onder 0,40)");
+aantalWarnings(gk({ isoGroepen: [{ id:1, naam:"Kracht", driefase:true, l1a:"0,23", l2a:"0,23", l3a:"0,23", na:"0,23" }] }), 0,
+  "4.4b 3-fase groep precies op 0,23 → geen waarschuwing (norm naar aarde, ook 3-fase)");
 bevat(gk({ isoGroepen: [{ id:1, driefase:false, fa:"0,10", na:"0,5" }] }),
   "Groep 1 (Fase→Aarde)", "4.5 groep zonder naam → 'Groep 1' fallback in melding");
 aantalWarnings(gk({ isoGroepen: [] }), 0, "4.6 lege groepenlijst → geen waarschuwing");
@@ -255,6 +258,6 @@ if (failures.length > 0) {
   failures.forEach(f => console.log("  " + f));
   process.exit(1);
 } else {
-  console.log("\n✅ Alle tests geslaagd — norm-validatie v2026-07-29-A is correct geïmplementeerd");
+  console.log("\n✅ Alle tests geslaagd — norm-validatie v2026-08-01-A is correct geïmplementeerd");
   process.exit(0);
 }

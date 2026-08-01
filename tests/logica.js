@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YourWkb — Pure logica module (AUTO-GEGENEREERD — NIET HANDMATIG BEWERKEN)
-// Gegenereerd uit: WkbApp-v2026-07-29-A.jsx
-// Op: 2026-07-29 08:48:33
+// Gegenereerd uit: WkbApp.jsx
+// Op: 2026-08-01 09:10:56
 // Draai 'node extract-logica.js <WkbApp.jsx>' opnieuw na elke wijziging aan de
 // norm-validatie in de app. De regressietest (test.js) draait hier direct op.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -115,7 +115,9 @@ function ggIaVoorTijd(ampere, tijd) {
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
 // Groepenkast cross-checks — werkt op aardlekgroepen (RCD-clusters), elk met 1+ eindgroepen.
-// Norm is altijd de "bestaande installatie" norm (1000Ω/V): 0,23 MΩ bij 230V / 0,40 MΩ bij 400V.
+// Norm bestaande installatie (1000Ω/V), gemeten NAAR AARDE: altijd ≥0,23 MΩ.
+// Elke fase staat t.o.v. aarde op 230V (ook bij 3-fase); de 0,40 MΩ hoort bij
+// 400V fase-tegen-fase, wat we hier niet meten.
 // ΔT-norm is afhankelijk van het stelsel (TN of TT) — zie NEN1010 tabel 41.1:
 //   TN-eindgroep ≤ 400ms · TT-eindgroep ≤ 200ms
 function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
@@ -140,7 +142,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   // ISO per groep (dynamische lijst) — waarschuw bij een waarde onder de norm.
   (instMet.isoGroepen || []).forEach((g, idx) => {
     const naam = g.naam || `Groep ${idx + 1}`;
-    const norm = g.driefase ? 0.40 : 0.23;
+    const norm = 0.23; // naar aarde: elke fase staat t.o.v. aarde op 230V → ≥0,23 MΩ, ook bij 3-fase
     const velden = g.driefase ? [["l1a", "L1→Aarde"], ["l2a", "L2→Aarde"], ["l3a", "L3→Aarde"], ["na", "N→Aarde"]] : [["fa", "Fase→Aarde"], ["na", "Nul→Aarde"]];
     velden.forEach(([k, label]) => {
       const iso = toNum(g[k]);
