@@ -9,10 +9,10 @@ export default function LandingPage() {
   const faqs = [
     { q: 'Moet ik iets installeren?', a: 'Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates.' },
     { q: 'Is het rapport echt NEN1010-compliant?', a: 'Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
-    { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie (JSON-export of gratis Dropbox-koppeling) om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
-    { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nooit. YourWkb verdient geen geld met advertenties en verkoopt geen data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn van jou. We verdienen alleen aan definitieve rapporten (€2,50 per stuk). Dat is ons volledige verdienmodel.' },
-    { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen en combiketel zijn nu beschikbaar. Warmtepomp en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl.' },
-    { q: 'Wat kost het na de testperiode?', a: 'De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
+    { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Maak een back-up via de JSON-export of de gratis Dropbox-koppeling en bewaar je dossiers zelf, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
+    { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels.' },
+    { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Laadpaal en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl.' },
+    { q: 'Wat kost het na de testperiode?', a: 'De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €7,50 per definitief rapport, of je kiest de voordeelbundel: 10 rapporten voor €55 (€5,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
   ]
 
   return (
@@ -53,7 +53,10 @@ export default function LandingPage() {
         .trust-icon { color: var(--green); }
 
         .phone-wrap { position: absolute; right: 5vw; top: 50%; transform: translateY(-50%); z-index: 1; }
-        .phone { width: 240px; background: var(--card); border: 1px solid var(--border); border-radius: 32px; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.6); }
+        .phone { width: 240px; background: var(--card); border: 1px solid var(--border); border-radius: 32px; overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.6); animation: phoneFloat 6s ease-in-out infinite; }
+        @keyframes phoneFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        @media (prefers-reduced-motion: reduce) { .phone { animation: none !important; } }
+        .phone-shot { display: block; width: 100%; border-radius: 10px; border: 1px solid var(--border); }
         .phone-notch { height: 28px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
         .phone-notch-pill { width: 60px; height: 8px; background: var(--black); border-radius: 4px; }
         .phone-screen { padding: 14px; }
@@ -129,7 +132,7 @@ export default function LandingPage() {
         .footer-links { display: flex; gap: 20px; }
         .footer-links a { font-size: 13px; color: var(--muted); text-decoration: none; }
 
-        @media (max-width: 900px) { .phone-wrap { display: none; } }
+        @media (max-width: 900px) { .phone-wrap { position: static; transform: none; display: flex; justify-content: center; margin: 48px auto 0; } .phone { width: 220px; } .hero { min-height: auto; padding-bottom: 80px; } }
 
         .wkb-explainer { padding: 0 5vw 64px; }
         .wkb-explainer-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; padding: 32px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(245,197,24,0.04), rgba(255,255,255,0.02)); }
@@ -153,13 +156,13 @@ export default function LandingPage() {
       {/* NAV */}
       <nav>
         <a href="#" className="logo">
-          <div className="logo-bolt">⚡</div>
+          <div className="logo-bolt"><svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden="true"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z" /></svg></div>
           YourWkb
         </a>
         <div className="nav-right">
           <a href="#stappen" className="nav-link">Hoe werkt het</a>
           <a href="#prijzen" className="nav-link">Privacy &amp; kosten</a>
-          <a href="/app" className="btn-nav">Start project</a>
+          <a href="/app" className="btn-nav">Gratis starten</a>
         </div>
       </nav>
 
@@ -174,13 +177,12 @@ export default function LandingPage() {
           </div>
           <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
           <p className="hero-sub">Snel ingevuld op je telefoon, klaar in minuten. NEN-conform en Wkb-proof — voor elektriciens, PV-installateurs, cv- en warmtepompmonteurs.</p>
-          <p style={{ fontSize:13, color:'var(--muted)', marginTop:-8, marginBottom:20 }}>Wkb-opleverrapport en NEN1010-rapport maken, direct als installateur op locatie.</p>
           <div className="hero-cta">
-            <a href="/app" className="btn-primary">Start project →</a>
+            <a href="/app" className="btn-primary">Gratis beginnen →</a>
             <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
           </div>
           <div className="hero-trust">
-            <div className="trust-item"><span className="trust-icon">✓</span> Altijd gratis te gebruiken</div>
+            <div className="trust-item"><span className="trust-icon">✓</span> Gratis te gebruiken</div>
             <div className="trust-item"><span className="trust-icon">✓</span> Geen creditcard nodig</div>
             <div className="trust-item"><span className="trust-icon">✓</span> Geen advertenties</div>
             <div className="trust-item"><span className="trust-icon">✓</span> Data wordt nooit verkocht</div>
@@ -192,41 +194,10 @@ export default function LandingPage() {
             <div className="phone-notch"><div className="phone-notch-pill" /></div>
             <div className="phone-screen">
               <div className="phone-hdr">
-                <div className="phone-logo">⚡</div>
+                <div className="phone-logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="#000000" aria-hidden="true"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z" /></svg></div>
                 <div><div className="phone-title">YourWkb</div><div className="phone-sub">NEN1010 · groepenkast</div></div>
               </div>
-              <div className="step-bar">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="step-dot" style={{ background: i < 4 ? '#22C55E' : i === 4 ? '#F5C518' : '#2A2E3A' }} />
-                ))}
-              </div>
-              <div className="phone-card">
-                <div className="phone-card-title">Foto's — stap 5 van 8</div>
-                {['Situatie vóór werkzaamheden', 'Kast gemonteerd (leeg)', 'Bedrading aangebracht', 'Aardingsrail + PE-geleiders'].map(l => (
-                  <div key={l} className="phone-row">
-                    <div className="phone-check check-done">✓</div>
-                    <div className="phone-label done">{l}</div>
-                  </div>
-                ))}
-                {['Verdeler dicht (afgewerkt)', 'Groepenbord / schema'].map(l => (
-                  <div key={l} className="phone-row">
-                    <div className="phone-check check-open" />
-                    <div className="phone-label">{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="phone-card">
-                <div className="phone-card-title">Meetwaarden groep 3</div>
-                {[['ISO', '2.4 MΩ'], ['ΔT', '18 ms'], ['Z L-PE', '0.38 Ω']].map(([n, v]) => (
-                  <div key={n} className="measure-row">
-                    <span className="measure-name">{n}</span>
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span className="measure-val">{v}</span>
-                      <span className="measure-tag ok">OK</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <img className="phone-shot" src="/yourwkbpromo.gif" alt="YourWkb app — van meting naar rapport" />
               <div className="phone-btn">📬 Rapport genereren →</div>
             </div>
           </div>
@@ -260,7 +231,7 @@ export default function LandingPage() {
             { icon: '📷', n: 3, title: "Foto's per checkpoint", desc: 'Vaste checkpoints: kast leeg, bedrading, aarding, verdeler dicht.' },
             { icon: '📏', n: 4, title: 'Meetwaarden invoeren', desc: 'Per groep: ISO, ΔT, ΔI, Z L-PE. Direct groen of rood op NEN1010 normen.' },
             { icon: '📄', n: 5, title: 'Rapport gegenereerd', desc: 'AI stelt het volledige NEN1010 opleverrapport op. Jij hoeft niks te typen.' },
-            { icon: '📬', n: 6, title: 'Naar de klant', desc: 'PDF direct per e-mail naar de opdrachtgever. Project blijft op je eigen toestel bewaard.' },
+            { icon: '📬', n: 6, title: 'Naar de klant', desc: 'PDF direct per e-mail naar de opdrachtgever. Project wordt gearchiveerd.' },
           ].map(s => (
             <div key={s.n} className="step-card">
               <div className="step-icon">{s.icon}</div>
@@ -281,6 +252,7 @@ export default function LandingPage() {
             { title: "⚡ Elektricien ZZP'er", desc: 'Groepenkast plaatsen of vervangen — NEN1010 rapport automatisch gegenereerd.' },
             { title: '☀️ PV-installateur', desc: 'Zonnepanelen installatie — NEN1010:712 rapport met string metingen en visuele inspectie.' },
             { title: '🔥 CV-monteur', desc: 'Combiketel plaatsen of vervangen — BRL6000-25 rapport met rookgasanalyse en CO-meting.' },
+            { title: '🌡️ Warmtepomp-monteur', desc: 'Warmtepomp installatie — opleverrapport met elektrische en hydraulische controles.' },
             { title: 'Wkb-plicht vanaf 2024', desc: 'Aantoonbaar voldoen aan de Wet kwaliteitsborging voor het bouwen.' },
             { title: 'Werkt op je telefoon', desc: 'Open yourwkb.nl in Safari of Chrome en voeg toe aan je homescreen.' },
             { title: 'Klant krijgt professioneel rapport', desc: 'PDF direct na de klus. Met jouw naam en erkenningsnummer erop.' },
@@ -296,9 +268,9 @@ export default function LandingPage() {
       {/* PRIJZEN */}
       <div className="prijzen" id="prijzen">
         <div className="section-label">Hoe het werkt</div>
-        <h2>Altijd gratis.<br />Betaal alleen per rapport.</h2>
+        <h2>De app is gratis.<br />Je betaalt per opleverrapport.</h2>
         <p className="section-sub" style={{ marginBottom: 32 }}>
-          De app is en blijft gratis. Je betaalt alleen voor een definitief rapport. Geen abonnement, geen verborgen kosten.
+          Alles in de app is gratis: invullen, meten, normchecks en een concept-rapport met watermerk. Alleen het definitieve rapport voor je klant — zonder watermerk — betaal je. Los, of via de voordeelbundel. Geen vaste lasten, geen verborgen kosten.
         </p>
 
         {/* Testfase banner */}
@@ -306,7 +278,7 @@ export default function LandingPage() {
           <span style={{ fontSize:22 }}>🎁</span>
           <div>
             <div style={{ fontWeight:700, fontSize:15, color:'var(--yellow)' }}>Tijdens de testfase: alles gratis</div>
-            <div style={{ fontSize:13, color:'var(--muted)' }}>Rapporten zijn nu gratis. De €2,50 per rapport gaat in zodra de testfase voorbij is. Je wordt van tevoren op de hoogte gesteld.</div>
+            <div style={{ fontSize:13, color:'var(--muted)' }}>Rapporten zijn nu gratis. Na de testfase: €7,50 per rapport, of 10 voor €55 met de bundel. Je wordt van tevoren op de hoogte gesteld.</div>
           </div>
         </div>
 
@@ -316,9 +288,9 @@ export default function LandingPage() {
             <div style={{ fontSize:32, marginBottom:12 }}>🆓</div>
             <div className="price-name">App gebruiken</div>
             <div className="price-amount">€0</div>
-            <div className="price-desc">Voor altijd gratis.</div>
+            <div className="price-desc">Gratis.</div>
             <ul className="price-features">
-              {[['✓','Groepenkast'],['✓','Zonnepanelen'],['✓','Combiketel'],['✓','Foto\'s & meetwaarden'],['✓','Cross-checks NEN1010']].map(([i,l])=>(
+              {[['✓','Groepenkast'],['✓','Zonnepanelen'],['✓','Combiketel'],['✓','Warmtepomp'],['✓','Foto\'s, meetwaarden & normchecks'],['✓','Concept-rapport met watermerk'],['✓','Back-up via gratis Dropbox-account']].map(([i,l])=>(
                 <li key={l}><span className={i==='✓'?'feat-check':'feat-dash'}>{i}</span>{l}</li>
               ))}
             </ul>
@@ -326,30 +298,34 @@ export default function LandingPage() {
           <div className="price-card featured">
             <div className="featured-badge">Per rapport</div>
             <div style={{ fontSize:32, marginBottom:12 }}>📄</div>
-            <div className="price-name">Definitief rapport</div>
+            <div className="price-name">Definitief opleverrapport</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:4 }}>
-              <div className="price-amount" style={{ textDecoration:'line-through', opacity:0.4 }}>€2<span style={{ fontSize:24 }}>,50</span></div>
+              <div className="price-amount" style={{ textDecoration:'line-through', opacity:0.4 }}>€7<span style={{ fontSize:24 }}>,50</span></div>
               <div style={{ background:'var(--yellow)', color:'#000', fontWeight:800, fontSize:13, padding:'3px 10px', borderRadius:20 }}>Nu gratis</div>
             </div>
-            <div className="price-desc">Eenmalig — gratis tijdens testfase.</div>
+            <div className="price-desc">Los €7,50 · bundel 10 voor €55 (€5,50/st). Gratis tijdens testfase.</div>
             <ul className="price-features">
-              {[['✓','PDF zonder watermerk'],['✓','Conform NEN1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Data blijft op jouw toestel'],['✓','Direct naar klant']].map(([i,l])=>(
+              {[['✓','PDF zonder watermerk'],['✓','Conform NEN1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Jouw naam & erkenningsnummer'],['✓','Eigen logo op het rapport'],['✓','Direct naar klant']].map(([i,l])=>(
                 <li key={l}><span className="feat-check">{i}</span>{l}</li>
               ))}
             </ul>
-            <a href="/app" className="btn-price-primary">Start project →</a>
+            <a href="/app" className="btn-price-primary">Gratis beginnen →</a>
           </div>
         </div>
 
-        {/* Jouw data, jouw back-up */}
+        {/* Binnenkort */}
         <div style={{ maxWidth:700, marginBottom:48 }}>
-          <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Al beschikbaar</div>
+          <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Binnenkort beschikbaar</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {[
-              { icon:'☁️', title:'Gratis Dropbox back-up', desc:'Sla je projecten op in je eigen Dropbox — 2GB gratis is goed voor 800-2000 projecten.' },
+              { icon:'🔌', title:'Laadpaal & thuisbatterij', desc:'Twee nieuwe disciplines, incl. type A/B-aardlekkeuze en plaatsingseisen.' },
+              { icon:'🧮', title:'Meterkast-belastingcheck', desc:'Kan de kast het totaal aan? Hoofdaansluiting én railcapaciteit getoetst.' },
+              { icon:'📱', title:'QR meterkastpaspoort', desc:'Sticker op de kastdeur — elke volgende monteur scant en ziet wat er al hangt.' },
               { icon:'🏷️', title:'Eigen logo op rapport', desc:'Jouw huisstijl op elk rapport. Upload eenmalig je logo.' },
+              { icon:'💾', title:'Back-up & delen', desc:'Back-up/herstel van je projecten en geanonimiseerd delen met een collega.' },
             ].map(c => (
-              <div key={c.title} style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:12, padding:18, position:'relative', overflow:'hidden' }}>
+              <div key={c.title} style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:12, padding:18, opacity:0.45, position:'relative', overflow:'hidden' }}>
+                <div style={{ position:'absolute', top:10, right:10, background:'var(--border)', color:'var(--muted)', fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10 }}>BINNENKORT</div>
                 <div style={{ fontSize:22, marginBottom:8 }}>{c.icon}</div>
                 <div style={{ fontWeight:700, fontSize:14, color:'var(--text)', marginBottom:4 }}>{c.title}</div>
                 <div style={{ fontSize:12, color:'var(--muted)' }}>{c.desc}</div>
@@ -365,8 +341,8 @@ export default function LandingPage() {
             {[
               { title:'Geen advertenties', desc:'Nooit. Nergens. Punt.' },
               { title:'Data wordt nooit verkocht', desc:'Jouw klantdata is van jou.' },
-              { title:'AVG-proof', desc:'Geen serveropslag, geen risico.' },
-              { title:'Geen abonnement', desc:'Betaal alleen wat je gebruikt.' },
+              { title:'AVG-proof', desc:'Server staat in de EU.' },
+              { title:'Geen vaste lasten', desc:'Betaal per rapport, of kies vrijblijvend een bundel.' },
             ].map(b => (
               <div key={b.title} style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
                 <span style={{ color:'#22C55E', fontSize:18, marginTop:1 }}>✓</span>
@@ -399,13 +375,14 @@ export default function LandingPage() {
       {/* CTA */}
       <div className="cta-bottom" id="aanmelden">
         <h2>Klaar om te beginnen?</h2>
-        <p>Altijd gratis te gebruiken. Tijdens de testfase ook rapporten gratis.<br />
-        <span style={{ fontSize:14 }}>Daarna €2,50 per rapport — je wordt van tevoren op de hoogte gesteld.</span></p>
+        <p>De app is gratis te gebruiken. Tijdens de testfase zijn ook rapporten gratis.<br />
+        <span style={{ fontSize:14 }}>Daarna €7,50 per rapport of 10 voor €55 — je wordt van tevoren op de hoogte gesteld.</span></p>
         <div style={{ maxWidth: 400, margin: '0 auto' }}>
+          <input type="email" className="email-input" placeholder="jouw@emailadres.nl" />
           <a href="/app" className="btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', marginBottom: 12 }}>
-            Start project →
+            Gratis beginnen →
           </a>
-          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Geen account, geen registratie — direct aan de slag.</p>
+          <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>Daarna direct toegang tot de app. Geen wachttijd.</p>
         </div>
       </div>
 

@@ -83,9 +83,9 @@ export default function RootLayout({ children }) {
         "url": "https://yourwkb.nl",
         "offers": {
           "@type": "Offer",
-          "price": "2.50",
+          "price": "7.50",
           "priceCurrency": "EUR",
-          "description": "Per definitief rapport, na de gratis testfase"
+          "description": "Per definitief rapport na de gratis testfase; voordeelbundel 10 rapporten voor €55"
         }
       },
       {
@@ -94,9 +94,9 @@ export default function RootLayout({ children }) {
           { "@type": "Question", "name": "Moet ik iets installeren?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates." } },
           { "@type": "Question", "name": "Is het rapport echt NEN1010-compliant?", "acceptedAnswer": { "@type": "Answer", "text": "Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden." } },
           { "@type": "Question", "name": "Hoe lang worden mijn dossiers bewaard?", "acceptedAnswer": { "@type": "Answer", "text": "Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie (JSON-export of gratis Dropbox-koppeling) om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn." } },
-          { "@type": "Question", "name": "Worden er advertenties getoond of wordt mijn data verkocht?", "acceptedAnswer": { "@type": "Answer", "text": "Nooit. YourWkb verdient geen geld met advertenties en verkoopt geen data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn van jou. We verdienen alleen aan definitieve rapporten (€2,50 per stuk). Dat is ons volledige verdienmodel." } },
-          { "@type": "Question", "name": "Werkt het ook voor andere disciplines?", "acceptedAnswer": { "@type": "Answer", "text": "Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Specifieke wensen? Mail naar info@yourwkb.nl." } },
-          { "@type": "Question", "name": "Wat kost het na de testperiode?", "acceptedAnswer": { "@type": "Answer", "text": "De app blijft altijd gratis. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €2,50 per definitief rapport. Je wordt van tevoren op de hoogte gesteld — geen verrassingen." } }
+          { "@type": "Question", "name": "Worden er advertenties getoond of wordt mijn data verkocht?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels." } },
+          { "@type": "Question", "name": "Werkt het ook voor andere disciplines?", "acceptedAnswer": { "@type": "Answer", "text": "Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Laadpaal en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl." } },
+          { "@type": "Question", "name": "Wat kost het na de testperiode?", "acceptedAnswer": { "@type": "Answer", "text": "De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €7,50 per definitief rapport, of je kiest de voordeelbundel: 10 rapporten voor €55 (€5,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen." } }
         ]
       }
     ]
