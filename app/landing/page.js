@@ -176,7 +176,7 @@ export default function LandingPage() {
             Nu beschikbaar: elektricien, zonnepanelen & cv-monteur
           </div>
           <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
-          <p className="hero-sub">Snel ingevuld op je telefoon, klaar in minuten. NEN-conform en Wkb-proof — voor elektriciens, PV-installateurs, cv- en warmtepompmonteurs.</p>
+          <p className="hero-sub">De Wet kwaliteitsborging voor het bouwen legt de aansprakelijkheid voor je werk bij jou. YourWkb legt het bewijs vast: NEN-conform opleverrapport, in minuten, vanaf je telefoon.</p>
           <div className="hero-cta">
             <a href="/app" className="btn-primary">Gratis beginnen →</a>
             <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
