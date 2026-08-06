@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-01-A
+// YourWkb WkbApp.jsx — versie 2026-08-06-B
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -2337,15 +2337,41 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 function StapMkp({ data, onChange, onNext, onBack }) {
   const m = data.mkp || {};
   const zet = (k,v) => onChange("mkp", { ...m, [k]: v });
+  // FIX 06-08-B: meerdere velden in één update. Twee losse zet()-aanroepen in één
+  // onClick gingen beide uit van dezelfde oude m, waardoor de tweede de eerste
+  // overschreef — daardoor "pakte" de kam-keuze niet.
+  const zetMeer = (obj) => onChange("mkp", { ...m, ...obj });
   const [bezig, setBezig] = useState(false);
   const [fout, setFout]   = useState("");
+  const [eanHint, setEanHint] = useState(false);
 
   const MKP_GRP_TYPES = [
     ["alg","Algemene groep"],["kook","Koken"],["wp","Warmtepomp"],["lp","Laadpaal"],
     ["pv","PV-omvormer"],["bat","Thuisbatterij"],["ov","Overig"],
   ];
+
+  // FIX 06-08-B: "wat hangt er aan de kast" niet opnieuw vragen — de eindgroepen
+  // zijn eerder in de app al ingevuld. Eenmalig automatisch overnemen uit de
+  // groepen-stap (aardlekgroepen → eindgroepen), daarna vrij bewerkbaar.
+  const EIND_NAAR_MKP = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
+  useEffect(() => {
+    if (m.grp !== undefined) return;                    // al gevuld (of bewust leeg gemaakt)
+    const uitGroepen = (data.aardlekgroepen||[]).flatMap(ag =>
+      (ag.eindgroepen||[]).filter(e=>e.type).map(e => ({
+        t: EIND_NAAR_MKP[e.type] || "ov",
+        rol: e.type==="pv" ? "voed" : e.type==="batterij" ? "voed" : "af",
+        f: ag.fase==="3" ? "3" : "1",
+        n: (e.naam||"").slice(0,40),
+        kw: "",
+      }))
+    );
+    const uitImport = (data.mkpImport?.grp||[]).map(g=>({ t:g.t, rol:g.rol, kw:g.kw!==undefined?String(g.kw):"", f:g.f!==undefined?String(g.f):"", n:g.n||"" }));
+    zet("grp", uitGroepen.length ? uitGroepen : uitImport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const grp = m.grp || [];
-  const zetGrp = (i,k,v) => { const n=[...grp]; n[i]={...n[i],[k]:v}; if(k==="t") n[i].rol = (v==="pv")?"voed":(v==="bat")?n[i].rol||"voed":"af"; zet("grp",n); };
+  const zetGrp = (i,k,v) => { const n=[...grp]; n[i]={...n[i],[k]:v}; if(k==="t") n[i].rol = (v==="pv"||v==="bat")?"voed":"af"; zet("grp",n); };
 
   // Dubbele-balancer-detectie: laadpaal én batterij in de lijst, load balancing aan,
   // maar geen regisseur ingevuld → wie stuurt wie?
@@ -2404,9 +2430,9 @@ function StapMkp({ data, onChange, onNext, onBack }) {
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Kam / ontwerpstroom verdeler</div>
         <div style={{fontSize:11, color:K.muted, marginBottom:8}}>De som van voedende groepen (PV, batterij) waar ze op de kam cumuleren mag deze waarde niet overschrijden.</div>
         <div style={{display:"flex", gap:8}}>
-          <button style={knopStijl(m.kamMm2==="10")} onClick={()=>{zet("kamMm2","10"); zet("kamA","40");}}>10 mm² · 40 A</button>
-          <button style={knopStijl(m.kamMm2==="16")} onClick={()=>{zet("kamMm2","16"); zet("kamA","63");}}>16 mm² · 63 A</button>
-          <button style={knopStijl(m.kamMm2==="?")}  onClick={()=>{zet("kamMm2","?");  zet("kamA","40");}}>Onbekend → 40 A</button>
+          <button style={knopStijl(m.kamMm2==="10")} onClick={()=>zetMeer({kamMm2:"10", kamA:"40"})}>10 mm² · 40 A</button>
+          <button style={knopStijl(m.kamMm2==="16")} onClick={()=>zetMeer({kamMm2:"16", kamA:"63"})}>16 mm² · 63 A</button>
+          <button style={knopStijl(m.kamMm2==="?")}  onClick={()=>zetMeer({kamMm2:"?",  kamA:"40"})}>Onbekend → 40 A</button>
         </div>
       </div>
 
@@ -2425,16 +2451,21 @@ function StapMkp({ data, onChange, onNext, onBack }) {
         {eanStatus==="fout" && <div style={{fontSize:11, color:K.red, marginTop:4}}>Geen geldige EAN (18 cijfers, begint met 87, controlecijfer klopt niet).</div>}
         {eanStatus==="ok"   && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ Geldige EAN-code</div>}
         <button style={{...S.btn, marginTop:8, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
-          onClick={()=>window.open(`https://www.eancodeboek.nl`,"_blank")}>
-          🔎 Zoek op in het EAN-codeboek (postcode {data.postcode||"…"}, nr {data.huisnummer||"…"})
+          onClick={async()=>{
+            try { await navigator.clipboard.writeText(`${(data.postcode||"").replace(/\s/g,"")} ${data.huisnummer||""}`.trim()); setEanHint(true); } catch {}
+            window.open("https://www.eancodeboek.nl","_blank");
+          }}>
+          🔎 Zoek op in het EAN-codeboek
         </button>
+        {eanHint && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ {(data.postcode||"")+" "+(data.huisnummer||"")} staat op je klembord — plak in het zoekveld van het codeboek en kopieer de EAN hierheen.</div>}
       </div>
 
       <div style={{...S.card, marginBottom:12}}>
-        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Wat hangt er op de kast</div>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Wat hangt er op de kast</div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Automatisch overgenomen uit de groepen-stap — vul aan met apparaten die níet via deze kast lopen (bijv. laadpaal op eigen aansluiting) en zet waar bekend het vermogen (kW) erbij.</div>
         {grp.map((g,i)=>(
           <div key={i} style={{display:"flex", gap:6, marginBottom:6, alignItems:"center"}}>
-            <select style={{...S.input, flex:2, padding:"8px"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
+            <select style={{...S.input, flex:2, padding:"8px", background:K.card, color:K.text, WebkitAppearance:"menulist"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
               <option value="">— type —</option>
               {MKP_GRP_TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
             </select>
