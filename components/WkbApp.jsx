@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-06-C
+// YourWkb WkbApp.jsx — versie 2026-08-06-D
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -2431,9 +2431,10 @@ function StapMkp({ data, onChange, onNext, onBack }) {
   const [eanHint, setEanHint] = useState(false);
 
   const MKP_GRP_TYPES = [
-    ["alg","Algemene groep"],["kook","Koken"],["wp","Warmtepomp"],["lp","Laadpaal"],
-    ["pv","PV-omvormer"],["bat","Thuisbatterij"],["ov","Overig"],
+    ["alg","💡","Algemeen"],["kook","🍳","Koken"],["wp","🌡️","Warmtepomp"],["lp","🔌","Laadpaal"],
+    ["pv","☀️","PV"],["bat","🔋","Batterij"],["ov","⚙️","Overig"],
   ];
+  const [typeOpen, setTypeOpen] = useState(null);       // welke rij toont de type-kiezer
 
   // FIX 06-08-B: "wat hangt er aan de kast" niet opnieuw vragen — de eindgroepen
   // zijn eerder in de app al ingevuld. Eenmalig automatisch overnemen uit de
@@ -2442,10 +2443,12 @@ function StapMkp({ data, onChange, onNext, onBack }) {
   useEffect(() => {
     const heeftEchteRijen = Array.isArray(m.grp) && m.grp.some(g=>g && g.t);
     if (heeftEchteRijen) return;                        // al zinvol gevuld
+    // ALLE eindgroepen overnemen — ook zonder snelkeuze-type (dan "algemene groep",
+    // de naam uit de groepen-stap reist mee zodat herkenbaar blijft wat het is).
     const uitGroepen = (data.aardlekgroepen||[]).flatMap(ag =>
-      (ag.eindgroepen||[]).filter(e=>e.type).map(e => ({
-        t: EIND_NAAR_MKP[e.type] || "ov",
-        rol: e.type==="pv" ? "voed" : e.type==="batterij" ? "voed" : "af",
+      (ag.eindgroepen||[]).map(e => ({
+        t: e.type ? (EIND_NAAR_MKP[e.type] || "ov") : "alg",
+        rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
         f: ag.fase==="3" ? "3" : "1",
         n: (e.naam||"").slice(0,40),
         kw: "",
@@ -2549,18 +2552,40 @@ function StapMkp({ data, onChange, onNext, onBack }) {
       <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Wat hangt er op de kast</div>
         <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Automatisch overgenomen uit de groepen-stap — vul aan met apparaten die níet via deze kast lopen (bijv. laadpaal op eigen aansluiting) en zet waar bekend het vermogen (kW) erbij.</div>
-        {grp.map((g,i)=>(
-          <div key={i} style={{display:"flex", gap:6, marginBottom:6, alignItems:"center"}}>
-            <select style={{flex:2, minWidth:0, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, colorScheme:"dark"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
-              <option value="">— type —</option>
-              {MKP_GRP_TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-            </select>
-            <input style={{flex:1, minWidth:0, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13}} placeholder="kW" inputMode="decimal"
-              value={g.kw||""} onChange={e=>zetGrp(i,"kw",e.target.value)}/>
-            <button style={{...S.btn, padding:"6px 10px", background:K.card, border:`1px solid ${K.border}`, color:K.red}}
-              onClick={()=>zet("grp", grp.filter((_,j)=>j!==i))}>✕</button>
+        {grp.map((g,i)=>{
+          const gekozen = MKP_GRP_TYPES.find(([v])=>v===g.t);
+          return (
+          <div key={i} style={{border:`1px solid ${K.border}`, borderRadius:10, padding:8, marginBottom:8, background:K.surface}}>
+            <div style={{display:"flex", gap:6, alignItems:"center"}}>
+              <button
+                style={{flex:1, minWidth:0, textAlign:"left", padding:"10px 10px", background:K.card, color:K.text,
+                        border:`1px solid ${typeOpen===i?K.yellow:K.border}`, borderRadius:8, fontSize:13,
+                        fontFamily:"inherit", cursor:"pointer", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
+                onClick={()=>setTypeOpen(typeOpen===i?null:i)}>
+                {gekozen ? `${gekozen[1]} ${gekozen[2]}` : "— kies type —"}{g.n ? ` · ${g.n}` : ""}
+                {g.rol==="voed" ? " ↩︎" : ""}
+              </button>
+              <input style={{width:64, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
+                placeholder="kW" inputMode="decimal"
+                value={g.kw||""} onChange={e=>zetGrp(i,"kw",e.target.value)}/>
+              <button style={{padding:"8px 10px", background:"transparent", border:"none", color:K.red, fontSize:16, cursor:"pointer"}}
+                onClick={()=>{ setTypeOpen(null); zet("grp", grp.filter((_,j)=>j!==i)); }}>✕</button>
+            </div>
+            {typeOpen===i && (
+              <div style={{display:"flex", flexWrap:"wrap", gap:6, marginTop:8}}>
+                {MKP_GRP_TYPES.map(([v,ic,l])=>(
+                  <button key={v}
+                    style={{padding:"8px 10px", borderRadius:8, fontSize:12, cursor:"pointer", fontFamily:"inherit",
+                            background: g.t===v ? K.yellow : K.card, color: g.t===v ? "#000" : K.text,
+                            border:`1px solid ${g.t===v ? K.yellow : K.border}`, fontWeight: g.t===v ? 700 : 400}}
+                    onClick={()=>{ zetGrp(i,"t",v); setTypeOpen(null); }}>
+                    {ic} {l}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
+        );})}
         <button style={{...S.btn, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
           onClick={()=>zet("grp",[...grp,{}])}>+ Apparaat/groep toevoegen</button>
       </div>
