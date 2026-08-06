@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-06-B
+// YourWkb WkbApp.jsx — versie 2026-08-06-C
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -2333,6 +2333,91 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── GEDEELDE VERSTUUR STAP ───────────────────────────────────────────────────
 
+// ─── MKP VIEWER: gescand paspoort direct tonen (inzien zonder project) ───────
+function MkpViewer({ p, onNieuw, onSluit }) {
+  const TYPE_LABEL = { alg:"Algemene groep", kook:"Koken", wp:"Warmtepomp", lp:"Laadpaal", pv:"PV-omvormer", bat:"Thuisbatterij", ov:"Overig" };
+  const rij = (label, waarde) => waarde ? (
+    <div style={{display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${K.border}`}}>
+      <span style={{fontSize:12, color:K.muted}}>{label}</span>
+      <span style={{fontSize:13, fontWeight:600, textAlign:"right"}}>{waarde}</span>
+    </div>) : null;
+  const chkKleur = p.chk?.r==="groen" ? K.green : p.chk?.r==="rood" ? K.red : K.orange;
+  return (
+    <div style={{padding:16, maxWidth:520, margin:"0 auto"}}>
+      <div style={{textAlign:"center", marginBottom:14}}>
+        <div style={{fontSize:26}}>📱</div>
+        <h2 style={{...S.h2, marginBottom:2}}>Meterkastpaspoort</h2>
+        <div style={{fontSize:12, color:K.muted}}>Opgave vorige installateur — controleer bij twijfel · open standaard meterkastpaspoort.nl</div>
+      </div>
+
+      <div style={{...S.card, marginBottom:10}}>
+        {rij("Adres", [p.pc, p.nr].filter(Boolean).join(" "))}
+        {rij("Bouwjaar / aanleg kast", p.bj)}
+        {rij("Hoofdaansluiting", p.ha && `${p.ha.f||"?"}-fase × ${p.ha.a||"?"} A`)}
+        {rij("Kam / ontwerpstroom", p.kam && `${p.kam.mm2?p.kam.mm2+" mm² · ":""}${p.kam.a||"?"} A`)}
+        {rij("EAN aansluiting", p.ean)}
+        {rij("EAN secundair (SAP)", p.ean2)}
+        {rij("Laatst bijgewerkt", p.d)}
+      </div>
+
+      {Array.isArray(p.grp) && p.grp.length>0 && (
+        <div style={{...S.card, marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Op de kast</div>
+          {p.grp.map((g,i)=>(
+            <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${K.border}`, fontSize:13}}>
+              <span>{g.rol==="voed"?"↩︎ ":"→ "}{TYPE_LABEL[g.t]||g.t}{g.n?` — ${g.n}`:""}</span>
+              <span style={{color:K.muted}}>{g.kw?`${g.kw} kW`:""}{g.f?` · ${g.f}F`:""}</span>
+            </div>
+          ))}
+          <div style={{fontSize:10, color:K.muted, marginTop:6}}>↩︎ = voedend (levert aan de kam) · → = afgaand</div>
+        </div>
+      )}
+
+      {p.lb && (
+        <div style={{...S.card, marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Load balancing</div>
+          <div style={{fontSize:13}}>
+            {p.lb.aan
+              ? `${p.lb.typ==="dyn"?"Dynamisch":p.lb.typ==="stat"?"Statisch":"Aanwezig"}${p.lb.max?` · grens ${p.lb.max} A`:""}${p.lb.reg?` · regisseur: ${p.lb.reg}`:""}`
+              : "Niet aanwezig"}
+          </div>
+          <div style={{fontSize:10, color:K.muted, marginTop:4}}>Let op: dit is een instelling, geen veiligheidsmaatregel — kan gewijzigd of opgeheven zijn.</div>
+        </div>
+      )}
+
+      {p.chk && (
+        <div style={{...S.card, marginBottom:10, borderLeft:`4px solid ${chkKleur}`}}>
+          <div style={{fontWeight:700, fontSize:13}}>Laatste belastingcheck: <span style={{color:chkKleur, textTransform:"uppercase"}}>{p.chk.r}</span></div>
+          {p.chk.d && <div style={{fontSize:11, color:K.muted}}>op {p.chk.d}</div>}
+        </div>
+      )}
+
+      {Array.isArray(p.log) && p.log.length>0 && (
+        <div style={{...S.card, marginBottom:16}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Logboek</div>
+          {p.log.map((r,i)=>(
+            <div key={i} style={{padding:"6px 0", borderBottom:`1px solid ${K.border}`, fontSize:12}}>
+              <span style={{color:K.muted}}>{r.d}</span> — <strong>{r.b}</strong><br/>{r.w}{r.c?<span style={{color:K.muted}}> · {r.c}</span>:null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{display:"flex", flexDirection:"column", gap:8}}>
+        <button style={{...S.btn, background:K.yellow, color:"#000", fontSize:14, padding:"14px"}} onClick={onNieuw}>
+          Nieuw project met deze gegevens →
+        </button>
+        <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text, fontSize:13}} onClick={onSluit}>
+          Alleen inzien — sluiten
+        </button>
+      </div>
+      <div style={{fontSize:10, color:K.muted, textAlign:"center", marginTop:10}}>
+        Er is niets opgeslagen of verzonden — dit paspoort komt uit de QR-code zelf.
+      </div>
+    </div>
+  );
+}
+
 // ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
 function StapMkp({ data, onChange, onNext, onBack }) {
   const m = data.mkp || {};
@@ -2355,7 +2440,8 @@ function StapMkp({ data, onChange, onNext, onBack }) {
   // groepen-stap (aardlekgroepen → eindgroepen), daarna vrij bewerkbaar.
   const EIND_NAAR_MKP = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
   useEffect(() => {
-    if (m.grp !== undefined) return;                    // al gevuld (of bewust leeg gemaakt)
+    const heeftEchteRijen = Array.isArray(m.grp) && m.grp.some(g=>g && g.t);
+    if (heeftEchteRijen) return;                        // al zinvol gevuld
     const uitGroepen = (data.aardlekgroepen||[]).flatMap(ag =>
       (ag.eindgroepen||[]).filter(e=>e.type).map(e => ({
         t: EIND_NAAR_MKP[e.type] || "ov",
@@ -2465,11 +2551,11 @@ function StapMkp({ data, onChange, onNext, onBack }) {
         <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Automatisch overgenomen uit de groepen-stap — vul aan met apparaten die níet via deze kast lopen (bijv. laadpaal op eigen aansluiting) en zet waar bekend het vermogen (kW) erbij.</div>
         {grp.map((g,i)=>(
           <div key={i} style={{display:"flex", gap:6, marginBottom:6, alignItems:"center"}}>
-            <select style={{...S.input, flex:2, padding:"8px", background:K.card, color:K.text, WebkitAppearance:"menulist"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
+            <select style={{flex:2, minWidth:0, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, colorScheme:"dark"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
               <option value="">— type —</option>
               {MKP_GRP_TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
             </select>
-            <input style={{...S.input, flex:1, padding:"8px"}} placeholder="kW" inputMode="decimal"
+            <input style={{flex:1, minWidth:0, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13}} placeholder="kW" inputMode="decimal"
               value={g.kw||""} onChange={e=>zetGrp(i,"kw",e.target.value)}/>
             <button style={{...S.btn, padding:"6px 10px", background:K.card, border:`1px solid ${K.border}`, color:K.red}}
               onClick={()=>zet("grp", grp.filter((_,j)=>j!==i))}>✕</button>
@@ -4698,20 +4784,10 @@ export default function App() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
-        {screen==="home" && mkpScan && (
-          <div style={{ margin:"12px 16px 0", padding:14, background:K.yellowDim, border:`1px solid ${K.yellow}66`, borderRadius:12 }}>
-            <div style={{fontWeight:800, fontSize:14, marginBottom:4}}>📱 Meterkastpaspoort gescand</div>
-            <div style={{fontSize:12, color:K.muted, marginBottom:4}}>{mkpSamenvatting(mkpScan)}</div>
-            <div style={{fontSize:11, color:K.muted, marginBottom:10}}>Opgave vorige installateur — controleer bij twijfel. Bron: QR-sticker (open standaard meterkastpaspoort.nl).</div>
-            <div style={{display:"flex", gap:8}}>
-              <button style={{...S.btn, flex:1, background:K.yellow, color:"#000", fontSize:13}} onClick={startMetPaspoort}>Nieuw project met deze gegevens →</button>
-              <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text, fontSize:13}} onClick={()=>setMkpScan(null)}>Sluiten</button>
-            </div>
-          </div>
-        )}
-        {screen==="home"   && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
-        {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
-        {screen==="job"    && (
+        {mkpScan && <MkpViewer p={mkpScan} onNieuw={startMetPaspoort} onSluit={()=>setMkpScan(null)}/>}
+        {!mkpScan && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
+        {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
+        {!mkpScan && screen==="job"    && (
           <div>
             <StepBar step={step} steps={stepLabels} onJump={(i) => {
               setStep(i);
