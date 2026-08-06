@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-06-D
+// YourWkb WkbApp.jsx — versie 2026-08-06-E
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -192,19 +192,32 @@ function mkpBouw(data) {
   const m = data.mkp || {};
   const p = { v: MKP_SPEC_VERSIE, d: new Date().toISOString().slice(0,10) };
   if (data.postcode)   p.pc = String(data.postcode).replace(/\s/g,"").toUpperCase();
-  if (data.huisnummer) p.nr = String(data.huisnummer);
+  if (data.huisnummer) p.nr = String(data.huisnummer) + (data.toevoeging ? " " + String(data.toevoeging) : "");
   if (m.ean && eanValide(m.ean)) p.ean = String(m.ean).replace(/\s/g,"");
   if (m.ean2 && eanValide(m.ean2)) p.ean2 = String(m.ean2).replace(/\s/g,"");
-  if (m.bj) p.bj = String(m.bj);
-  if (m.haF || m.haA) { p.ha = {}; if (m.haF) p.ha.f = toNum(m.haF); if (m.haA) p.ha.a = toNum(m.haA); }
+  const bjBron = data.bouwjaar || m.bj;
+  if (bjBron) p.bj = String(bjBron);
+  const instB = data.instMetingen || {};
+  const haF = instB.zDrieFase ? 3 : 1;
+  const haA = toNum(instB.hoofdzekering);
+  if (haA > 0) p.ha = { f: haF, a: haA }; else p.ha = { f: haF };
   if (m.kamMm2 || m.kamA) { p.kam = {}; if (m.kamMm2) p.kam.mm2 = toNum(m.kamMm2); if (m.kamA) p.kam.a = toNum(m.kamA); }
-  const grp = (m.grp||[]).filter(g => g.t).map(g => {
-    const r = { t:g.t, rol:g.rol || (g.t==="pv" ? "voed" : "af") };
-    if (g.kw) r.kw = toNum(g.kw);
-    if (g.f)  r.f  = toNum(g.f);
-    if (g.n)  r.n  = String(g.n).slice(0,40);
-    return r;
-  });
+  const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
+  const kwByIdB = m.kwById || {};
+  let grp = (data.aardlekgroepen||[]).flatMap(ag =>
+    (ag.eindgroepen||[]).map(e => {
+      const r = {
+        t: e.type ? (EIND_NAAR_MKP_B[e.type] || "ov") : "alg",
+        rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
+        f: ag.fase==="3" ? 3 : 1,
+      };
+      const kw = toNum(kwByIdB[e.id]);
+      if (kw > 0) r.kw = kw;
+      if (e.naam) r.n = String(e.naam).slice(0,40);
+      return r;
+    })
+  );
+  if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = data.mkpImport.grp;  // gescand paspoort zonder eigen groepen-stap
   if (grp.length) p.grp = grp;
   if (m.lbAan !== undefined) {
     p.lb = { aan: !!m.lbAan };
@@ -886,8 +899,12 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
             </div>
             <div style={{ flex:1 }}>
               <label style={S.label}>Huisnr.</label>
-              <input style={S.input} placeholder="12A" value={data.huisnummer||""}
-                onChange={e=>handleNr(e.target.value)}/>
+              <div style={{display:"flex",gap:6}}>
+                <input style={{...S.input,flex:2,minWidth:0}} placeholder="12" value={data.huisnummer||""}
+                  onChange={e=>handleNr(e.target.value)}/>
+                <input style={{...S.input,flex:1,minWidth:0}} placeholder="toev." value={data.toevoeging||""}
+                  onChange={e=>onChange("toevoeging",e.target.value)}/>
+              </div>
             </div>
           </div>
 
@@ -1270,6 +1287,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                       {EINDGROEP_TYPES.map(t=>(
                         <Pill key={t.id} small active={eg.type===t.id} onClick={()=>{
+                          if (eg.type===t.id) { updEind(ag.id,eg.id,"type",null); return; }  // nogmaals tikken = deselecteren
                           updEind(ag.id,eg.id,"type",t.id);
                           if (eg.naam===""||eg.naam==="Nieuwe eindgroep") updEind(ag.id,eg.id,"naam",t.label);
                         }}>{t.icon} {t.label}</Pill>
@@ -1280,8 +1298,10 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                       <MiniSelect value={eg.ampere} onChange={v=>updEind(ag.id,eg.id,"ampere",v)} options={GROEP_A} width={72}/>
                       {ag.eindgroepen.length>1 && (
                         <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:hoogstId===eg.id?K.yellow:K.muted,cursor:"pointer",marginLeft:"auto"}}>
-                          <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId===eg.id} onChange={()=>updAG(ag.id,"hoogstId",eg.id)}/>
-                          zwaarst belast in dit cluster
+                          <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId===eg.id}
+                            onClick={()=> ag.hoogstId===eg.id ? updAG(ag.id,"hoogstId",null) : updAG(ag.id,"hoogstId",eg.id)}
+                            onChange={()=>{}}/>
+                          zwaarst belast{ag.hoogstId===eg.id?" (tik = terug naar automatisch)":" in dit cluster"}
                         </label>
                       )}
                     </div>
@@ -1977,6 +1997,17 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
   };
   const gv = (agId, k) => veld[`${agId}_${k}`] || "";
 
+  // Fysica-check: de veldmeting zit vérder van de bron dan de kastmeting, dus de
+  // impedantie kan daar nooit LAGER zijn. Lager gemeten = meetfout of verwisselde
+  // waarden → rode vlag. Kleine meettolerantie van 5% om terechte twijfel te scheiden
+  // van instrumentruis.
+  const kastZ = { zln: toNum(instM.zln), zlpe: toNum(instM.zlpe) };
+  const veldLagerDanKast = (agId, k) => {
+    const veldW = toNum(gv(agId, k));
+    const kastW = kastZ[k];
+    return veldW > 0 && kastW > 0 && veldW < kastW * 0.95;
+  };
+
   const berekenLengte = (agId) => {
     const dikte = toNum(gv(agId,"dikte")) || 2.5;
     const zln = toNum(gv(agId,"zln"));
@@ -2040,7 +2071,10 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={80} placeholder="bijv. 1.2"/>
                         {gv(ag.id,"zln") && zMaxVeld && (
-                          <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld?"ok":"red"}/>
+                          <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld && !veldLagerDanKast(ag.id,"zln") ?"ok":"red"}/>
+                        )}
+                        {veldLagerDanKast(ag.id,"zln") && (
+                          <div style={{flexBasis:"100%",fontSize:11,color:K.red,marginTop:2}}>🚩 Lager dan de kastmeting ({kastZ.zln} Ω) — fysiek onmogelijk op grotere afstand van de bron. Controleer de meting of de ingevoerde waarden.</div>
                         )}
                       </div>
                       {lengteZln && (
@@ -2052,7 +2086,10 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={80} placeholder="bijv. 1.3"/>
                         {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
-                          <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe"))?"ok":"red"}/>
+                          <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe")) && !veldLagerDanKast(ag.id,"zlpe") ?"ok":"red"}/>
+                        )}
+                        {veldLagerDanKast(ag.id,"zlpe") && (
+                          <div style={{flexBasis:"100%",fontSize:11,color:K.red,marginTop:2}}>🚩 Lager dan de kastmeting ({kastZ.zlpe} Ω) — fysiek onmogelijk op grotere afstand van de bron. Controleer de meting of de ingevoerde waarden.</div>
                         )}
                       </div>
                       {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
@@ -2434,38 +2471,34 @@ function StapMkp({ data, onChange, onNext, onBack }) {
     ["alg","💡","Algemeen"],["kook","🍳","Koken"],["wp","🌡️","Warmtepomp"],["lp","🔌","Laadpaal"],
     ["pv","☀️","PV"],["bat","🔋","Batterij"],["ov","⚙️","Overig"],
   ];
-  const [typeOpen, setTypeOpen] = useState(null);       // welke rij toont de type-kiezer
-
-  // FIX 06-08-B: "wat hangt er aan de kast" niet opnieuw vragen — de eindgroepen
-  // zijn eerder in de app al ingevuld. Eenmalig automatisch overnemen uit de
-  // groepen-stap (aardlekgroepen → eindgroepen), daarna vrij bewerkbaar.
+  // FIX 06-08-E: het paspoort vraagt niet opnieuw wat de app al weet.
+  // Groepenlijst wordt LIVE afgeleid uit de groepen-stap (stap 6) — toevoegen of
+  // weghalen doe je daar; hier vul je alleen vermogens (kW) aan, bewaard per
+  // eindgroep-id zodat wijzigingen in stap 6 vanzelf doorwerken.
   const EIND_NAAR_MKP = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
-  useEffect(() => {
-    const heeftEchteRijen = Array.isArray(m.grp) && m.grp.some(g=>g && g.t);
-    if (heeftEchteRijen) return;                        // al zinvol gevuld
-    // ALLE eindgroepen overnemen — ook zonder snelkeuze-type (dan "algemene groep",
-    // de naam uit de groepen-stap reist mee zodat herkenbaar blijft wat het is).
-    const uitGroepen = (data.aardlekgroepen||[]).flatMap(ag =>
-      (ag.eindgroepen||[]).map(e => ({
-        t: e.type ? (EIND_NAAR_MKP[e.type] || "ov") : "alg",
-        rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
-        f: ag.fase==="3" ? "3" : "1",
-        n: (e.naam||"").slice(0,40),
-        kw: "",
-      }))
-    );
-    const uitImport = (data.mkpImport?.grp||[]).map(g=>({ t:g.t, rol:g.rol, kw:g.kw!==undefined?String(g.kw):"", f:g.f!==undefined?String(g.f):"", n:g.n||"" }));
-    zet("grp", uitGroepen.length ? uitGroepen : uitImport);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const grpLive = (data.aardlekgroepen||[]).flatMap(ag =>
+    (ag.eindgroepen||[]).map(e => ({
+      id: e.id,
+      t: e.type ? (EIND_NAAR_MKP[e.type] || "ov") : "alg",
+      rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
+      f: ag.fase==="3" ? "3" : "1",
+      n: (e.naam||"").slice(0,40),
+      ampere: e.ampere || "",
+    }))
+  );
+  const kwById = m.kwById || {};
+  const zetKw = (id,v) => zet("kwById", { ...kwById, [id]: v });
 
-  const grp = m.grp || [];
-  const zetGrp = (i,k,v) => { const n=[...grp]; n[i]={...n[i],[k]:v}; if(k==="t") n[i].rol = (v==="pv"||v==="bat")?"voed":"af"; zet("grp",n); };
+  // Hoofdaansluiting en bouwjaar komen uit eerdere stappen:
+  const instM_mkp = data.instMetingen || {};
+  const haF_app = instM_mkp.zDrieFase ? "3" : "1";
+  const haA_app = instM_mkp.hoofdzekering || "";
+  const bj_app  = data.bouwjaar || "";
 
   // Dubbele-balancer-detectie: laadpaal én batterij in de lijst, load balancing aan,
   // maar geen regisseur ingevuld → wie stuurt wie?
-  const heeftLp  = grp.some(g=>g.t==="lp");
-  const heeftBat = grp.some(g=>g.t==="bat");
+  const heeftLp  = grpLive.some(g=>g.t==="lp");
+  const heeftBat = grpLive.some(g=>g.t==="bat");
   const dubbeleBalancerRisico = m.lbAan && heeftLp && heeftBat && !(m.lbReg||"").trim();
 
   const eanIngevuld = (m.ean||"").replace(/\s/g,"");
@@ -2504,15 +2537,10 @@ function StapMkp({ data, onChange, onNext, onBack }) {
       )}
 
       <div style={{...S.card, marginBottom:12}}>
-        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Hoofdaansluiting</div>
-        <div style={{display:"flex", gap:8, marginBottom:8}}>
-          {[["1","1-fase"],["3","3-fase"]].map(([v,l]) =>
-            <button key={v} style={knopStijl(m.haF===v)} onClick={()=>zet("haF",v)}>{l}</button>)}
-        </div>
-        <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-          {["25","35","40","50","63"].map(a =>
-            <button key={a} style={{...knopStijl(m.haA===a), flex:"0 0 auto", minWidth:56}} onClick={()=>zet("haA",a)}>{a} A</button>)}
-        </div>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Uit de app overgenomen</div>
+        <div style={{fontSize:13}}>Hoofdaansluiting: <strong>{haF_app}-fase{haA_app?` × ${haA_app} A`:""}</strong>{!haA_app && <span style={{color:K.orange}}> — hoofdzekering nog niet ingevuld (stap 7)</span>}</div>
+        <div style={{fontSize:13, marginTop:4}}>Bouwjaar kast: {bj_app ? <strong>{bj_app}</strong> : <span style={{color:K.orange}}>nog niet ingevuld (stap 3 · Apparatuur)</span>}</div>
+        <div style={{fontSize:11, color:K.muted, marginTop:6}}>Aanpassen doe je in de betreffende stap — het paspoort neemt het automatisch over.</div>
       </div>
 
       <div style={{...S.card, marginBottom:12}}>
@@ -2526,13 +2554,6 @@ function StapMkp({ data, onChange, onNext, onBack }) {
       </div>
 
       <div style={{...S.card, marginBottom:12}}>
-        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Bouwjaar / aanlegperiode kast</div>
-        <input style={{...S.input, width:"100%"}} placeholder='bijv. 1998 of "±1990" (schatting mag)'
-          value={m.bj||""} onChange={e=>zet("bj",e.target.value)}/>
-        <div style={{fontSize:11, color:K.muted, marginTop:6}}>Bepaalt het normregime van aanleg (rechtens verkregen niveau) — nuttig voor elke volgende monteur.</div>
-      </div>
-
-      <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>EAN-code aansluiting <span style={{fontWeight:400, color:K.muted}}>(optioneel)</span></div>
         <div style={{fontSize:11, color:K.muted, marginBottom:8}}>De unieke code van de netaansluiting (18 cijfers, staat op de energierekening). Nodig voor o.a. de netbeheerder-melding bij PV/batterij.</div>
         <input style={{...S.input, width:"100%", borderColor: eanStatus==="fout" ? K.red : eanStatus==="ok" ? K.green : K.border}}
@@ -2540,54 +2561,44 @@ function StapMkp({ data, onChange, onNext, onBack }) {
         {eanStatus==="fout" && <div style={{fontSize:11, color:K.red, marginTop:4}}>Geen geldige EAN (18 cijfers, begint met 87, controlecijfer klopt niet).</div>}
         {eanStatus==="ok"   && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ Geldige EAN-code</div>}
         <button style={{...S.btn, marginTop:8, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
-          onClick={async()=>{
-            try { await navigator.clipboard.writeText(`${(data.postcode||"").replace(/\s/g,"")} ${data.huisnummer||""}`.trim()); setEanHint(true); } catch {}
+          onClick={()=>{
+            // iOS: window.open en kopiëren moeten SYNCHROON in de tik-actie gebeuren —
+            // na een await ziet Safari het niet meer als gebruikersactie en blokkeert beide.
+            const tekst = `${(data.postcode||"").replace(/\s/g,"")} ${[data.huisnummer,data.toevoeging].filter(Boolean).join(" ")}`.trim();
+            let ok = false;
+            try {
+              const ta = document.createElement("textarea");
+              ta.value = tekst; ta.style.position = "fixed"; ta.style.opacity = "0";
+              document.body.appendChild(ta); ta.focus(); ta.select();
+              ok = document.execCommand("copy");
+              document.body.removeChild(ta);
+            } catch {}
+            if (!ok && navigator.clipboard?.writeText) navigator.clipboard.writeText(tekst).catch(()=>{});
+            setEanHint(true);
             window.open("https://www.eancodeboek.nl","_blank");
           }}>
           🔎 Zoek op in het EAN-codeboek
         </button>
-        {eanHint && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ {(data.postcode||"")+" "+(data.huisnummer||"")} staat op je klembord — plak in het zoekveld van het codeboek en kopieer de EAN hierheen.</div>}
+        {eanHint && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ {[(data.postcode||""),data.huisnummer,data.toevoeging].filter(Boolean).join(" ")} staat op je klembord — plak in het zoekveld van het codeboek en zet de EAN hierboven.</div>}
       </div>
 
       <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Wat hangt er op de kast</div>
-        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Automatisch overgenomen uit de groepen-stap — vul aan met apparaten die níet via deze kast lopen (bijv. laadpaal op eigen aansluiting) en zet waar bekend het vermogen (kW) erbij.</div>
-        {grp.map((g,i)=>{
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Live overgenomen uit de groepen-stap (stap 6) — groepen toevoegen of weghalen doe je dáár. Vul hier waar bekend het vermogen (kW) aan; dat komt in het paspoort en voedt straks de belastingcheck.</div>
+        {grpLive.length===0 && <div style={{fontSize:12, color:K.orange}}>Nog geen groepen — vul eerst stap 6 (Groepen) in.</div>}
+        {grpLive.map(g=>{
           const gekozen = MKP_GRP_TYPES.find(([v])=>v===g.t);
           return (
-          <div key={i} style={{border:`1px solid ${K.border}`, borderRadius:10, padding:8, marginBottom:8, background:K.surface}}>
-            <div style={{display:"flex", gap:6, alignItems:"center"}}>
-              <button
-                style={{flex:1, minWidth:0, textAlign:"left", padding:"10px 10px", background:K.card, color:K.text,
-                        border:`1px solid ${typeOpen===i?K.yellow:K.border}`, borderRadius:8, fontSize:13,
-                        fontFamily:"inherit", cursor:"pointer", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}
-                onClick={()=>setTypeOpen(typeOpen===i?null:i)}>
-                {gekozen ? `${gekozen[1]} ${gekozen[2]}` : "— kies type —"}{g.n ? ` · ${g.n}` : ""}
-                {g.rol==="voed" ? " ↩︎" : ""}
-              </button>
-              <input style={{width:64, padding:"10px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
-                placeholder="kW" inputMode="decimal"
-                value={g.kw||""} onChange={e=>zetGrp(i,"kw",e.target.value)}/>
-              <button style={{padding:"8px 10px", background:"transparent", border:"none", color:K.red, fontSize:16, cursor:"pointer"}}
-                onClick={()=>{ setTypeOpen(null); zet("grp", grp.filter((_,j)=>j!==i)); }}>✕</button>
+          <div key={g.id} style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
+            <div style={{flex:1, minWidth:0, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+              {gekozen?gekozen[1]:"💡"} {g.n || (gekozen?gekozen[2]:"Groep")}
+              <span style={{color:K.muted, fontSize:11}}> · {g.ampere||""}{g.rol==="voed"?" · ↩︎ voedend":""}</span>
             </div>
-            {typeOpen===i && (
-              <div style={{display:"flex", flexWrap:"wrap", gap:6, marginTop:8}}>
-                {MKP_GRP_TYPES.map(([v,ic,l])=>(
-                  <button key={v}
-                    style={{padding:"8px 10px", borderRadius:8, fontSize:12, cursor:"pointer", fontFamily:"inherit",
-                            background: g.t===v ? K.yellow : K.card, color: g.t===v ? "#000" : K.text,
-                            border:`1px solid ${g.t===v ? K.yellow : K.border}`, fontWeight: g.t===v ? 700 : 400}}
-                    onClick={()=>{ zetGrp(i,"t",v); setTypeOpen(null); }}>
-                    {ic} {l}
-                  </button>
-                ))}
-              </div>
-            )}
+            <input style={{width:64, padding:"9px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
+              placeholder="kW" inputMode="decimal"
+              value={kwById[g.id]||""} onChange={e=>zetKw(g.id, e.target.value)}/>
           </div>
         );})}
-        <button style={{...S.btn, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
-          onClick={()=>zet("grp",[...grp,{}])}>+ Apparaat/groep toevoegen</button>
       </div>
 
       <div style={{...S.card, marginBottom:12}}>
@@ -2602,8 +2613,11 @@ function StapMkp({ data, onChange, onNext, onBack }) {
             <button style={knopStijl(m.lbTyp==="dyn")}  onClick={()=>zet("lbTyp","dyn")}>Dynamisch (P1/meting)</button>
           </div>
           <div style={{display:"flex", gap:8}}>
-            <input style={{...S.input, flex:1}} placeholder="Grenswaarde (A)" inputMode="decimal"
-              value={m.lbMax||""} onChange={e=>zet("lbMax",e.target.value)}/>
+            <div style={{flex:1, display:"flex", alignItems:"center", gap:4}}>
+              <input style={{...S.input, flex:1, minWidth:0}} placeholder="Grenswaarde" inputMode="decimal"
+                value={m.lbMax||""} onChange={e=>zet("lbMax",e.target.value)}/>
+              <span style={{fontSize:13, color:K.muted, fontWeight:700}}>A</span>
+            </div>
             <input style={{...S.input, flex:2}} placeholder="Regisseur (bijv. evcc, HEMS, laadpaal intern)"
               value={m.lbReg||""} onChange={e=>zet("lbReg",e.target.value)}/>
           </div>
@@ -2943,7 +2957,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table>
           <tr><td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td>
               <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td></tr>
-          <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||"—"}</td></tr>
+          <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||`${aardlekgroepen.reduce((t,ag)=>t+(ag.eindgroepen||[]).length,0)}× — zie groepenoverzicht (merk/serie niet ingevuld in stap 5)`}</td></tr>
           <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${ag.naam}: geen RCD`:`${ag.naam}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
         </table>
         <h2>Meetgegevens installatie (AC)</h2>
@@ -3500,7 +3514,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <div style={{display:"flex",gap:20}}>
             {discipline==="groepenkast" && <>
               <div><div style={{fontSize:20,fontWeight:800}}>{aardlekgroepen.length}</div><div style={{fontSize:11,color:K.muted}}>Aardlekgroepen</div></div>
-              <div><div style={{fontSize:20,fontWeight:800}}>{automaten.reduce((s,a)=>s+a.aantal,0)}</div><div style={{fontSize:11,color:K.muted}}>Automaten</div></div>
+              <div><div style={{fontSize:20,fontWeight:800}}>{(data.automaten||[]).reduce((s,a)=>s+a.aantal,0) || aardlekgroepen.reduce((s,ag)=>s+(ag.eindgroepen||[]).length,0)}</div><div style={{fontSize:11,color:K.muted}}>Automaten</div></div>
             </>}
             {discipline==="cv" && <>
               <div><div style={{fontSize:20,fontWeight:800}}>{data.ketelFab||"—"}</div><div style={{fontSize:11,color:K.muted}}>Fabrikant</div></div>
