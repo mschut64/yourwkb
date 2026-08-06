@@ -24,7 +24,16 @@
 //    per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import QRCode from "qrcode";
 import { trackEvent } from "./analytics";
+// 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
+//   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
+//   bouwjaar, EAN met GS1-check + eancodeboek.nl-knop, load balancing incl.
+//   dubbele-balancer-waarschuwing, groepenlijst, logboek), QR-generatie
+//   (JSON→deflate-raw→base64url in URL-fragment), uitknipbare stickerpagina in
+//   rapport-PDF, inlezen gescand paspoort via #fragment bij app-start,
+//   norm-editie- en scope-voetnoot in conformverklaring (NORM_EDITIE_VOETNOOT).
+//   Vereist dependency "qrcode" in package.json.
 
 // Robuuste numerieke parser — accepteert zowel komma als punt als decimaalteken.
 // Zonder deze fix leest parseFloat("1,9") als 1 (stopt bij de komma) — dat veroorzaakte
@@ -117,6 +126,114 @@ function ggIaVoorTijd(ampere, tijd) {
   const rij = GG_TABEL[dichtstbij];
   if (!rij || rij[tijd] === undefined) return null;
   return { ia: rij[tijd], inGebruikt: dichtstbij };
+}
+
+// ─── MKP: OPEN METERKASTPASPOORT (spec v0.1 — meterkastpaspoort.nl) ──────────
+// Het paspoort is een JSON-object conform de open specificatie, gecomprimeerd
+// (deflate-raw) en base64url-gecodeerd in het URL-fragment achter /p#.
+// Fragmenten gaan nooit naar een server: privacy door architectuur.
+const MKP_BASIS = "https://meterkastpaspoort.nl/p#";
+const MKP_SPEC_VERSIE = 1;
+
+// Norm-editie: één plek. NEN 1010:2020 is nog niet aangewezen in de
+// Omgevingsregeling (daar staat 2015); toepassing van een nieuwere editie is
+// toegestaan. Zodra de aanwijzing rond is: alleen deze voetnoot aanpassen.
+const NORM_EDITIE_VOETNOOT = "Getoetst aan NEN 1010:2020. In de Omgevingsregeling is momenteel NEN 1010:2015 aangewezen; toepassing van een nieuwere editie is toegestaan — het veiligheidsniveau ligt daarmee ten minste op het wettelijk aangewezen niveau.";
+const SCOPE_VOETNOOT = "De uitgevoerde werkzaamheden zijn getoetst aan de actuele editie van NEN 1010. De bestaande installatie is beoordeeld op veiligheid en op samenhang met de uitgevoerde werkzaamheden; voor het overige geldt het rechtens verkregen niveau (de normeditie ten tijde van aanleg).";
+
+// EAN-18 validatie: 18 cijfers, NL begint met 87, laatste cijfer = GS1
+// modulo-10-controlecijfer (afwisselend ×3/×1 vanaf rechts, aanvullen tot tiental).
+// Let op: dit is dus géén elfproef (die was van oude bankrekeningnummers).
+const eanValide = (ean) => {
+  const s = String(ean||"").replace(/\s/g,"");
+  if (!/^\d{18}$/.test(s)) return false;
+  if (!s.startsWith("87")) return false;
+  let som = 0;
+  for (let i = 0; i < 17; i++) {
+    const cijfer = s.charCodeAt(16 - i) - 48;      // van rechts naar links, excl. controlecijfer
+    som += cijfer * (i % 2 === 0 ? 3 : 1);
+  }
+  const controle = (10 - (som % 10)) % 10;
+  return controle === (s.charCodeAt(17) - 48);
+};
+
+// bytes ⇄ base64url
+const _b64urlEnc = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const _b64urlDec = (s) => {
+  const b64 = s.replace(/-/g,"+").replace(/_/g,"/") + "===".slice((s.length + 3) % 4);
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+};
+
+// JSON → deflate-raw → base64url (CompressionStream: standaard browser-API,
+// iOS 16.4+/Chrome 103+ — ruim gedekt op monteurstelefoons).
+async function mkpEncode(obj) {
+  const bron = new TextEncoder().encode(JSON.stringify(obj));
+  const cs = new CompressionStream("deflate-raw");
+  const gecomprimeerd = new Uint8Array(await new Response(
+    new Blob([bron]).stream().pipeThrough(cs)
+  ).arrayBuffer());
+  return _b64urlEnc(gecomprimeerd);
+}
+
+async function mkpDecode(frag) {
+  const bytes = _b64urlDec(String(frag||"").trim());
+  const ds = new DecompressionStream("deflate-raw");
+  const json = await new Response(
+    new Blob([bytes]).stream().pipeThrough(ds)
+  ).text();
+  const obj = JSON.parse(json);
+  if (!obj || typeof obj.v !== "number") throw new Error("geen geldig meterkastpaspoort");
+  return obj;
+}
+
+// Bouwt het paspoort-object uit de app-data conform spec v0.1.
+// Onbekende/lege velden worden weggelaten om de QR compact te houden.
+function mkpBouw(data) {
+  const m = data.mkp || {};
+  const p = { v: MKP_SPEC_VERSIE, d: new Date().toISOString().slice(0,10) };
+  if (data.postcode)   p.pc = String(data.postcode).replace(/\s/g,"").toUpperCase();
+  if (data.huisnummer) p.nr = String(data.huisnummer);
+  if (m.ean && eanValide(m.ean)) p.ean = String(m.ean).replace(/\s/g,"");
+  if (m.ean2 && eanValide(m.ean2)) p.ean2 = String(m.ean2).replace(/\s/g,"");
+  if (m.bj) p.bj = String(m.bj);
+  if (m.haF || m.haA) { p.ha = {}; if (m.haF) p.ha.f = toNum(m.haF); if (m.haA) p.ha.a = toNum(m.haA); }
+  if (m.kamMm2 || m.kamA) { p.kam = {}; if (m.kamMm2) p.kam.mm2 = toNum(m.kamMm2); if (m.kamA) p.kam.a = toNum(m.kamA); }
+  const grp = (m.grp||[]).filter(g => g.t).map(g => {
+    const r = { t:g.t, rol:g.rol || (g.t==="pv" ? "voed" : "af") };
+    if (g.kw) r.kw = toNum(g.kw);
+    if (g.f)  r.f  = toNum(g.f);
+    if (g.n)  r.n  = String(g.n).slice(0,40);
+    return r;
+  });
+  if (grp.length) p.grp = grp;
+  if (m.lbAan !== undefined) {
+    p.lb = { aan: !!m.lbAan };
+    if (m.lbAan) {
+      if (m.lbTyp) p.lb.typ = m.lbTyp;
+      if (m.lbMax) p.lb.max = toNum(m.lbMax);
+      if (m.lbReg) p.lb.reg = String(m.lbReg).slice(0,40);
+    }
+  }
+  // Logboek: nieuwe regel bovenaan, geïmporteerde historie eronder, max 8 regels.
+  const nieuweRegel = {
+    d: p.d,
+    b: (data.instBedrijf || data.instNaam || "installateur").slice(0,40),
+    w: (m.logOmschrijving || data.typeWerk || "werkzaamheden meterkast").slice(0,60),
+  };
+  const oudeLog = Array.isArray(data.mkpImport?.log) ? data.mkpImport.log : [];
+  p.log = [nieuweRegel, ...oudeLog].slice(0,8);
+  return p;
+}
+
+// Korte leesbare samenvatting van een (gescand) paspoort voor de UI.
+function mkpSamenvatting(p) {
+  const delen = [];
+  if (p.pc || p.nr) delen.push(`${p.pc||""} ${p.nr||""}`.trim());
+  if (p.ha) delen.push(`${p.ha.f||"?"}×${p.ha.a||"?"}A`);
+  if (p.kam) delen.push(`kam ${p.kam.a||"?"}A`);
+  if (p.bj) delen.push(`aanleg ${p.bj}`);
+  if (p.log?.[0]) delen.push(`laatst: ${p.log[0].b} (${p.log[0].d})`);
+  return delen.join(" · ") || "meterkastpaspoort";
 }
 
 // Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
@@ -2216,6 +2333,178 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 
 // ─── GEDEELDE VERSTUUR STAP ───────────────────────────────────────────────────
 
+// ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
+function StapMkp({ data, onChange, onNext, onBack }) {
+  const m = data.mkp || {};
+  const zet = (k,v) => onChange("mkp", { ...m, [k]: v });
+  const [bezig, setBezig] = useState(false);
+  const [fout, setFout]   = useState("");
+
+  const MKP_GRP_TYPES = [
+    ["alg","Algemene groep"],["kook","Koken"],["wp","Warmtepomp"],["lp","Laadpaal"],
+    ["pv","PV-omvormer"],["bat","Thuisbatterij"],["ov","Overig"],
+  ];
+  const grp = m.grp || [];
+  const zetGrp = (i,k,v) => { const n=[...grp]; n[i]={...n[i],[k]:v}; if(k==="t") n[i].rol = (v==="pv")?"voed":(v==="bat")?n[i].rol||"voed":"af"; zet("grp",n); };
+
+  // Dubbele-balancer-detectie: laadpaal én batterij in de lijst, load balancing aan,
+  // maar geen regisseur ingevuld → wie stuurt wie?
+  const heeftLp  = grp.some(g=>g.t==="lp");
+  const heeftBat = grp.some(g=>g.t==="bat");
+  const dubbeleBalancerRisico = m.lbAan && heeftLp && heeftBat && !(m.lbReg||"").trim();
+
+  const eanIngevuld = (m.ean||"").replace(/\s/g,"");
+  const eanStatus = !eanIngevuld ? null : eanValide(eanIngevuld) ? "ok" : "fout";
+
+  const volgende = async () => {
+    setBezig(true); setFout("");
+    try {
+      const paspoort = mkpBouw(data);
+      const url = MKP_BASIS + await mkpEncode(paspoort);
+      const qr  = await QRCode.toDataURL(url, { errorCorrectionLevel:"M", margin:1, width:480, color:{ dark:"#000000", light:"#FFFFFF" } });
+      onChange("mkpUrl", url);
+      onChange("mkpQr", qr);
+      onNext();
+    } catch(e) {
+      setFout("QR-generatie mislukt: " + (e?.message||e));
+    } finally { setBezig(false); }
+  };
+
+  const knopStijl = (actief) => ({ ...S.btn, flex:1, padding:"10px 6px", fontSize:13,
+    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
+    border: `1px solid ${actief ? K.yellow : K.border}` });
+
+  return (
+    <div style={{padding:16}}>
+      <h2 style={S.h2}>Meterkastpaspoort</h2>
+      <p style={{fontSize:13,color:K.muted,marginBottom:14}}>
+        Deze gegevens komen als QR-sticker op de kastdeur én als uitknippagina in het rapport.
+        De data zit in de QR zelf — er wordt niets centraal opgeslagen. Open standaard: meterkastpaspoort.nl.
+      </p>
+
+      {data.mkpImport && (
+        <div style={{...S.card, background:K.yellowDim, border:`1px solid ${K.yellow}55`, marginBottom:12, fontSize:12}}>
+          📥 Vooringevuld vanuit gescand paspoort — <strong>opgave vorige installateur, controleer bij twijfel.</strong>
+        </div>
+      )}
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Hoofdaansluiting</div>
+        <div style={{display:"flex", gap:8, marginBottom:8}}>
+          {[["1","1-fase"],["3","3-fase"]].map(([v,l]) =>
+            <button key={v} style={knopStijl(m.haF===v)} onClick={()=>zet("haF",v)}>{l}</button>)}
+        </div>
+        <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+          {["25","35","40","50","63"].map(a =>
+            <button key={a} style={{...knopStijl(m.haA===a), flex:"0 0 auto", minWidth:56}} onClick={()=>zet("haA",a)}>{a} A</button>)}
+        </div>
+      </div>
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Kam / ontwerpstroom verdeler</div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>De som van voedende groepen (PV, batterij) waar ze op de kam cumuleren mag deze waarde niet overschrijden.</div>
+        <div style={{display:"flex", gap:8}}>
+          <button style={knopStijl(m.kamMm2==="10")} onClick={()=>{zet("kamMm2","10"); zet("kamA","40");}}>10 mm² · 40 A</button>
+          <button style={knopStijl(m.kamMm2==="16")} onClick={()=>{zet("kamMm2","16"); zet("kamA","63");}}>16 mm² · 63 A</button>
+          <button style={knopStijl(m.kamMm2==="?")}  onClick={()=>{zet("kamMm2","?");  zet("kamA","40");}}>Onbekend → 40 A</button>
+        </div>
+      </div>
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Bouwjaar / aanlegperiode kast</div>
+        <input style={{...S.input, width:"100%"}} placeholder='bijv. 1998 of "±1990" (schatting mag)'
+          value={m.bj||""} onChange={e=>zet("bj",e.target.value)}/>
+        <div style={{fontSize:11, color:K.muted, marginTop:6}}>Bepaalt het normregime van aanleg (rechtens verkregen niveau) — nuttig voor elke volgende monteur.</div>
+      </div>
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>EAN-code aansluiting <span style={{fontWeight:400, color:K.muted}}>(optioneel)</span></div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>De unieke code van de netaansluiting (18 cijfers, staat op de energierekening). Nodig voor o.a. de netbeheerder-melding bij PV/batterij.</div>
+        <input style={{...S.input, width:"100%", borderColor: eanStatus==="fout" ? K.red : eanStatus==="ok" ? K.green : K.border}}
+          placeholder="87…" inputMode="numeric" value={m.ean||""} onChange={e=>zet("ean",e.target.value)}/>
+        {eanStatus==="fout" && <div style={{fontSize:11, color:K.red, marginTop:4}}>Geen geldige EAN (18 cijfers, begint met 87, controlecijfer klopt niet).</div>}
+        {eanStatus==="ok"   && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ Geldige EAN-code</div>}
+        <button style={{...S.btn, marginTop:8, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
+          onClick={()=>window.open(`https://www.eancodeboek.nl`,"_blank")}>
+          🔎 Zoek op in het EAN-codeboek (postcode {data.postcode||"…"}, nr {data.huisnummer||"…"})
+        </button>
+      </div>
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Wat hangt er op de kast</div>
+        {grp.map((g,i)=>(
+          <div key={i} style={{display:"flex", gap:6, marginBottom:6, alignItems:"center"}}>
+            <select style={{...S.input, flex:2, padding:"8px"}} value={g.t||""} onChange={e=>zetGrp(i,"t",e.target.value)}>
+              <option value="">— type —</option>
+              {MKP_GRP_TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+            <input style={{...S.input, flex:1, padding:"8px"}} placeholder="kW" inputMode="decimal"
+              value={g.kw||""} onChange={e=>zetGrp(i,"kw",e.target.value)}/>
+            <button style={{...S.btn, padding:"6px 10px", background:K.card, border:`1px solid ${K.border}`, color:K.red}}
+              onClick={()=>zet("grp", grp.filter((_,j)=>j!==i))}>✕</button>
+          </div>
+        ))}
+        <button style={{...S.btn, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
+          onClick={()=>zet("grp",[...grp,{}])}>+ Apparaat/groep toevoegen</button>
+      </div>
+
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Load balancing / vermogenssturing</div>
+        <div style={{display:"flex", gap:8, marginBottom:8}}>
+          <button style={knopStijl(m.lbAan===true)}  onClick={()=>zet("lbAan",true)}>Aanwezig</button>
+          <button style={knopStijl(m.lbAan===false)} onClick={()=>zet("lbAan",false)}>Niet aanwezig</button>
+        </div>
+        {m.lbAan && (<>
+          <div style={{display:"flex", gap:8, marginBottom:8}}>
+            <button style={knopStijl(m.lbTyp==="stat")} onClick={()=>zet("lbTyp","stat")}>Statisch (vaste grens)</button>
+            <button style={knopStijl(m.lbTyp==="dyn")}  onClick={()=>zet("lbTyp","dyn")}>Dynamisch (P1/meting)</button>
+          </div>
+          <div style={{display:"flex", gap:8}}>
+            <input style={{...S.input, flex:1}} placeholder="Grenswaarde (A)" inputMode="decimal"
+              value={m.lbMax||""} onChange={e=>zet("lbMax",e.target.value)}/>
+            <input style={{...S.input, flex:2}} placeholder="Regisseur (bijv. evcc, HEMS, laadpaal intern)"
+              value={m.lbReg||""} onChange={e=>zet("lbReg",e.target.value)}/>
+          </div>
+          {dubbeleBalancerRisico && (
+            <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange}66`, marginTop:8, marginBottom:0, fontSize:12}}>
+              ⚠️ <strong>Laadpaal én thuisbatterij aanwezig, maar geen regisseur ingevuld.</strong> Twee
+              onafhankelijke begrenzers weten niets van elkaar en kunnen samen alsnog de aansluiting of
+              kam overbelasten. Vul in wélk systeem de regie voert, of leg vast dat sturing ontbreekt.
+            </div>
+          )}
+          <div style={{fontSize:11, color:K.muted, marginTop:8}}>
+            Load balancing is een software-instelling, geen veiligheidsmaatregel — de installatie moet ook bij falende sturing veilig zijn.
+          </div>
+        </>)}
+        {m.lbAan===false && (
+          <div style={{fontSize:11, color:K.muted}}>Zonder gezamenlijke sturing rekent de belastingcheck (volgt) conservatief met gelijktijdigheidsfactor 0,6 over de grote verbruikers (richtlijn NEN-EN-IEC 61439).</div>
+        )}
+      </div>
+
+      <div style={{...S.card, marginBottom:16}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:8}}>Logboekregel voor deze klus</div>
+        <input style={{...S.input, width:"100%"}} placeholder={data.typeWerk||"Omschrijving werkzaamheden"}
+          value={m.logOmschrijving||""} onChange={e=>zet("logOmschrijving",e.target.value)}/>
+        {Array.isArray(data.mkpImport?.log) && data.mkpImport.log.length>0 && (
+          <div style={{fontSize:11, color:K.muted, marginTop:8}}>
+            Historie (uit gescand paspoort):<br/>
+            {data.mkpImport.log.slice(0,5).map((r,i)=><span key={i}>• {r.d} — {r.b}: {r.w}<br/></span>)}
+          </div>
+        )}
+      </div>
+
+      {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red}66`, marginBottom:12, fontSize:12}}>{fout}</div>}
+
+      <div style={{display:"flex", gap:10}}>
+        <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={onBack}>← Terug</button>
+        <button style={{...S.btn, flex:1, background:K.yellow, color:"#000"}} disabled={bezig} onClick={volgende}>
+          {bezig ? "QR genereren…" : "Paspoort-QR maken & verder →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   const [status, setStatus] = useState("idle");
   const [pdfHtml, setPdfHtml] = useState("");
@@ -2441,7 +2730,35 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       </div>
       <div class="sign" style="margin-top:16px">
         <span>Handtekening (optioneel): <span class="sign-line" style="width:250px"></span></span>
+      </div>
+      <p style="font-size:8px;color:#666;margin-top:10px">${NORM_EDITIE_VOETNOOT}</p>
+      <p style="font-size:8px;color:#666;margin-top:4px">${SCOPE_VOETNOOT}</p>
+      ${stickerHtml()}`;
+
+    // ── MKP: uitknipbare QR-stickerpagina (alleen als er een paspoort-QR is) ──
+    const stickerHtml = () => {
+      if (!data.mkpQr) return "";
+      const adres = [data.postcode, data.huisnummer].filter(Boolean).join(" ") || "";
+      return `
+      <div style="page-break-before:always; padding-top:20px">
+        <h2>Meterkastpaspoort — sticker voor op de kastdeur</h2>
+        <p style="font-size:9px;margin-bottom:10px">
+          Knip de sticker uit langs de stippellijn en plak hem aan de <strong>binnenzijde van de meterkastdeur</strong>.
+          Elke volgende installateur scant de QR-code met de telefooncamera en ziet direct wat er op deze kast hangt.
+          De gegevens zitten in de code zelf — er is geen centrale opslag. Open standaard: meterkastpaspoort.nl.
+        </p>
+        <div style="border:2px dashed #999; border-radius:8px; width:260px; padding:14px; text-align:center; margin:0 auto">
+          <div style="font-weight:bold; font-size:12px; letter-spacing:0.5px">⚡ METERKASTPASPOORT</div>
+          <div style="font-size:8px; color:#555; margin-bottom:6px">${adres}</div>
+          <img src="${data.mkpQr}" style="width:200px; height:200px" alt="Meterkastpaspoort QR"/>
+          <div style="font-size:8px; color:#555; margin-top:6px">Scan met je telefooncamera · bijgewerkt ${datum}</div>
+          <div style="font-size:7px; color:#888; margin-top:2px">meterkastpaspoort.nl — open standaard · gemaakt met YourWkb</div>
+        </div>
+        <p style="font-size:8px; color:#666; margin-top:10px; text-align:center">
+          Tip: geen printer bij de hand? De QR staat ook in de app — laat de klant hem fotograferen, of bestel voorbedrukte stickers.
+        </p>
       </div>`;
+    };
 
     let html = "";
 
@@ -4161,6 +4478,46 @@ export default function App() {
   const [job,        setJob]        = useState({});
   const [actiefId,   setActiefId]   = useState(null);
   const [idbKlaar,   setIdbKlaar]   = useState(false);
+  const [mkpScan,    setMkpScan]    = useState(null);
+
+  // MKP: gescand meterkastpaspoort inlezen. De QR op de kastdeur codeert
+  // meterkastpaspoort.nl/p#<data>; die redirect komt hier binnen met het
+  // datafragment intact. Decoderen, tonen, en de URL schoonmaken.
+  useEffect(() => {
+    (async () => {
+      const frag = typeof window !== "undefined" ? window.location.hash : "";
+      if (!frag || frag.length < 20) return;
+      try {
+        const p = await mkpDecode(frag.slice(1));
+        setMkpScan(p);
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        trackEvent("mkp_gescand", { velden: Object.keys(p).length });
+      } catch { /* geen (geldig) paspoort-fragment — stil negeren */ }
+    })();
+  }, []);
+
+  // Start een nieuw project vooringevuld met een gescand paspoort.
+  const startMetPaspoort = () => {
+    const p = mkpScan; if (!p) return;
+    const nieuwId = "p" + Date.now();
+    setActiefId(nieuwId);
+    try { localStorage.setItem(ACTIEF_KEY, nieuwId); } catch {}
+    setJob({
+      postcode: p.pc || "", huisnummer: p.nr || "",
+      mkpImport: p,
+      mkp: {
+        bj: p.bj || "", ean: p.ean || "", ean2: p.ean2 || "",
+        haF: p.ha?.f ? String(p.ha.f) : "", haA: p.ha?.a ? String(p.ha.a) : "",
+        kamMm2: p.kam?.mm2 ? String(p.kam.mm2) : "", kamA: p.kam?.a ? String(p.kam.a) : "",
+        grp: (p.grp||[]).map(g=>({ t:g.t, rol:g.rol, kw:g.kw!==undefined?String(g.kw):"", f:g.f!==undefined?String(g.f):"", n:g.n||"" })),
+        lbAan: p.lb ? !!p.lb.aan : undefined,
+        lbTyp: p.lb?.typ || "", lbMax: p.lb?.max!==undefined ? String(p.lb.max) : "", lbReg: p.lb?.reg || "",
+      },
+    });
+    setStep(0);
+    setMkpScan(null);
+    setScreen("kiezen");
+  };
 
   // Initialiseer IndexedDB-cache bij app-start (eenmalig).
   // Doet ook automatisch migratie van localStorage → IndexedDB.
@@ -4250,7 +4607,7 @@ export default function App() {
   };
 
   // Stappen per discipline
-  const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Veldmeting","Foto's (nieuw)","Versturen"];
+  const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Veldmeting","Foto's (nieuw)","Paspoort","Versturen"];
   const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
 
   const gkScreens = [
@@ -4263,6 +4620,7 @@ export default function App() {
     <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapVeldmeting  key="veldmeting" data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={GK_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
@@ -4309,6 +4667,17 @@ export default function App() {
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
+        {screen==="home" && mkpScan && (
+          <div style={{ margin:"12px 16px 0", padding:14, background:K.yellowDim, border:`1px solid ${K.yellow}66`, borderRadius:12 }}>
+            <div style={{fontWeight:800, fontSize:14, marginBottom:4}}>📱 Meterkastpaspoort gescand</div>
+            <div style={{fontSize:12, color:K.muted, marginBottom:4}}>{mkpSamenvatting(mkpScan)}</div>
+            <div style={{fontSize:11, color:K.muted, marginBottom:10}}>Opgave vorige installateur — controleer bij twijfel. Bron: QR-sticker (open standaard meterkastpaspoort.nl).</div>
+            <div style={{display:"flex", gap:8}}>
+              <button style={{...S.btn, flex:1, background:K.yellow, color:"#000", fontSize:13}} onClick={startMetPaspoort}>Nieuw project met deze gegevens →</button>
+              <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text, fontSize:13}} onClick={()=>setMkpScan(null)}>Sluiten</button>
+            </div>
+          </div>
+        )}
         {screen==="home"   && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {screen==="job"    && (
