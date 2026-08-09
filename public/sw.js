@@ -1,10 +1,21 @@
-// YourWkb service worker — v3 (2026-08-09)
+// YourWkb service worker — v4 (2026-08-09)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v3";
+const CACHE = "yourwkb-v4";
 const APP_PAGINAS = ["/app"];
+
+// Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
+// mag van de browser NIET uit de cache geserveerd worden aan een navigatie
+// (redirect mode "manual") — dat geeft een eeuwig hangend opstartscherm.
+// Daarom wassen we navigatie-responsen schoon vóór het cachen: zelfde inhoud
+// en headers, maar zonder redirect-markering.
+async function schoonVoorCache(res) {
+  if (!res.redirected) return res;
+  const body = await res.blob();
+  return new Response(body, { status: 200, statusText: "OK", headers: res.headers });
+}
 
 self.addEventListener("install", (e) => {
   // Direct doorschakelen: een nieuwe worker wacht NIET tot alle vensters dicht
@@ -12,7 +23,16 @@ self.addEventListener("install", (e) => {
   // buildnamen) en essentieel: anders blijft een oude worker de offline-start
   // afhandelen tot de gebruiker toevallig de update-balk aantikt.
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_PAGINAS).catch(() => {})));
+  e.waitUntil(
+    caches.open(CACHE).then(async (c) => {
+      for (const pad of APP_PAGINAS) {
+        try {
+          const res = await fetch(pad);
+          if (res.ok) await c.put(pad, await schoonVoorCache(res));
+        } catch { /* offline tijdens install — runtime-caching vangt het op */ }
+      }
+    })
+  );
 });
 
 self.addEventListener("activate", (e) => {
@@ -39,10 +59,10 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req).then((res) => {
         const kopie = res.clone();
-        const kopie2 = res.clone();
-        caches.open(CACHE).then((c) => {
-          c.put(req, kopie);
-          c.put("/app", kopie2);   // vast offline-anker: bestaat en is altijd vers
+        caches.open(CACHE).then(async (c) => {
+          const schoon = await schoonVoorCache(kopie);
+          c.put(req, schoon.clone());
+          c.put("/app", schoon);   // vast offline-anker: bestaat, vers én redirect-vrij
         });
         return res;
       }).catch(async () => {
