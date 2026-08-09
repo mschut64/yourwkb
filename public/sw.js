@@ -1,9 +1,9 @@
-// YourWkb service worker — v4 (2026-08-09)
+// YourWkb service worker — v5 (2026-08-09)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v4";
+const CACHE = "yourwkb-v5";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
@@ -11,6 +11,20 @@ const APP_PAGINAS = ["/app"];
 // (redirect mode "manual") — dat geeft een eeuwig hangend opstartscherm.
 // Daarom wassen we navigatie-responsen schoon vóór het cachen: zelfde inhoud
 // en headers, maar zonder redirect-markering.
+// Network-first met DEADLINE: zonder limiet wacht een offline/zwak-bereik-start
+// op de volledige netwerk-timeout van het OS (tientallen seconden splash).
+// Na 3 s wint de cache; het netwerkantwoord dat alsnog binnenkomt ververst de
+// cache op de achtergrond voor de volgende keer.
+function fetchMetDeadline(req, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("deadline")), ms);
+    fetch(req).then(
+      (res) => { clearTimeout(timer); resolve(res); },
+      (err) => { clearTimeout(timer); reject(err); }
+    );
+  });
+}
+
 async function schoonVoorCache(res) {
   if (!res.redirected) return res;
   const body = await res.blob();
@@ -56,19 +70,24 @@ self.addEventListener("fetch", (e) => {
 
   // Navigaties (app openen / pagina laden): network-first, offline uit cache
   if (req.mode === "navigate") {
+    // Trage/zwakke netwerkrespons ná de deadline cachet alsnog op de achtergrond:
+    const achtergrond = fetch(req.clone()).then((res) => {
+      const kopie = res.clone();
+      caches.open(CACHE).then(async (c) => {
+        const schoon = await schoonVoorCache(kopie);
+        c.put(req, schoon.clone());
+        c.put("/app", schoon);
+      });
+      return res;
+    }).catch(() => null);
+
     e.respondWith(
-      fetch(req).then((res) => {
-        const kopie = res.clone();
-        caches.open(CACHE).then(async (c) => {
-          const schoon = await schoonVoorCache(kopie);
-          c.put(req, schoon.clone());
-          c.put("/app", schoon);   // vast offline-anker: bestaat, vers én redirect-vrij
-        });
-        return res;
-      }).catch(async () => {
-        return (await caches.match(req, { ignoreSearch: true }))
-            || (await caches.match("/app", { ignoreSearch: true }))
-            || Response.error();
+      fetchMetDeadline(req.clone(), 3000).catch(async () => {
+        const hit = (await caches.match(req, { ignoreSearch: true }))
+                 || (await caches.match("/app", { ignoreSearch: true }));
+        if (hit) return hit;
+        // Geen cache (allereerste gebruik): dan tóch op het netwerk wachten.
+        return achtergrond.then((res) => res || Response.error());
       })
     );
     return;
