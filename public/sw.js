@@ -1,12 +1,17 @@
-// YourWkb service worker — v2 (2026-08-09)
+// YourWkb service worker — v3 (2026-08-09)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v2";
+const CACHE = "yourwkb-v3";
 const APP_PAGINAS = ["/app"];
 
 self.addEventListener("install", (e) => {
+  // Direct doorschakelen: een nieuwe worker wacht NIET tot alle vensters dicht
+  // zijn. Veilig bij onze strategie (pagina's network-first, assets met unieke
+  // buildnamen) en essentieel: anders blijft een oude worker de offline-start
+  // afhandelen tot de gebruiker toevallig de update-balk aantikt.
+  self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_PAGINAS).catch(() => {})));
 });
 
@@ -34,7 +39,11 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req).then((res) => {
         const kopie = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, kopie));
+        const kopie2 = res.clone();
+        caches.open(CACHE).then((c) => {
+          c.put(req, kopie);
+          c.put("/app", kopie2);   // vast offline-anker: bestaat en is altijd vers
+        });
         return res;
       }).catch(async () => {
         return (await caches.match(req, { ignoreSearch: true }))
