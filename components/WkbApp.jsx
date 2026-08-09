@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-09-A
+// YourWkb WkbApp.jsx — versie 2026-08-09-B
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -2401,6 +2401,78 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
 }
 
 // ─── GEDEELDE VERSTUUR STAP ───────────────────────────────────────────────────
+
+// ─── MKP SCANNER: QR scannen ín de app — werkt volledig offline ──────────────
+// De camera leest de QR, het datafragment wordt lokaal gedecodeerd; er is geen
+// redirect via meterkastpaspoort.nl nodig. BarcodeDetector waar beschikbaar
+// (Android, snel), anders jsQR als universele fallback (o.a. iOS).
+function MkpScanner({ onResult, onSluit }) {
+  const videoRef = useRef(null);
+  const [fout, setFout] = useState("");
+  useEffect(() => {
+    let gestopt = false, stream = null, raf = null;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        const v = videoRef.current; if (!v) return;
+        v.srcObject = stream; await v.play();
+        const detector = ("BarcodeDetector" in window)
+          ? new window.BarcodeDetector({ formats: ["qr_code"] }) : null;
+        let jsQR = null;
+        if (!detector) jsQR = (await import("jsqr")).default;
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const tik = async () => {
+          if (gestopt) return;
+          if (v.readyState === 4) {
+            let raw = null;
+            if (detector) {
+              try { const codes = await detector.detect(v); if (codes.length) raw = codes[0].rawValue; } catch {}
+            } else if (jsQR) {
+              canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+              ctx.drawImage(v, 0, 0);
+              const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const c = jsQR(img.data, img.width, img.height);
+              if (c) raw = c.data;
+            }
+            if (raw) {
+              const frag = raw.includes("#") ? raw.split("#").pop() : raw;
+              try {
+                const p = await mkpDecode(frag);
+                gestopt = true;
+                stream?.getTracks().forEach(t => t.stop());
+                onResult(p);
+                return;
+              } catch {
+                setFout("Dit is geen meterkastpaspoort-QR — richt op de sticker.");
+              }
+            }
+          }
+          raf = requestAnimationFrame(tik);
+        };
+        tik();
+      } catch (e) {
+        setFout("Camera niet beschikbaar" + (e?.message ? ` (${e.message})` : "") + ". Geef de app cameratoegang in de instellingen.");
+      }
+    })();
+    return () => { gestopt = true; stream?.getTracks().forEach(t => t.stop()); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:1000, background:"#000", display:"flex", flexDirection:"column" }}>
+      <video ref={videoRef} playsInline muted style={{ flex:1, width:"100%", objectFit:"cover" }}/>
+      <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+        width:230, height:230, border:`3px solid ${K.yellow}`, borderRadius:16, boxShadow:"0 0 0 9999px rgba(0,0,0,0.35)" }}/>
+      <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center", color:"#fff", fontSize:14, fontWeight:700, textShadow:"0 1px 4px #000" }}>
+        Richt op de meterkastpaspoort-sticker
+      </div>
+      {fout && <div style={{ position:"absolute", bottom:96, left:16, right:16, background:"rgba(0,0,0,0.75)", color:"#FCA5A5", fontSize:13, padding:"10px 14px", borderRadius:10, textAlign:"center" }}>{fout}</div>}
+      <button onClick={onSluit} style={{ position:"absolute", bottom:24, left:"50%", transform:"translateX(-50%)",
+        padding:"12px 28px", borderRadius:24, border:"none", background:"rgba(255,255,255,0.92)", color:"#000", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+        Sluiten
+      </button>
+    </div>
+  );
+}
 
 // ─── MKP VIEWER: gescand paspoort direct tonen (inzien zonder project) ───────
 function MkpViewer({ p, onNieuw, onSluit }) {
@@ -5164,6 +5236,7 @@ export default function App() {
   const [actiefId,   setActiefId]   = useState(null);
   const [idbKlaar,   setIdbKlaar]   = useState(false);
   const [mkpScan,    setMkpScan]    = useState(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   // Service worker registreren (offline-werking) + update-signalering.
   const [swUpdate, setSwUpdate] = useState(null);   // wachtende nieuwe versie
@@ -5417,8 +5490,16 @@ export default function App() {
             ⬆️ Nieuwe versie beschikbaar — tik om te verversen
           </button>
         )}
-        {mkpScan && <MkpViewer p={mkpScan} onNieuw={startMetPaspoort} onSluit={()=>setMkpScan(null)}/>}
-        {!mkpScan && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
+        {scannerOpen && <MkpScanner onResult={(p)=>{ setScannerOpen(false); setMkpScan(p); trackEvent("mkp_gescand_inapp",{}); }} onSluit={()=>setScannerOpen(false)}/>}
+        {mkpScan && !scannerOpen && <MkpViewer p={mkpScan} onNieuw={startMetPaspoort} onSluit={()=>setMkpScan(null)}/>}
+        {!mkpScan && !scannerOpen && screen==="home" && (
+          <button onClick={()=>setScannerOpen(true)}
+            style={{ margin:"12px 16px 0", width:"calc(100% - 32px)", padding:"12px", borderRadius:12,
+                     background:K.card, border:`1px dashed ${K.yellow}88`, color:K.text, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+            📷 Scan meterkastpaspoort <span style={{color:K.muted, fontWeight:400}}>· werkt ook zonder bereik</span>
+          </button>
+        )}
+        {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {!mkpScan && screen==="job"    && (
           <div>
