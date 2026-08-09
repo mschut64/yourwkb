@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-07-B
+// YourWkb WkbApp.jsx — versie 2026-08-07-D
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -189,19 +189,24 @@ async function mkpDecode(frag) {
 
 // Bouwt het paspoort-object uit de app-data conform spec v0.1.
 // Onbekende/lege velden worden weggelaten om de QR compact te houden.
-function mkpBouw(data) {
+function mkpBouw(data, discipline) {
   const m = data.mkp || {};
   const p = { v: MKP_SPEC_VERSIE, d: new Date().toISOString().slice(0,10) };
   if (data.postcode)   p.pc = String(data.postcode).replace(/\s/g,"").toUpperCase();
   if (data.huisnummer) p.nr = String(data.huisnummer) + (data.toevoeging ? " " + String(data.toevoeging) : "");
   if (m.ean && eanValide(m.ean)) p.ean = String(m.ean).replace(/\s/g,"");
   if (m.ean2 && eanValide(m.ean2)) p.ean2 = String(m.ean2).replace(/\s/g,"");
-  const bjBron = data.bouwjaar || m.bj;
+  const bjBron = data.bouwjaar || m.bj || data.mkpImport?.bj;
   if (bjBron) p.bj = String(bjBron);
   const instB = data.instMetingen || {};
-  const haF = instB.zDrieFase ? 3 : 1;
-  const haA = toNum(instB.hoofdzekering);
-  if (haA > 0) p.ha = { f: haF, a: haA }; else p.ha = { f: haF };
+  const haA_inst = toNum(instB.hoofdzekering);
+  if (haA_inst > 0) {
+    p.ha = { f: instB.zDrieFase ? 3 : 1, a: haA_inst };
+  } else if (m.haF || m.haA) {
+    p.ha = {}; if (m.haF) p.ha.f = toNum(m.haF); if (toNum(m.haA)>0) p.ha.a = toNum(m.haA);
+  } else if (data.mkpImport?.ha) {
+    p.ha = data.mkpImport.ha;
+  }
   if (m.kamMm2 || m.kamA) { p.kam = {}; if (m.kamMm2) p.kam.mm2 = toNum(m.kamMm2); if (m.kamA) p.kam.a = toNum(m.kamA); }
   const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
   const kwByIdB = m.kwById || {};
@@ -218,7 +223,33 @@ function mkpBouw(data) {
       return r;
     })
   );
-  if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = data.mkpImport.grp;  // gescand paspoort zonder eigen groepen-stap
+  if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = [...data.mkpImport.grp];  // gescand paspoort als basis
+  // Startmodus (laadpaal/batterij): eigen apparaat + ter plekke gesignaleerde verbruikers toevoegen
+  if (discipline === "laadpaal") {
+    const kw = toNum(String(data.lpVermogen||"").replace(/[^0-9,\.]/g,""));
+    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1 };
+    if (kw>0) r.kw = kw; if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
+    grp = [...grp, r];
+  } else if (discipline === "batterij") {
+    const r = { t:"bat", rol:"voed" };
+    if (toNum(data.batKw)>0) r.kw = toNum(data.batKw);
+    if (data.batMerk) r.n = String(data.batMerk).slice(0,40);
+    grp = [...grp, r];
+  } else if (discipline === "pv") {
+    const r = { t:"pv", rol:"voed" };
+    if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
+    if (data.aantalPanelen) r.n = `PV ${data.aantalPanelen} panelen`.slice(0,40);
+    grp = [...grp, r];
+  } else if (discipline === "wp") {
+    const r = { t:"wp", rol:"af" };
+    if (data.wpType) r.n = String(data.wpType).slice(0,40);
+    grp = [...grp, r];
+  }
+  (m.extraGrp||[]).filter(g=>g.t).forEach(g=>{
+    const r = { t:g.t, rol:g.rol || ((g.t==="pv"||g.t==="bat")?"voed":"af") };
+    if (toNum(g.kw)>0) r.kw = toNum(g.kw);
+    grp = [...grp, r];
+  });
   if (grp.length) p.grp = grp;
   if (m.lbAan !== undefined) {
     p.lb = { aan: !!m.lbAan };
@@ -2457,7 +2488,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 }
 
 // ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
-function StapMkp({ data, onChange, onNext, onBack }) {
+function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   const m = data.mkp || {};
   const zet = (k,v) => onChange("mkp", { ...m, [k]: v });
   // FIX 06-08-B: meerdere velden in één update. Twee losse zet()-aanroepen in één
@@ -2490,11 +2521,40 @@ function StapMkp({ data, onChange, onNext, onBack }) {
   const kwById = m.kwById || {};
   const zetKw = (id,v) => zet("kwById", { ...kwById, [id]: v });
 
-  // Hoofdaansluiting en bouwjaar komen uit eerdere stappen:
+  // Context: in de groepenkast-flow komt alles uit de app; in laadpaal/batterij-flow
+  // is er (nog) geen kast-inventaris — dan werkt deze stap als STARTPASPOORT:
+  // de monteur legt vast wat hij ter plekke kan aflezen (hoofdzekering, fasen,
+  // bouwjaar) plus zijn eigen apparaat; volgende monteurs vullen aan.
+  const isStartModus = discipline === "laadpaal" || discipline === "batterij" || discipline === "pv" || discipline === "wp";
   const instM_mkp = data.instMetingen || {};
-  const haF_app = instM_mkp.zDrieFase ? "3" : "1";
-  const haA_app = instM_mkp.hoofdzekering || "";
-  const bj_app  = data.bouwjaar || "";
+  const uitApp_haA = instM_mkp.hoofdzekering || "";
+  const haF_app = uitApp_haA ? (instM_mkp.zDrieFase ? "3" : "1") : (m.haF || "");
+  const haA_app = uitApp_haA || m.haA || "";
+  const bj_app  = data.bouwjaar || m.bj || "";
+
+  // Eigen apparaat uit déze klus — komt altijd in het paspoort:
+  const eigenApparaat = discipline === "laadpaal" ? {
+    t:"lp", rol:"af", f: toNum(data.lpFasen)||1,
+    kw: toNum(String(data.lpVermogen||"").replace(/[^0-9,\.]/g,"")) || undefined,
+    n: (data.lpMerk||"laadpaal").slice(0,40),
+  } : discipline === "batterij" ? {
+    t:"bat", rol:"voed",
+    kw: toNum(data.batKw) || undefined,
+    n: (data.batMerk||"thuisbatterij").slice(0,40),
+  } : discipline === "pv" ? {
+    t:"pv", rol:"voed",
+    kw: toNum(data.omvormerKw) || undefined,
+    n: `PV ${data.aantalPanelen||"?"} panelen`.slice(0,40),
+  } : discipline === "wp" ? {
+    t:"wp", rol:"af",
+    kw: undefined,
+    n: (data.wpType||"warmtepomp").slice(0,40),
+  } : null;
+
+  // Extra verbruikers die de monteur ter plekke ziet (alleen in startmodus bewerkbaar)
+  const extraGrp = m.extraGrp || [];
+  const [extraOpen, setExtraOpen] = useState(null);
+  const EXTRA_TYPES = [["kook","🍳","Koken"],["wp","🌡️","Warmtepomp"],["pv","☀️","PV"],["lp","🔌","Laadpaal"],["bat","🔋","Batterij"],["alg","💡","Overig"]];
 
   // Dubbele-balancer-detectie: laadpaal én batterij in de lijst, load balancing aan,
   // maar geen regisseur ingevuld → wie stuurt wie?
@@ -2508,7 +2568,7 @@ function StapMkp({ data, onChange, onNext, onBack }) {
   const volgende = async () => {
     setBezig(true); setFout("");
     try {
-      const paspoort = mkpBouw(data);
+      const paspoort = mkpBouw(data, discipline);
       const url = MKP_BASIS + await mkpEncode(paspoort);
       const qr  = await QRCode.toDataURL(url, { errorCorrectionLevel:"M", margin:1, width:480, color:{ dark:"#000000", light:"#FFFFFF" } });
       onChange("mkpUrl", url);
@@ -2537,12 +2597,29 @@ function StapMkp({ data, onChange, onNext, onBack }) {
         </div>
       )}
 
+      {!isStartModus ? (
       <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Uit de app overgenomen</div>
         <div style={{fontSize:13}}>Hoofdaansluiting: <strong>{haF_app}-fase{haA_app?` × ${haA_app} A`:""}</strong>{!haA_app && <span style={{color:K.orange}}> — hoofdzekering nog niet ingevuld (stap 7)</span>}</div>
         <div style={{fontSize:13, marginTop:4}}>Bouwjaar kast: {bj_app ? <strong>{bj_app}</strong> : <span style={{color:K.orange}}>nog niet ingevuld (stap 3 · Apparatuur)</span>}</div>
         <div style={{fontSize:11, color:K.muted, marginTop:6}}>Aanpassen doe je in de betreffende stap — het paspoort neemt het automatisch over.</div>
       </div>
+      ) : (
+      <div style={{...S.card, marginBottom:12}}>
+        <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Hoofdaansluiting (aflezen in de kast)</div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Nog geen paspoort op deze kast? Jij maakt het startpaspoort: leg vast wat je ter plekke kunt aflezen — volgende monteurs vullen aan.</div>
+        <div style={{display:"flex", gap:8, marginBottom:8}}>
+          {[["1","1-fase"],["3","3-fase"]].map(([v,l]) =>
+            <button key={v} style={knopStijl(m.haF===v)} onClick={()=>zet("haF",v)}>{l}</button>)}
+        </div>
+        <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:10}}>
+          {["25","35","40","50","63"].map(a =>
+            <button key={a} style={{...knopStijl(m.haA===a), flex:"0 0 auto", minWidth:56}} onClick={()=>zet("haA",a)}>{a} A</button>)}
+        </div>
+        <label style={S.label}>Bouwjaar / aanlegperiode kast (schatting mag)</label>
+        <input style={{...S.input}} placeholder='bijv. 1998 of "±1990"' value={m.bj||""} onChange={e=>zet("bj",e.target.value)}/>
+      </div>
+      )}
 
       <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Kam / ontwerpstroom verdeler</div>
@@ -2585,9 +2662,63 @@ function StapMkp({ data, onChange, onNext, onBack }) {
 
       <div style={{...S.card, marginBottom:12}}>
         <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Wat hangt er op de kast</div>
-        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Live overgenomen uit de groepen-stap (stap 6) — groepen toevoegen of weghalen doe je dáár. Vul hier waar bekend het vermogen (kW) aan; dat komt in het paspoort en voedt straks de belastingcheck.</div>
-        {grpLive.length===0 && <div style={{fontSize:12, color:K.orange}}>Nog geen groepen — vul eerst stap 6 (Groepen) in.</div>}
-        {grpLive.map(g=>{
+        {!isStartModus ? (
+          <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Live overgenomen uit de groepen-stap (stap 6) — groepen toevoegen of weghalen doe je dáár. Vul hier waar bekend het vermogen (kW) aan; dat komt in het paspoort en voedt straks de belastingcheck.</div>
+        ) : (
+          <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Jouw {({laadpaal:"laadpaal",batterij:"batterij",pv:"PV-installatie",wp:"warmtepomp"}[discipline])||"apparaat"} staat er automatisch in. Zie je in de kast nog andere grote verbruikers of opwekkers (kookgroep, warmtepomp, PV…)? Voeg ze toe — hoeft niet compleet, elk gegeven helpt de volgende monteur.</div>
+        )}
+        {isStartModus && eigenApparaat && (
+          <div style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
+            <div style={{flex:1, minWidth:0, fontSize:13}}>
+              {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️"}[eigenApparaat.t])||"⚙️"} {eigenApparaat.n}
+              <span style={{color:K.yellow, fontSize:11}}> · deze klus</span>
+              <span style={{color:K.muted, fontSize:11}}>{eigenApparaat.kw?` · ${eigenApparaat.kw} kW`:""}{eigenApparaat.rol==="voed"?" · ↩︎ voedend":""}</span>
+            </div>
+          </div>
+        )}
+        {isStartModus && Array.isArray(data.mkpImport?.grp) && data.mkpImport.grp.map((g,i)=>(
+          <div key={`imp${i}`} style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
+            <div style={{flex:1, minWidth:0, fontSize:13, color:K.muted}}>
+              {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️",kook:"🍳"}[g.t])||"💡"} {g.n||g.t}
+              <span style={{fontSize:11}}> · uit gescand paspoort{g.kw?` · ${g.kw} kW`:""}</span>
+            </div>
+          </div>
+        ))}
+        {isStartModus && extraGrp.map((g,i)=>{
+          const gek = EXTRA_TYPES.find(([v])=>v===g.t);
+          return (
+          <div key={`ex${i}`} style={{border:`1px solid ${K.border}`, borderRadius:10, padding:8, marginTop:8}}>
+            <div style={{display:"flex", gap:6, alignItems:"center"}}>
+              <button style={{flex:1, minWidth:0, textAlign:"left", padding:"9px 10px", background:K.card, color:K.text,
+                      border:`1px solid ${extraOpen===i?K.yellow:K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
+                onClick={()=>setExtraOpen(extraOpen===i?null:i)}>
+                {gek ? `${gek[1]} ${gek[2]}` : "— kies type —"}
+              </button>
+              <input style={{width:64, padding:"9px 8px", background:K.card, color:K.text, border:`1px solid ${K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
+                placeholder="kW" inputMode="decimal" value={g.kw||""}
+                onChange={e=>{const n=[...extraGrp]; n[i]={...n[i],kw:e.target.value}; zet("extraGrp",n);}}/>
+              <button style={{padding:"8px 10px", background:"transparent", border:"none", color:K.red, fontSize:16, cursor:"pointer"}}
+                onClick={()=>{setExtraOpen(null); zet("extraGrp", extraGrp.filter((_,j)=>j!==i));}}>✕</button>
+            </div>
+            {extraOpen===i && (
+              <div style={{display:"flex", flexWrap:"wrap", gap:6, marginTop:8}}>
+                {EXTRA_TYPES.map(([v,ic,l])=>(
+                  <button key={v} style={{padding:"8px 10px", borderRadius:8, fontSize:12, fontFamily:"inherit", cursor:"pointer",
+                          background:g.t===v?K.yellow:K.card, color:g.t===v?"#000":K.text, border:`1px solid ${g.t===v?K.yellow:K.border}`}}
+                    onClick={()=>{const n=[...extraGrp]; n[i]={...n[i], t:v, rol:(v==="pv"||v==="bat")?"voed":"af"}; zet("extraGrp",n); setExtraOpen(null);}}>
+                    {ic} {l}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );})}
+        {isStartModus && (
+          <button style={{...S.btn, fontSize:12, padding:"8px 12px", marginTop:8, background:K.card, border:`1px solid ${K.border}`, color:K.text}}
+            onClick={()=>zet("extraGrp",[...extraGrp,{}])}>+ Zichtbare verbruiker toevoegen</button>
+        )}
+        {!isStartModus && grpLive.length===0 && <div style={{fontSize:12, color:K.orange}}>Nog geen groepen — vul eerst stap 6 (Groepen) in.</div>}
+        {!isStartModus && grpLive.map(g=>{
           const gekozen = MKP_GRP_TYPES.find(([v])=>v===g.t);
           return (
           <div key={g.id} style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
@@ -5182,7 +5313,7 @@ export default function App() {
 
   // Stappen per discipline
   const GK_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Groepen","Meten","Veldmeting","Foto's (nieuw)","Paspoort","Versturen"];
-  const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
+  const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Paspoort","Versturen"];
 
   const gkScreens = [
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("kiezen")}/>,
@@ -5206,11 +5337,12 @@ export default function App() {
     <PV_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <PV_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={PV_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} discipline="pv" onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="pv" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
   const CV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
-  const WP_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Versturen"];
+  const WP_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Paspoort","Versturen"];
 
   const cvScreens = [
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
@@ -5231,6 +5363,7 @@ export default function App() {
     <WP_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <WP_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={WP_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} discipline="wp" onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="wp" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
@@ -5245,7 +5378,7 @@ export default function App() {
     <LP_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <LP_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={LP_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
-    <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="laadpaal" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
   const batScreens = [
@@ -5256,7 +5389,7 @@ export default function App() {
     <BAT_StapMateriaal  key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <BAT_StapMeten      key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={BAT_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
-    <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} discipline="batterij" onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="batterij" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
