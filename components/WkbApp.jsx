@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-06-F
+// YourWkb WkbApp.jsx — versie 2026-08-07-B
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -73,8 +73,9 @@ const DISCIPLINES = [
   { id:"groepenkast", label:"Groepenkast",    icon:"⚡", sub:"Plaatsen of vervangen",     color:K.yellow,  colorDim:K.yellowDim, norm:"NEN1010",     available:true  },
   { id:"pv",          label:"Zonnepanelen",   icon:"☀️", sub:"PV installatie",            color:"#F97316", colorDim:"#2A1000",   norm:"NEN1010:712", available:true  },
   { id:"cv",          label:"Combiketel",     icon:"🔥", sub:"Plaatsen of vervangen",     color:"#EF4444", colorDim:"#2A0808",   norm:"BRL6000-25",  available:true  },
-  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water of bodem",     color:"#06B6D4", colorDim:"#042020",   norm:"BRL6000-21",  available:true  },
-  { id:"batterij",    label:"Thuisbatterij",  icon:"🔋", sub:"Energieopslag",             color:"#8B5CF6", colorDim:"#1A0A30",   norm:"SCIOS S10",   available:false },
+  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water · split-airco · bodem", color:"#06B6D4", colorDim:"#042020",   norm:"BRL100 / 6000-21",  available:true  },
+  { id:"laadpaal",    label:"Laadpaal",       icon:"🔌", sub:"EV-laadvoorziening",        color:"#22C55E", colorDim:"#06200D",   norm:"NEN1010:2020", available:true },
+  { id:"batterij",    label:"Thuisbatterij",  icon:"🔋", sub:"Energieopslag",             color:"#8B5CF6", colorDim:"#1A0A30",   norm:"NEN1010:2020", available:true },
 ];
 
 // ─── GROEPENKAST DATA ─────────────────────────────────────────────────────────
@@ -2684,7 +2685,9 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   ) : [];
   const cvWarnings = discipline==="cv" ? cvCrossChecks(data.cvMeet||{}) : [];
   const wpWarnings = discipline==="wp" ? wpCrossChecks(data.wpMeet||{}, {geluidOpgave:data.geluidOpgave, groepAmpere:data.groepAmpere}) : [];
-  const allWarnings = [...gkWarnings,...pvWarnings,...cvWarnings,...wpWarnings];
+  const lpWarnings = discipline==="laadpaal" ? lpCrossChecks(data.lpMeet||{}, {fasen:data.lpFasen}) : [];
+  const batWarnings = discipline==="batterij" ? batCrossChecks(data.batMeet||{}) : [];
+  const allWarnings = [...gkWarnings,...pvWarnings,...cvWarnings,...wpWarnings,...lpWarnings,...batWarnings];
   const redWarnings = allWarnings.filter(w=>w.level==="red");
 
   const genereerRapport = () => {
@@ -2911,7 +2914,12 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <div style="font-size:7px; color:#888; margin-top:2px">meterkastpaspoort.nl — open standaard · gemaakt met YourWkb</div>
         </div>
         <p style="font-size:8px; color:#666; margin-top:10px; text-align:center">
-          Tip: geen printer bij de hand? De QR staat ook in de app — laat de klant hem fotograferen, of bestel voorbedrukte stickers.
+          Tip: geen printer bij de hand? De QR staat ook in de app — laat de klant hem fotograferen, of print hem op een labelprinter.
+        </p>
+        <p style="font-size:8px; color:#666; margin-top:6px; text-align:center; max-width:340px; margin-left:auto; margin-right:auto">
+          <strong>Dit rapport is tevens de reservekopie van het paspoort.</strong> Sticker kwijt, beschadigd of verloren gegaan (bijv. door brand)?
+          Scan de QR hierboven uit dit document en print opnieuw — elk opleverrapport bevat de paspoortstand van dat moment,
+          dus de historie is zo vaak bewaard als er rapporten zijn.
         </p>
       </div>`;
     };
@@ -3231,7 +3239,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <style>${css(accentWP)}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
-        <p style="font-size:11px;color:#555;margin-bottom:12px">Warmtepompinstallatie · BRL6000-21</p>
+        <p style="font-size:11px;color:#555;margin-bottom:12px">Warmtepompinstallatie · ${data.wpType||""} · ${data.wpType==="Bodem/water (grond)" ? "BRL 6000-21" : "F-gassenverordening · BRL 100/200"}</p>
         ${nawHtml()}
         <h2>Meetapparatuur</h2>
         <table>
@@ -3283,10 +3291,76 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         ${waarschuwingHtml()}
         ${fotosHtml(WP_FOTO_CPS)}
-        ${signHtml("BRL6000-21","De warmtepompinstallatie is geplaatst conform de geldende normen en richtlijnen (BRL6000-21). De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+        ${data.wpType==="Bodem/water (grond)"
+          ? signHtml("BRL 6000-21, NEN 1010","De bodemgebonden warmtepompinstallatie is geplaatst conform BRL 6000-21 (bodemenergiesystemen, bovengrondse deel); het ondergrondse deel (boring/bronnen) valt onder een SIKB 11000-gecertificeerde boorfirma. Het elektrotechnische deel voldoet aan NEN 1010. De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")
+          : signHtml("F-gassenverordening (BRL 100/200), NEN-EN 378, NEN 1010","De warmtepompinstallatie is geplaatst conform de geldende regelgeving: eventuele koudemiddelhandelingen zijn uitgevoerd onder geldige F-gassencertificering (BRL 100 bedrijfscertificaat en BRL 200 persoonscertificaat), het koudemiddelcircuit voldoet aan NEN-EN 378 en het elektrotechnische deel aan NEN 1010. De buitenunit voldoet aan de geluidseis uit het Besluit bouwwerken leefomgeving (max. 40 dB op de perceelgrens in de nachtperiode). De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
         </body></html>`;
 
     // ── ZONNEPANELEN RAPPORT ──────────────────────────────────────
+    } else if (discipline === "laadpaal") {
+      const lm = data.lpMeet || {};
+      const lb = data.mkp || {};
+      html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${data.projectId}-laadpaal</title>
+        <style>${css("#22C55E")}</style></head><body>
+        ${logoHtml()}
+        <h1>Opleveringsrapport</h1>
+        <p style="font-size:11px;color:#555;margin-bottom:12px">EV-laadvoorziening · ${data.lpMerk||""} ${data.lpVermogen||""} · NEN 1010:2020</p>
+        ${nawHtml()}
+        <h2>Laadpunt & aansluiting</h2>
+        <table>
+          <tr><td><strong>Laadpunt</strong></td><td>${data.lpMerk||"—"}</td><td><strong>Vermogen</strong></td><td>${data.lpVermogen||"—"}</td></tr>
+          <tr><td><strong>Aansluiting</strong></td><td>${data.lpFasen||"—"}-fase</td><td><strong>Kabel</strong></td><td>${data.lpKabelMm2||"—"} mm² · ${data.lpKabelLengte||"—"} m</td></tr>
+        </table>
+        <h2>Beveiliging & metingen</h2>
+        <table>
+          <tr><td><strong>Aardlek laadgroep</strong></td><td>Type ${lm.aardlekType||"—"}${lm.aardlekType==="A" ? ` (6 mA DC-detectie in laadpunt: ${lm.dcDetectie||"—"})` : ""}</td>
+              <td><strong>Uitschakeltijd</strong></td><td>${lm.aardlekMs||"—"} ms</td></tr>
+          <tr><td><strong>Isolatieweerstand</strong></td><td>${lm.iso||"—"} MΩ (norm ≥ 0,23)</td>
+              <td><strong>Spanningsverlies vollast</strong></td><td>${lm.spanningsverlies||"—"} % (norm ≤ 5)</td></tr>
+          <tr><td><strong>Z L-N / Z L-PE</strong></td><td>${lm.zln||"—"} / ${lm.zlpe||"—"} Ω</td>
+              <td><strong>Fasevolgorde</strong></td><td>${data.lpFasen==="3" ? (lm.fasevolgorde==="ok"?"gecontroleerd, OK":"—") : "n.v.t. (1-fase)"}</td></tr>
+          <tr><td><strong>Functionele laadtest</strong></td><td colspan="3">${lm.laadtest==="ja"?"uitgevoerd met voertuig — geslaagd":lm.laadtest==="nee"?"NIET geslaagd":"—"}</td></tr>
+        </table>
+        <h2>Load balancing / vermogenssturing</h2>
+        <table>
+          <tr><td><strong>Sturing</strong></td><td>${lb.lbAan===true ? `${lb.lbTyp==="dyn"?"dynamisch":"statisch"}${lb.lbMax?` · begrensd op ${lb.lbMax} A`:""}${lb.lbReg?` · regisseur: ${lb.lbReg}`:""}` : lb.lbAan===false ? "niet aanwezig — belasting geldt ongestuurd" : "—"}</td></tr>
+        </table>
+        <p style="font-size:9px;color:#666">Load balancing is een instelbare softwarematige begrenzing en geen veiligheidsmaatregel; de vaste installatie en beveiliging zijn gedimensioneerd onafhankelijk van deze sturing. De instelling is vastgelegd in het meterkastpaspoort.</p>
+        ${fotosHtml(LP_FOTO_CPS)}
+        ${signHtml("NEN 1010:2020 (laadvoorzieningen EV)","De laadvoorziening is aangelegd conform NEN 1010:2020, met de daarin opgenomen bepalingen voor laadvoorzieningen van elektrische voertuigen (aardlekbeveiliging met DC-foutstroomdetectie, afzonderlijke eindgroep). De metingen en de functionele laadtest voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+        </body></html>`;
+    } else if (discipline === "batterij") {
+      const bm = data.batMeet || {};
+      const mk = data.mkp || {};
+      const plaatsing = { ventilatie:"Ventilatie", temp:"Temperatuurbereik", brandbaar:"Afstand brandbaar", vluchtweg:"Buiten vluchtweg", dragend:"Dragende ondergrond" };
+      html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>${data.projectId}-thuisbatterij</title>
+        <style>${css("#8B5CF6")}</style></head><body>
+        ${logoHtml()}
+        <h1>Opleveringsrapport</h1>
+        <p style="font-size:11px;color:#555;margin-bottom:12px">Thuisbatterij · ${data.batMerk||""} ${data.batKwh?data.batKwh+" kWh":""} · NEN 1010:2020</p>
+        ${nawHtml()}
+        <h2>Systeem</h2>
+        <table>
+          <tr><td><strong>Batterij</strong></td><td>${data.batMerk||"—"}</td><td><strong>Capaciteit</strong></td><td>${data.batKwh||"—"} kWh</td></tr>
+          <tr><td><strong>Max. (ont)laadvermogen</strong></td><td>${data.batKw||"—"} kW</td><td><strong>Koppeling</strong></td><td>${data.batKoppeling||"—"}-gekoppeld</td></tr>
+          <tr><td><strong>Back-up/eilandbedrijf</strong></td><td colspan="3">${data.batEiland==="ja" ? `ja — omschakeltest ${bm.eilandtest==="ja"?"geslaagd":"NIET geslaagd/uitgevoerd"}` : "nee"}</td></tr>
+        </table>
+        <h2>Plaatsingseisen</h2>
+        <table>
+          ${Object.entries(plaatsing).map(([id,l])=>`<tr><td><strong>${l}</strong></td><td>${bm[`pl_${id}`]==="ja"?"voldaan":bm[`pl_${id}`]==="nee"?"NIET voldaan":"—"}</td></tr>`).join("")}
+        </table>
+        <h2>Metingen & veiligheid</h2>
+        <table>
+          <tr><td><strong>Isolatieweerstand batterijgroep</strong></td><td>${bm.iso||"—"} MΩ (norm ≥ 0,23)</td>
+              <td><strong>Aardlektest</strong></td><td>${bm.aardlekMs||"—"} ms</td></tr>
+          <tr><td><strong>Brandweersticker meterkast</strong></td><td>${bm.brandweersticker==="ja"?"geplaatst":bm.brandweersticker==="nee"?"ONTBREEKT":"—"}</td>
+              <td><strong>Melding netbeheerder</strong></td><td>${bm.meldingNetbeheerder==="ja"?`gedaan (energieleveren.nl${mk.ean?`, EAN ${mk.ean}`:""})`:"nog niet gedaan"}</td></tr>
+        </table>
+        ${fotosHtml(BAT_FOTO_CPS)}
+        ${signHtml("NEN 1010:2020","De thuisbatterij is geplaatst en aangesloten conform NEN 1010:2020, met inachtneming van de fabrikantvoorschriften voor opstelling en ventilatie. De metingen voldoen aan de gestelde eisen, de aanwezigheid van het systeem is op de meterkast gemarkeerd en de installatie is bij de netbeheerder gemeld. De installatie is veilig in bedrijf gesteld.")}
+        </body></html>`;
     } else {
       const accentPV = "#EA580C";
       const statusPV = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
@@ -4250,7 +4324,7 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · BRL6000-21</div></div>
+        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · {data.wpType==="Bodem/water (grond)" ? "BRL 6000-21 (bodemenergie)" : "F-gassen · BRL 100/200"}</div></div>
       </div>
       <div style={S.body}>
 
@@ -4647,6 +4721,310 @@ function upsertProject(lijst, proj) {
 }
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
+
+// ═══ LAADPAAL (EV-LAADVOORZIENING) ═══════════════════════════════════════════
+// Getoetst aan NEN 1010:2020 (bepalingen laadvoorzieningen elektrische voertuigen).
+const LP_FOTO_CPS_VOOR = [
+  { id:"situatie",   label:"Situatie vóór montage (gevel/parkeerplek)", required:true  },
+  { id:"meterkast",  label:"Meterkast vóór aanpassing",                 required:true  },
+  { id:"kabeltrace", label:"Kabeltracé / doorvoer",                     required:false },
+];
+const LP_FOTO_CPS_NA = [
+  { id:"paal",       label:"Laadpunt gemonteerd",                       required:true  },
+  { id:"groep",      label:"Laadgroep + aardlek in de kast",            required:true  },
+  { id:"typeplaat",  label:"Typeplaatje laadpunt",                      required:true  },
+  { id:"laadtest",   label:"Voertuig aan het laden (functietest)",      required:false },
+];
+const LP_FOTO_CPS = [...LP_FOTO_CPS_VOOR, ...LP_FOTO_CPS_NA];
+
+function lpCrossChecks(meet, ctx) {
+  const w = [];
+  const iso = toNum(meet.iso), zlpe = toNum(meet.zlpe);
+  if (meet.iso && iso < 0.23) w.push({ level:"red", msg:`ISO laadgroep ${meet.iso} MΩ < 0,23 MΩ — afkeur` });
+  if (meet.zlpe && zlpe > 1.66) w.push({ level:"orange", msg:`Z L-PE ${meet.zlpe} Ω hoog — controleer aansluitleiding/kabellengte` });
+  if (meet.aardlekType === "A" && meet.dcDetectie !== "ja")
+    w.push({ level:"red", msg:"Type A aardlek gekozen zonder aantoonbare 6 mA DC-detectie in het laadpunt — type B (of A-EV) vereist" });
+  if (ctx.fasen === "3" && meet.fasevolgorde !== "ok")
+    w.push({ level:"orange", msg:"Fasevolgorde niet gecontroleerd/OK — draaiveld verplicht controleren bij 3-fase laden" });
+  if (meet.laadtest !== "ja") w.push({ level:"orange", msg:"Functionele laadtest nog niet uitgevoerd/geslaagd" });
+  const spanningsverlies = toNum(meet.spanningsverlies);
+  if (meet.spanningsverlies && spanningsverlies > 5) w.push({ level:"red", msg:`Spanningsverlies ${meet.spanningsverlies}% > 5% — kabeldoorsnede vergroten` });
+  return w;
+}
+
+function LP_StapMateriaal({ data, onChange, onNext, onBack }) {
+  const v = (k) => data[k] || "";
+  const zet = (k,val) => onChange(k, val);
+  const knop = (actief) => ({ flex:1, padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.yellow : K.border}` });
+  return (
+    <div style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+        <button style={S.backBtn} onClick={onBack}>‹</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Laadpunt & aansluiting</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Laadpaal</div></div>
+      </div>
+      <div style={{...S.card, marginTop:12}}>
+        <label style={S.label}>Merk & type laadpunt</label>
+        <input style={S.input} placeholder="bijv. Alfen Eve Single, Zaptec Go" value={v("lpMerk")} onChange={e=>zet("lpMerk",e.target.value)}/>
+        <label style={{...S.label, marginTop:12}}>Laadvermogen</label>
+        <div style={{display:"flex", gap:8}}>
+          {["3,7 kW","7,4 kW","11 kW","22 kW"].map(p=><button key={p} style={knop(v("lpVermogen")===p)} onClick={()=>zet("lpVermogen",p)}>{p}</button>)}
+        </div>
+        <label style={{...S.label, marginTop:12}}>Aansluiting laadgroep</label>
+        <div style={{display:"flex", gap:8}}>
+          <button style={knop(v("lpFasen")==="1")} onClick={()=>zet("lpFasen","1")}>1-fase</button>
+          <button style={knop(v("lpFasen")==="3")} onClick={()=>zet("lpFasen","3")}>3-fase</button>
+        </div>
+        <div style={{display:"flex", gap:8, marginTop:12}}>
+          <div style={{flex:1}}>
+            <label style={S.label}>Kabel (mm²)</label>
+            <input style={S.input} placeholder="bijv. 2,5 / 6" inputMode="decimal" value={v("lpKabelMm2")} onChange={e=>zet("lpKabelMm2",e.target.value)}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={S.label}>Kabellengte (m)</label>
+            <input style={S.input} placeholder="bijv. 18" inputMode="decimal" value={v("lpKabelLengte")} onChange={e=>zet("lpKabelLengte",e.target.value)}/>
+          </div>
+        </div>
+      </div>
+      <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
+    </div>
+  );
+}
+
+function LP_StapMeten({ data, onChange, onNext, onBack }) {
+  const meet = data.lpMeet || {};
+  const zm = (k,v) => onChange("lpMeet", { ...meet, [k]: v });
+  const mkp = data.mkp || {};
+  const zetMkp = (obj) => onChange("mkp", { ...mkp, ...obj });
+  const warnings = lpCrossChecks(meet, { fasen: data.lpFasen });
+  const knop = (actief, kleur=K.yellow) => ({ flex:1, padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+    background: actief ? kleur : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? kleur : K.border}` });
+  const MeetVeld = ({k,l,unit,ph,chk}) => (
+    <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+      <div style={{flex:1, fontSize:13}}>{l}</div>
+      <input style={{...S.input, width:90}} placeholder={ph} inputMode="decimal" value={meet[k]||""} onChange={e=>zm(k,e.target.value)}/>
+      <span style={{fontSize:12, color:K.muted, width:26}}>{unit}</span>
+      {meet[k] && chk && <StatusTag level={chk(toNum(meet[k]))?"ok":"red"}/>}
+    </div>
+  );
+  return (
+    <div style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+        <button style={S.backBtn} onClick={onBack}>‹</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Metingen & controles laadpunt</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN 1010:2020 (EV-laadvoorzieningen)</div></div>
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Aardlekbeveiliging laadgroep</div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Type B vereist, tenzij het laadpunt aantoonbaar 6 mA DC-foutstroomdetectie heeft — dan volstaat type A.</div>
+        <div style={{display:"flex", gap:8, marginBottom:8}}>
+          <button style={knop(meet.aardlekType==="A")} onClick={()=>zm("aardlekType","A")}>Type A</button>
+          <button style={knop(meet.aardlekType==="A-EV")} onClick={()=>zm("aardlekType","A-EV")}>Type A-EV</button>
+          <button style={knop(meet.aardlekType==="B")} onClick={()=>zm("aardlekType","B")}>Type B</button>
+        </div>
+        {meet.aardlekType==="A" && (
+          <div style={{display:"flex", gap:8, alignItems:"center"}}>
+            <div style={{flex:1, fontSize:13}}>6 mA DC-detectie in laadpunt aantoonbaar?</div>
+            <button style={{...knop(meet.dcDetectie==="ja", K.green), flex:"0 0 64px"}} onClick={()=>zm("dcDetectie","ja")}>Ja</button>
+            <button style={{...knop(meet.dcDetectie==="nee", K.red), flex:"0 0 64px"}} onClick={()=>zm("dcDetectie","nee")}>Nee</button>
+          </div>
+        )}
+        <div style={{display:"flex", alignItems:"center", gap:8, marginTop:10}}>
+          <div style={{flex:1, fontSize:13}}>Aardlektest (testknop + uitschakeltijd)</div>
+          <input style={{...S.input, width:90}} placeholder="bijv. 22" inputMode="decimal" value={meet.aardlekMs||""} onChange={e=>zm("aardlekMs",e.target.value)}/>
+          <span style={{fontSize:12, color:K.muted, width:26}}>ms</span>
+          {meet.aardlekMs && <StatusTag level={toNum(meet.aardlekMs)<=300?"ok":"red"}/>}
+        </div>
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Elektrische metingen laadgroep</div>
+        <MeetVeld k="iso"  l="Isolatieweerstand (naar aarde)" unit="MΩ" ph="≥0,23" chk={(x)=>x>=0.23}/>
+        <MeetVeld k="zln"  l="Z L-N bij laadpunt"             unit="Ω"  ph="bijv. 0,8"/>
+        <MeetVeld k="zlpe" l="Z L-PE bij laadpunt"            unit="Ω"  ph="bijv. 0,9"/>
+        <MeetVeld k="spanningsverlies" l="Spanningsverlies bij vollast" unit="%" ph="≤5" chk={(x)=>x<=5}/>
+        {data.lpFasen==="3" && (
+          <div style={{display:"flex", alignItems:"center", gap:8, marginTop:4}}>
+            <div style={{flex:1, fontSize:13}}>Fasevolgorde / draaiveld gecontroleerd</div>
+            <button style={{...knop(meet.fasevolgorde==="ok", K.green), flex:"0 0 64px"}} onClick={()=>zm("fasevolgorde","ok")}>OK</button>
+            <button style={{...knop(meet.fasevolgorde==="nvt"), flex:"0 0 64px"}} onClick={()=>zm("fasevolgorde","nvt")}>—</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Load balancing / vermogenssturing</div>
+        <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Wordt vastgelegd in het meterkastpaspoort — een onzichtbare instelling die elke volgende monteur moet kennen.</div>
+        <div style={{display:"flex", gap:8, marginBottom:8}}>
+          <button style={knop(mkp.lbAan===true)}  onClick={()=>zetMkp({lbAan:true})}>Aanwezig</button>
+          <button style={knop(mkp.lbAan===false)} onClick={()=>zetMkp({lbAan:false})}>Niet aanwezig</button>
+        </div>
+        {mkp.lbAan && (<>
+          <div style={{display:"flex", gap:8, marginBottom:8}}>
+            <button style={knop(mkp.lbTyp==="stat")} onClick={()=>zetMkp({lbTyp:"stat"})}>Statisch</button>
+            <button style={knop(mkp.lbTyp==="dyn")}  onClick={()=>zetMkp({lbTyp:"dyn"})}>Dynamisch (P1)</button>
+          </div>
+          <div style={{display:"flex", gap:8}}>
+            <div style={{flex:1, display:"flex", alignItems:"center", gap:4}}>
+              <input style={{...S.input, flex:1, minWidth:0}} placeholder="Grens" inputMode="decimal" value={mkp.lbMax||""} onChange={e=>zetMkp({lbMax:e.target.value})}/>
+              <span style={{fontSize:13, color:K.muted, fontWeight:700}}>A</span>
+            </div>
+            <input style={{...S.input, flex:2}} placeholder="Regisseur (evcc, HEMS, paal intern)" value={mkp.lbReg||""} onChange={e=>zetMkp({lbReg:e.target.value})}/>
+          </div>
+        </>)}
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={{display:"flex", alignItems:"center", gap:8}}>
+          <div style={{flex:1, fontSize:13, fontWeight:600}}>Functionele laadtest met voertuig geslaagd</div>
+          <button style={{...knop(meet.laadtest==="ja", K.green), flex:"0 0 64px"}} onClick={()=>zm("laadtest","ja")}>Ja</button>
+          <button style={{...knop(meet.laadtest==="nee", K.red), flex:"0 0 64px"}} onClick={()=>zm("laadtest","nee")}>Nee</button>
+        </div>
+      </div>
+
+      {warnings.map((w,i)=>(
+        <div key={i} style={{...S.card, marginTop:10, borderLeft:`4px solid ${w.level==="red"?K.red:K.orange}`, fontSize:12}}>
+          {w.level==="red"?"⛔":"⚠️"} {w.msg}
+        </div>
+      ))}
+      <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
+    </div>
+  );
+}
+
+// ═══ THUISBATTERIJ ═══════════════════════════════════════════════════════════
+const BAT_FOTO_CPS_VOOR = [
+  { id:"opstelplek", label:"Opstelplek vóór installatie",     required:true  },
+  { id:"meterkast",  label:"Meterkast vóór aanpassing",       required:true  },
+];
+const BAT_FOTO_CPS_NA = [
+  { id:"batterij",   label:"Batterij gemonteerd (overzicht)",  required:true  },
+  { id:"typeplaat",  label:"Typeplaatje batterij/omvormer",    required:true  },
+  { id:"groep",      label:"Batterijgroep in de kast",         required:true  },
+  { id:"sticker",    label:"Brandweersticker op meterkast",    required:true  },
+];
+const BAT_FOTO_CPS = [...BAT_FOTO_CPS_VOOR, ...BAT_FOTO_CPS_NA];
+
+const BAT_PLAATSING = [
+  { id:"ventilatie", label:"Ventilatie conform fabrikantvoorschrift" },
+  { id:"temp",       label:"Omgevingstemperatuur binnen opgegeven bereik" },
+  { id:"brandbaar",  label:"Vrije afstand tot brandbare materialen aangehouden" },
+  { id:"vluchtweg",  label:"Niet in of grenzend aan vluchtweg geplaatst" },
+  { id:"dragend",    label:"Bevestiging op dragende ondergrond" },
+];
+
+function batCrossChecks(meet) {
+  const w = [];
+  if (meet.iso && toNum(meet.iso) < 0.23) w.push({ level:"red", msg:`ISO batterijgroep ${meet.iso} MΩ < 0,23 MΩ — afkeur` });
+  BAT_PLAATSING.forEach(p => { if (meet[`pl_${p.id}`] === "nee") w.push({ level:"red", msg:`Plaatsingseis niet voldaan: ${p.label.toLowerCase()}` }); });
+  if (meet.eilandtest === "nee") w.push({ level:"orange", msg:"Omschakeltest eilandbedrijf/back-up niet uitgevoerd of niet geslaagd" });
+  if (meet.brandweersticker === "nee") w.push({ level:"orange", msg:"Brandweersticker (aanwezigheid batterij) ontbreekt op de meterkast" });
+  if (meet.meldingNetbeheerder !== "ja") w.push({ level:"orange", msg:"Melding netbeheerder (energieleveren.nl) nog niet gedaan — verplicht bij opwek/opslag" });
+  return w;
+}
+
+function BAT_StapMateriaal({ data, onChange, onNext, onBack }) {
+  const v = (k) => data[k] || "";
+  const zet = (k,val) => onChange(k, val);
+  const knop = (actief) => ({ flex:1, padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.yellow : K.border}` });
+  return (
+    <div style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+        <button style={S.backBtn} onClick={onBack}>‹</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Batterij & aansluiting</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Thuisbatterij</div></div>
+      </div>
+      <div style={{...S.card, marginTop:12}}>
+        <label style={S.label}>Merk & type</label>
+        <input style={S.input} placeholder="bijv. BYD HVS 7.7, Sessy, HomeWizard" value={v("batMerk")} onChange={e=>zet("batMerk",e.target.value)}/>
+        <div style={{display:"flex", gap:8, marginTop:12}}>
+          <div style={{flex:1}}>
+            <label style={S.label}>Capaciteit (kWh)</label>
+            <input style={S.input} placeholder="bijv. 7,7" inputMode="decimal" value={v("batKwh")} onChange={e=>zet("batKwh",e.target.value)}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={S.label}>Max. (ont)laadvermogen (kW)</label>
+            <input style={S.input} placeholder="bijv. 3,68" inputMode="decimal" value={v("batKw")} onChange={e=>zet("batKw",e.target.value)}/>
+          </div>
+        </div>
+        <label style={{...S.label, marginTop:12}}>Koppeling</label>
+        <div style={{display:"flex", gap:8}}>
+          <button style={knop(v("batKoppeling")==="AC")} onClick={()=>zet("batKoppeling","AC")}>AC-gekoppeld (eigen omvormer)</button>
+          <button style={knop(v("batKoppeling")==="DC")} onClick={()=>zet("batKoppeling","DC")}>DC-gekoppeld (via PV-omvormer)</button>
+        </div>
+        <label style={{...S.label, marginTop:12}}>Back-up / eilandbedrijf-functie</label>
+        <div style={{display:"flex", gap:8}}>
+          <button style={knop(v("batEiland")==="ja")}  onClick={()=>zet("batEiland","ja")}>Ja</button>
+          <button style={knop(v("batEiland")==="nee")} onClick={()=>zet("batEiland","nee")}>Nee</button>
+        </div>
+      </div>
+      <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
+    </div>
+  );
+}
+
+function BAT_StapMeten({ data, onChange, onNext, onBack }) {
+  const meet = data.batMeet || {};
+  const zm = (k,v) => onChange("batMeet", { ...meet, [k]: v });
+  const mkp = data.mkp || {};
+  const warnings = batCrossChecks(meet);
+  const knop = (actief, kleur=K.yellow) => ({ padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+    background: actief ? kleur : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? kleur : K.border}` });
+  const JaNee = ({k, l}) => (
+    <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+      <div style={{flex:1, fontSize:13}}>{l}</div>
+      <button style={{...knop(meet[k]==="ja", K.green), flex:"0 0 64px"}} onClick={()=>zm(k,"ja")}>Ja</button>
+      <button style={{...knop(meet[k]==="nee", K.red), flex:"0 0 64px"}} onClick={()=>zm(k,"nee")}>Nee</button>
+    </div>
+  );
+  return (
+    <div style={{padding:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+        <button style={S.backBtn} onClick={onBack}>‹</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Plaatsing, metingen & meldingen</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN 1010:2020 · thuisbatterij</div></div>
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Plaatsingseisen</div>
+        {BAT_PLAATSING.map(p => <JaNee key={p.id} k={`pl_${p.id}`} l={p.label}/>)}
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Elektrisch (batterijgroep)</div>
+        <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+          <div style={{flex:1, fontSize:13}}>Isolatieweerstand (naar aarde)</div>
+          <input style={{...S.input, width:90}} placeholder="≥0,23" inputMode="decimal" value={meet.iso||""} onChange={e=>zm("iso",e.target.value)}/>
+          <span style={{fontSize:12, color:K.muted, width:26}}>MΩ</span>
+          {meet.iso && <StatusTag level={toNum(meet.iso)>=0.23?"ok":"red"}/>}
+        </div>
+        <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
+          <div style={{flex:1, fontSize:13}}>Aardlektest batterijgroep</div>
+          <input style={{...S.input, width:90}} placeholder="ms" inputMode="decimal" value={meet.aardlekMs||""} onChange={e=>zm("aardlekMs",e.target.value)}/>
+          <span style={{fontSize:12, color:K.muted, width:26}}>ms</span>
+          {meet.aardlekMs && <StatusTag level={toNum(meet.aardlekMs)<=300?"ok":"red"}/>}
+        </div>
+        {data.batEiland==="ja" && <JaNee k="eilandtest" l="Omschakeltest eilandbedrijf/back-up geslaagd"/>}
+      </div>
+
+      <div style={{...S.card, marginTop:12}}>
+        <div style={S.sTitle}>Veiligheid & meldingen</div>
+        <JaNee k="brandweersticker" l="Brandweersticker op meterkast geplakt"/>
+        <JaNee k="meldingNetbeheerder" l="Melding netbeheerder gedaan (energieleveren.nl)"/>
+        <div style={{fontSize:11, color:K.muted}}>
+          Voor de melding is de EAN-code nodig{mkp.ean ? <> — die staat al in het paspoort: <strong>{mkp.ean}</strong></> : <> — zoek hem op via de EAN-knop in de paspoort-stap</>}.
+        </div>
+      </div>
+
+      {warnings.map((w,i)=>(
+        <div key={i} style={{...S.card, marginTop:10, borderLeft:`4px solid ${w.level==="red"?K.red:K.orange}`, fontSize:12}}>
+          {w.level==="red"?"⛔":"⚠️"} {w.msg}
+        </div>
+      ))}
+      <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
+    </div>
+  );
+}
+
 export default function App() {
   const [screen,     setScreen]     = useState("home");
   const [discipline, setDiscipline] = useState(null);
@@ -4655,6 +5033,26 @@ export default function App() {
   const [actiefId,   setActiefId]   = useState(null);
   const [idbKlaar,   setIdbKlaar]   = useState(false);
   const [mkpScan,    setMkpScan]    = useState(null);
+
+  // Service worker registreren (offline-werking) + update-signalering.
+  const [swUpdate, setSwUpdate] = useState(null);   // wachtende nieuwe versie
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").then(reg => {
+      if (reg.waiting) setSwUpdate(reg.waiting);
+      reg.addEventListener("updatefound", () => {
+        const nieuw = reg.installing;
+        nieuw?.addEventListener("statechange", () => {
+          if (nieuw.state === "installed" && navigator.serviceWorker.controller) setSwUpdate(nieuw);
+        });
+      });
+    }).catch(()=>{});
+    let herladen = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (herladen) return; herladen = true; window.location.reload();
+    });
+  }, []);
+  const activeerUpdate = () => { swUpdate?.postMessage("SKIP_WAITING"); };
 
   // MKP: gescand meterkastpaspoort inlezen. De QR op de kastdeur codeert
   // meterkastpaspoort.nl/p#<data>; die redirect komt hier binnen met het
@@ -4836,13 +5234,44 @@ export default function App() {
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="wp" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
 
-  const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : discipline==="wp" ? wpScreens : gkScreens;
-  const stepLabels = discipline==="pv" ? PV_STEPS  : discipline==="cv" ? CV_STEPS  : discipline==="wp" ? WP_STEPS  : GK_STEPS;
+  const LP_STEPS  = ["Klant","Installateur","Apparatuur","Foto's (voor)","Laadpunt","Meten","Foto's (na)","Paspoort","Versturen"];
+  const BAT_STEPS = ["Klant","Installateur","Apparatuur","Foto's (voor)","Batterij","Meten","Foto's (na)","Paspoort","Versturen"];
+
+  const lpScreens = [
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={LP_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <LP_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <LP_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={LP_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="laadpaal" onSend={markeerOpgeleverd} onBack={prev}/>,
+  ];
+  const batScreens = [
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="batterij" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="batterij" onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={BAT_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <BAT_StapMateriaal  key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <BAT_StapMeten      key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={BAT_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="batterij" onSend={markeerOpgeleverd} onBack={prev}/>,
+  ];
+
+  const screens    = discipline==="pv" ? pvScreens : discipline==="cv" ? cvScreens : discipline==="wp" ? wpScreens : discipline==="laadpaal" ? lpScreens : discipline==="batterij" ? batScreens : gkScreens;
+  const stepLabels = discipline==="pv" ? PV_STEPS  : discipline==="cv" ? CV_STEPS  : discipline==="wp" ? WP_STEPS  : discipline==="laadpaal" ? LP_STEPS  : discipline==="batterij" ? BAT_STEPS  : GK_STEPS;
 
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
       <div style={S.app}>
+        {swUpdate && (
+          <button onClick={activeerUpdate} style={{width:"100%", padding:"10px", background:K.yellow, color:"#000", border:"none", fontSize:13, fontWeight:700, cursor:"pointer"}}>
+            ⬆️ Nieuwe versie beschikbaar — tik om te verversen
+          </button>
+        )}
         {mkpScan && <MkpViewer p={mkpScan} onNieuw={startMetPaspoort} onSluit={()=>setMkpScan(null)}/>}
         {!mkpScan && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
         {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}

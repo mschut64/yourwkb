@@ -7,6 +7,7 @@ export default function LandingPage() {
   const toggleFaq = (i) => setOpenFaq(openFaq === i ? null : i)
 
   const faqs = [
+    { q: 'Wat als de paspoort-sticker verloren gaat, bijvoorbeeld door brand?', a: 'Elk opleverrapport bevat dezelfde QR-code als uitknippagina — het rapport bij de klant (en in jouw administratie) is dus automatisch de reservekopie. Scannen uit het rapport en opnieuw printen is genoeg. Er is bewust geen centrale database: de historie is zo vaak bewaard als er rapporten zijn.' },
     { q: 'Moet ik iets installeren?', a: 'Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates.' },
     { q: 'Is het rapport echt NEN1010-compliant?', a: 'Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
     { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Maak een back-up via de JSON-export of de gratis Dropbox-koppeling en bewaar je dossiers zelf, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
