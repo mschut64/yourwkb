@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-06-E
+// YourWkb WkbApp.jsx — versie 2026-08-06-F
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -4435,6 +4435,25 @@ const IDB_VERSION = 1;
 const IDB_STORE_PROJ = "projecten";
 const IDB_STORE_FOTOS = "fotos";
 
+// Persistente opslag aanvragen — cruciaal op iOS/Safari: zonder dit verzoek mag
+// het OS de opslag (incl. IndexedDB met projecten en foto's) opruimen bij
+// ruimtegebrek. Met persist() toegekend is de data beschermd tegen automatische
+// eviction. Op de geinstalleerde PWA kent Safari dit doorgaans direct toe.
+// NB: Safari-tabblad en beginscherm-app hebben ELK een eigen opslagruimte —
+// een project uit het tabblad bestaat dus niet in de geinstalleerde app (en
+// andersom). Structurele oplossing: back-up/restore (sessie 2).
+let _persistGevraagd = false;
+async function vraagPersistenteOpslag() {
+  if (_persistGevraagd) return;
+  _persistGevraagd = true;
+  try {
+    if (navigator.storage?.persist) {
+      const al = await navigator.storage.persisted();
+      if (!al) await navigator.storage.persist();
+    }
+  } catch { /* niet ondersteund — stil doorgaan */ }
+}
+
 // IndexedDB open (asynchroon, maar we cachen de connectie)
 let _idbPromise = null;
 function openIDB() {
@@ -4461,6 +4480,7 @@ let _idbCache = null; // null = nog niet geladen; [] of array = geladen
 let _idbFotosCache = {}; // {id: fotosObject}
 
 async function _initIDBCache() {
+  vraagPersistenteOpslag();
   const db = await openIDB();
   if (!db) { _idbCache = []; return; }
   await new Promise((resolve) => {
