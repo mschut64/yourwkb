@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-07-D
+// YourWkb WkbApp.jsx — versie 2026-08-09-A
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -5176,6 +5176,18 @@ export default function App() {
         nieuw?.addEventListener("statechange", () => {
           if (nieuw.state === "installed" && navigator.serviceWorker.controller) setSwUpdate(nieuw);
         });
+      });
+      // iOS-garantie: de allereerste sessie draait nog NIET onder de service worker,
+      // waardoor de app-bestanden van die sessie niet gecachet worden. Zodra de
+      // worker actief is maar deze pagina nog niet onder zijn controle valt:
+      // eenmalig herladen (met vlag tegen een lus), zodat álles door de worker
+      // stroomt en offline-start gegarandeerd is. Het controllerchange-event
+      // alleen is op iOS niet betrouwbaar genoeg.
+      navigator.serviceWorker.ready.then(() => {
+        if (!navigator.serviceWorker.controller && !sessionStorage.getItem("swHerladen")) {
+          sessionStorage.setItem("swHerladen", "1");
+          window.location.reload();
+        }
       });
     }).catch(()=>{});
     let herladen = false;

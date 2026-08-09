@@ -1,15 +1,13 @@
-// YourWkb service worker — v2026-08-07-B
-// Strategie: network-first voor pagina's/navigaties (altijd actueel bij verbinding,
-// cache als vangnet offline), cache-first voor statische Next.js-assets (die hebben
-// unieke buildnamen en zijn dus onveranderlijk). Bij een nieuwe deploy krijgt de
-// cache een nieuwe naam; oude caches worden bij activatie opgeruimd.
-const CACHE = "yourwkb-v1"; // ← ophogen bij bewuste cache-reset (zelden nodig)
-const APP_PAGINAS = ["/app", "/"];
+// YourWkb service worker — v2 (2026-08-09)
+// Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
+// cache-first voor onveranderlijke build-assets. Gehard voor iOS:
+// - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
+// - expliciete navigate-afhandeling met dubbele fallback
+const CACHE = "yourwkb-v2";
+const APP_PAGINAS = ["/app"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(APP_PAGINAS).catch(() => {}))
-  );
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_PAGINAS).catch(() => {})));
 });
 
 self.addEventListener("activate", (e) => {
@@ -28,10 +26,26 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;           // externe calls (API's, EAN-codeboek) nooit cachen
-  if (url.pathname.startsWith("/api/")) return;               // rapport/e-mail-API altijd live
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
-  // Statische build-assets: cache-first (onveranderlijk door unieke namen)
+  // Navigaties (app openen / pagina laden): network-first, offline uit cache
+  if (req.mode === "navigate") {
+    e.respondWith(
+      fetch(req).then((res) => {
+        const kopie = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, kopie));
+        return res;
+      }).catch(async () => {
+        return (await caches.match(req, { ignoreSearch: true }))
+            || (await caches.match("/app", { ignoreSearch: true }))
+            || Response.error();
+      })
+    );
+    return;
+  }
+
+  // Onveranderlijke build-assets & media: cache-first
   if (url.pathname.startsWith("/_next/static/") || /\.(png|jpg|gif|svg|ico|woff2?)$/.test(url.pathname)) {
     e.respondWith(
       caches.match(req).then((hit) => hit || fetch(req).then((res) => {
@@ -43,14 +57,12 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Pagina's/navigaties en overige zelfde-origin GET's: network-first met cache-fallback
+  // Overig (zelfde origin): network-first met cache-fallback
   e.respondWith(
     fetch(req).then((res) => {
       const kopie = res.clone();
       caches.open(CACHE).then((c) => c.put(req, kopie));
       return res;
-    }).catch(() =>
-      caches.match(req).then((hit) => hit || caches.match("/app"))
-    )
+    }).catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });
