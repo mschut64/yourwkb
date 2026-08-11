@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-09-B
+// YourWkb WkbApp.jsx — versie 2026-08-09-C
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -5257,6 +5257,10 @@ export default function App() {
       // stroomt en offline-start gegarandeerd is. Het controllerchange-event
       // alleen is op iOS niet betrouwbaar genoeg.
       navigator.serviceWorker.ready.then(() => {
+        // Kwam de gebruiker binnen via een paspoort-scan (#fragment)? Dan NIET
+        // herladen — dat zou de zojuist geopende paspoort-viewer wegvagen.
+        // De cache-opwarming gebeurt dan gewoon bij het volgende gewone bezoek.
+        if (window.__mkpBinnengekomen) return;
         if (!navigator.serviceWorker.controller && !sessionStorage.getItem("swHerladen")) {
           sessionStorage.setItem("swHerladen", "1");
           window.location.reload();
@@ -5277,6 +5281,7 @@ export default function App() {
     (async () => {
       const frag = typeof window !== "undefined" ? window.location.hash : "";
       if (!frag || frag.length < 20) return;
+      if (typeof window !== "undefined") window.__mkpBinnengekomen = true;
       try {
         const p = await mkpDecode(frag.slice(1));
         setMkpScan(p);
