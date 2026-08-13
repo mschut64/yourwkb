@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-C
+// YourWkb WkbApp.jsx — versie 2026-08-13-D
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -3984,9 +3984,12 @@ function BackupScherm({ onBack, onGewijzigd }) {
   const deelProject = async (p) => {
     const schoon = { ...p, id: undefined, status:"concept", job: anonimiseerJob(p.job||{}) };
     const inhoud = { app:"yourwkb", type:"gedeeld-project", versie:1, geanonimiseerd:true, project: schoon };
-    const naam = `yourwkb-project-${(p.discipline||"klus")}-${new Date().toISOString().slice(0,10)}.json`;
-    const blob = new Blob([JSON.stringify(inhoud)], { type:"application/json" });
-    const bestand = new File([blob], naam, { type:"application/json" });
+    // .txt/text-plain: Android's deelmenu accepteert alleen een vaste lijst
+    // bestandstypen — application/json hoort daar NIET bij (canShare → false →
+    // stille download-fallback). Als platte tekst deelt hij wél gewoon.
+    const naam = `yourwkb-project-${(p.discipline||"klus")}-${new Date().toISOString().slice(0,10)}.txt`;
+    const blob = new Blob([JSON.stringify(inhoud)], { type:"text/plain" });
+    const bestand = new File([blob], naam, { type:"text/plain" });
     if (navigator.canShare && navigator.canShare({ files:[bestand] })) {
       try {
         await navigator.share({ files:[bestand], title:"YourWkb-project",
@@ -4086,7 +4089,7 @@ function BackupScherm({ onBack, onGewijzigd }) {
         <div style={{...S.card, marginBottom:12}}>
           <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Terugzetten / importeren</div>
           <div style={{fontSize:12, color:K.muted, marginBottom:10}}>Kies een back-upbestand of een gedeeld project van een collega.</div>
-          <input ref={fileRef} type="file" accept=".json,application/json" style={{display:"none"}} onChange={kiesBestand}/>
+          <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain" style={{display:"none"}} onChange={kiesBestand}/>
           <button style={{...S.btn, width:"100%", background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={()=>fileRef.current?.click()}>
             📂 Kies bestand…
           </button>
