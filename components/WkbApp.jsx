@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-B
+// YourWkb WkbApp.jsx — versie 2026-08-13-C
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -4048,7 +4048,32 @@ function BackupScherm({ onBack, onGewijzigd }) {
       <div style={S.body}>
 
         <div style={{...S.card, marginBottom:12}}>
-          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Back-up maken</div>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Project back-up & delen</div>
+          <div style={{fontSize:12, color:K.muted, marginBottom:6}}>
+            Draag een project over aan een collega — klantgegevens, EAN en paspoort-QR worden automatisch verwijderd.
+            De deelknop opent het deelmenu van je telefoon; kies daar <strong>WhatsApp</strong> (of mail).
+          </div>
+          {!projecten.length && <div style={{fontSize:12, color:K.muted}}>Nog geen projecten om te delen.</div>}
+          {projecten.map(p=>(
+            <div key={p.id} style={{display:"flex", alignItems:"center", gap:10, padding:"10px 0", borderBottom:`1px solid ${K.border}`}}>
+              <div style={{fontSize:20, flexShrink:0}}>{(DISCIPLINES.find(d=>d.id===p.discipline)||{}).icon||"📄"}</div>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{fontSize:13, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                  {p.job?.naam || "(geen klantnaam)"}{(p.job?.postcode||p.job?.huisnummer) ? ` · ${[p.job?.postcode, [p.job?.huisnummer,p.job?.toevoeging].filter(Boolean).join(" ")].filter(Boolean).join(" ")}` : ""}
+                </div>
+                <div style={{fontSize:11, color:K.muted}}>
+                  {(DISCIPLINES.find(d=>d.id===p.discipline)||{}).label||p.discipline||"—"} · {fmt(p.updatedAt)}{p.status==="opgeleverd"?" · opgeleverd":""}
+                </div>
+              </div>
+              <button style={{padding:"9px 14px", fontSize:12, fontWeight:700, borderRadius:9, cursor:"pointer", fontFamily:"inherit",
+                              background:"#25D366", border:"none", color:"#000", flexShrink:0}}
+                onClick={()=>deelProject(p)}>💬 Deel</button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{...S.card, marginBottom:12}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Volledige back-up</div>
           <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
             Alle {projecten.length} project{projecten.length===1?"":"en"} (inclusief foto's) in één bestand.
             Projecten staan alléén op dit apparaat — een back-up buiten de telefoon is je verzekering tegen verlies, wissen of een nieuw toestel.
@@ -4082,22 +4107,6 @@ function BackupScherm({ onBack, onGewijzigd }) {
               <div style={{fontSize:11, color:K.muted, marginTop:6}}>Bestaande projecten blijven staan; dubbele krijgen een nieuw nummer.</div>
             </div>
           )}
-        </div>
-
-        <div style={{...S.card, marginBottom:12}}>
-          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Project delen met een collega</div>
-          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
-            Voor collegiale overname: klantgegevens, EAN en de paspoort-QR worden eruit gehaald.
-            Je collega vult eigen klant- en bedrijfsgegevens in en levert onder eigen naam op.
-          </div>
-          {!projecten.length && <div style={{fontSize:12, color:K.muted}}>Nog geen projecten om te delen.</div>}
-          {projecten.map(p=>(
-            <div key={p.id} style={{display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
-              <span style={{flex:1, minWidth:0, fontSize:12, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{omschrijf(p)}</span>
-              <button style={{...S.btn, padding:"7px 12px", fontSize:12, background:K.card, border:`1px solid ${K.border}`, color:K.text, flexShrink:0}}
-                onClick={()=>deelProject(p)}>📤 Deel</button>
-            </div>
-          ))}
         </div>
 
         {melding && <div style={{...S.card, fontSize:12, borderLeft:`4px solid ${melding.startsWith("⚠")?K.orange:K.green}`}}>{melding}</div>}
@@ -4187,18 +4196,8 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
       </div>
       <div style={S.body}>
 
-        {/* Hero */}
-        <div style={{...S.card,background:`linear-gradient(135deg,#1A1D10,${K.yellowDim})`,border:`1px solid ${K.yellow}33`,padding:22,marginBottom:20,cursor:"pointer"}} onClick={()=>onNew()}>
-          <div style={{fontSize:13,color:K.yellow,fontWeight:700,marginBottom:8}}>+ NIEUWE REGISTRATIE</div>
-          <div style={{fontSize:20,fontWeight:800,marginBottom:4}}>Kies discipline</div>
-          <div style={{fontSize:13,color:K.muted,marginBottom:16}}>Groepenkast · Zonnepanelen · Combiketel · Warmtepomp</div>
-          <div style={{display:"inline-flex",alignItems:"center",gap:8,background:K.yellow,color:"#000",padding:"11px 20px",borderRadius:10,fontWeight:700,fontSize:14}}>
-            Start registratie →
-          </div>
-        </div>
-
-        {/* Snelkeuze disciplines — direct een klus starten */}
-        <div style={S.sTitle}>Start direct</div>
+        {/* Snelkeuze disciplines — dé ingang voor een nieuwe klus */}
+        <div style={{fontSize:13,color:K.yellow,fontWeight:700,marginBottom:8}}>+ NIEUWE REGISTRATIE</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           {DISCIPLINES.map(d=>(
             <div key={d.id} style={{...S.card,padding:14,cursor:"pointer",border:`1px solid ${d.colorDim}`}} onClick={()=>onNew(d.id)}>
@@ -5569,7 +5568,7 @@ export default function App() {
   const PV_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Paspoort","Versturen"];
 
   const gkScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
@@ -5583,7 +5582,7 @@ export default function App() {
   ];
 
   const pvScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="pv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="pv" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="pv" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={PV_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
@@ -5598,7 +5597,7 @@ export default function App() {
   const WP_STEPS = ["Klant","Installateur","Apparatuur","Foto's (oud)","Materiaal","Meten","Foto's (nieuw)","Paspoort","Versturen"];
 
   const cvScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="cv" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={CV_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
@@ -5609,7 +5608,7 @@ export default function App() {
   ];
 
   const wpScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="wp" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="wp" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="wp" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={WP_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
@@ -5624,7 +5623,7 @@ export default function App() {
   const BAT_STEPS = ["Klant","Installateur","Apparatuur","Foto's (voor)","Batterij","Meten","Foto's (na)","Paspoort","Versturen"];
 
   const lpScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="laadpaal" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={LP_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
@@ -5635,7 +5634,7 @@ export default function App() {
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="laadpaal" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
   const batScreens = [
-    <StapKlant          key="klant"      data={job} onChange={upd} discipline="batterij" onNext={next} onBack={()=>setScreen("kiezen")}/>,
+    <StapKlant          key="klant"      data={job} onChange={upd} discipline="batterij" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="batterij" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={BAT_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
