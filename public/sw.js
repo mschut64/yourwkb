@@ -1,9 +1,9 @@
-// YourWkb service worker — v5 (2026-08-09)
+// YourWkb service worker — v6 (2026-08-13)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v5";
+const CACHE = "yourwkb-v6";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
@@ -63,6 +63,24 @@ self.addEventListener("message", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
+
+  // Web Share Target: bestand gedeeld vanuit een andere app (bijv. WhatsApp).
+  // We parkeren de inhoud in de cache en sturen de app door met een vlag;
+  // de app haalt hem daar op en opent meteen het importscherm.
+  if (req.method === "POST" && new URL(req.url).pathname === "/app/deel-ontvangst") {
+    e.respondWith((async () => {
+      try {
+        const form = await req.formData();
+        const bestand = form.get("bestand");
+        const tekst = bestand ? await bestand.text() : "";
+        const c = await caches.open(CACHE);
+        await c.put("/app/__gedeeld-bestand", new Response(tekst, { headers: { "Content-Type": "text/plain" } }));
+      } catch { /* leeg gedeeld — app toont dan gewoon het importscherm */ }
+      return Response.redirect("/app?gedeeld=1", 303);
+    })());
+    return;
+  }
+
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;

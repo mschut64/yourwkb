@@ -23,6 +23,19 @@ export default function manifest() {
     lang: 'nl',
     dir: 'ltr',
     categories: ['business', 'productivity', 'utilities'],
+    // Web Share Target: YourWkb verschijnt in het Android-deelmenu (o.a. vanuit
+    // WhatsApp: lang indrukken op een ontvangen bestand → Delen → YourWkb).
+    // De service worker vangt de POST op en geeft het bestand aan de app door.
+    share_target: {
+      action: '/app/deel-ontvangst',
+      method: 'POST',
+      enctype: 'multipart/form-data',
+      params: {
+        files: [
+          { name: 'bestand', accept: ['text/plain', 'application/json', '.txt', '.json'] },
+        ],
+      },
+    },
     icons: [
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

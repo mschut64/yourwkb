@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-G
+// YourWkb WkbApp.jsx — versie 2026-08-13-H
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -3964,11 +3964,31 @@ function downloadJson(naam, obj) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
-function BackupScherm({ onBack, onGewijzigd }) {
+function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
   const [projecten, setProjecten] = useState(laadProjecten());
   const [importLijst, setImportLijst] = useState(null);   // projecten uit gekozen bestand
   const [melding, setMelding] = useState("");
   const fileRef = useRef(null);
+
+  // Bestand dat via het Android-deelmenu binnenkwam ("Delen → YourWkb"):
+  useEffect(() => {
+    if (!startBestand) return;
+    try {
+      const d = JSON.parse(startBestand);
+      const lijst = d.type==="gedeeld-project" && d.project ? [d.project]
+                  : Array.isArray(d.projecten) ? d.projecten : null;
+      if (lijst && lijst.length) {
+        setImportLijst(lijst.map(p => ({ ...p, _gedeeld: d.type==="gedeeld-project" })));
+        setMelding("📥 Bestand ontvangen via delen — controleer hieronder en zet terug.");
+      } else {
+        setMelding("⚠️ Het gedeelde bestand bevat geen YourWkb-projecten.");
+      }
+    } catch {
+      setMelding("⚠️ Het gedeelde bestand is geen YourWkb-back-up of project.");
+    }
+    naVerwerkt?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startBestand]);
   const D_LABEL = Object.fromEntries(DISCIPLINES.map(d=>[d.id, `${d.icon} ${d.label}`]));
   const fmt = (t) => new Date(t||Date.now()).toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"numeric"});
   const omschrijf = (p) => `${D_LABEL[p.discipline]||p.discipline||"—"} · ${p.job?.naam||"(geen naam)"} · ${[p.job?.postcode,p.job?.huisnummer].filter(Boolean).join(" ")||"geen adres"}`;
@@ -4091,10 +4111,9 @@ function BackupScherm({ onBack, onGewijzigd }) {
           <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Terugzetten / importeren</div>
           <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
             Kies een back-upbestand of een gedeeld project van een collega.
-            <br/><strong>Ontvangen via WhatsApp? Zo werkt het:</strong>
-            <br/>1. Tik in WhatsApp één keer op het bestand — dan wordt het gedownload. (Opent hij als tekst? Gewoon sluiten, dat hoort zo.)
-            <br/>2. Kom terug naar dit scherm en tik op "Kies bestand…".
-            <br/>3. Het bestand staat bovenaan onder <strong>Recent</strong> — anders via Bladeren → Downloads of de WhatsApp-map.
+            <br/><strong>Ontvangen via WhatsApp?</strong> Druk in WhatsApp <strong>lang op het bestand</strong> → tik <strong>Delen</strong> → kies <strong>YourWkb</strong>.
+            De app opent dan vanzelf met het project klaar om terug te zetten.
+            <br/><span style={{color:K.muted}}>Staat YourWkb er (nog) niet tussen? Werk de app-installatie bij (verwijder het icoon en zet de app opnieuw op je beginscherm) — of gebruik "Kies bestand…" hieronder.</span>
           </div>
           <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain" style={{display:"none"}} onChange={kiesBestand}/>
           <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000"}} onClick={()=>fileRef.current?.click()}>
@@ -5446,6 +5465,27 @@ export default function App() {
   }, []);
   const activeerUpdate = () => { swUpdate?.postMessage("SKIP_WAITING"); };
 
+  // Web Share Target: binnengekomen via "Delen → YourWkb" vanuit een andere app
+  // (WhatsApp-bestand). De service worker heeft de inhoud geparkeerd; wij halen
+  // hem op, openen het Back-up & delen-scherm en zetten het bestand klaar.
+  const [gedeeldBestand, setGedeeldBestand] = useState(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.location.search.includes("gedeeld=1")) return;
+    window.history.replaceState(null, "", "/app");
+    (async () => {
+      try {
+        const hit = await caches.match("/app/__gedeeld-bestand");
+        if (!hit) return;
+        const tekst = await hit.text();
+        const c = await caches.open((await caches.keys()).find(n=>n.startsWith("yourwkb")) || "yourwkb");
+        c.delete("/app/__gedeeld-bestand").catch(()=>{});
+        if (tekst) { setGedeeldBestand(tekst); setScreen("backup"); }
+      } catch { /* stil — gebruiker kan altijd handmatig kiezen */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // MKP: gescand meterkastpaspoort inlezen. De QR op de kastdeur codeert
   // meterkastpaspoort.nl/p#<data>; die redirect komt hier binnen met het
   // datafragment intact. Decoderen, tonen, en de URL schoonmaken.
@@ -5677,7 +5717,7 @@ export default function App() {
           </button>
         )}
         {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject} onBackup={()=>setScreen("backup")}/>}
-        {!mkpScan && screen==="backup" && <BackupScherm onBack={()=>setScreen("home")} onGewijzigd={()=>{}}/>}
+        {!mkpScan && screen==="backup" && <BackupScherm onBack={()=>setScreen("home")} onGewijzigd={()=>{}} startBestand={gedeeldBestand} naVerwerkt={()=>setGedeeldBestand(null)}/>}
         {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {!mkpScan && screen==="job"    && (
           <div>
