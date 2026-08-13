@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-09-C
+// YourWkb WkbApp.jsx — versie 2026-08-13-A
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -3943,6 +3943,169 @@ function KlaarScreen({ data, discipline, onDone }) {
 }
 
 // ─── DISCIPLINE KIEZER ────────────────────────────────────────────────────────
+// ─── BACK-UP & DELEN ─────────────────────────────────────────────────────────
+const KLANT_VELDEN = ["naam","email","straat","plaats","postcode","huisnummer","toevoeging"];
+
+function anonimiseerJob(job) {
+  const schoon = { ...job };
+  KLANT_VELDEN.forEach(k => { delete schoon[k]; });
+  delete schoon.mkpUrl; delete schoon.mkpQr;      // bevatten adres — ontvanger genereert opnieuw
+  if (schoon.mkp) { const m = { ...schoon.mkp }; delete m.ean; delete m.ean2; schoon.mkp = m; }
+  delete schoon.mkpImport;
+  return schoon;
+}
+
+function downloadJson(naam, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = naam;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function BackupScherm({ onBack, onGewijzigd }) {
+  const [projecten, setProjecten] = useState(laadProjecten());
+  const [importLijst, setImportLijst] = useState(null);   // projecten uit gekozen bestand
+  const [melding, setMelding] = useState("");
+  const fileRef = useRef(null);
+  const D_LABEL = Object.fromEntries(DISCIPLINES.map(d=>[d.id, `${d.icon} ${d.label}`]));
+  const fmt = (t) => new Date(t||Date.now()).toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"numeric"});
+  const omschrijf = (p) => `${D_LABEL[p.discipline]||p.discipline||"—"} · ${p.job?.naam||"(geen naam)"} · ${[p.job?.postcode,p.job?.huisnummer].filter(Boolean).join(" ")||"geen adres"}`;
+
+  const exporteerAlles = () => {
+    const datum = new Date().toISOString().slice(0,10);
+    downloadJson(`yourwkb-backup-${datum}.json`,
+      { app:"yourwkb", type:"backup", versie:1, exportDatum:datum, projecten });
+    setMelding(`✓ Back-up met ${projecten.length} project${projecten.length===1?"":"en"} gedownload — bewaar hem buiten dit apparaat (mail naar jezelf, Dropbox, USB).`);
+    trackEvent("backup_geexporteerd", { aantal: projecten.length });
+  };
+
+  const deelProject = async (p) => {
+    const schoon = { ...p, id: undefined, status:"concept", job: anonimiseerJob(p.job||{}) };
+    const inhoud = { app:"yourwkb", type:"gedeeld-project", versie:1, geanonimiseerd:true, project: schoon };
+    const naam = `yourwkb-project-${(p.discipline||"klus")}-${new Date().toISOString().slice(0,10)}.json`;
+    const blob = new Blob([JSON.stringify(inhoud)], { type:"application/json" });
+    const bestand = new File([blob], naam, { type:"application/json" });
+    if (navigator.canShare && navigator.canShare({ files:[bestand] })) {
+      try {
+        await navigator.share({ files:[bestand], title:"YourWkb-project",
+          text:"Geanonimiseerd YourWkb-project — importeren via Back-up & delen in de app." });
+        trackEvent("project_gedeeld", { discipline: p.discipline });
+        return;
+      } catch { /* geannuleerd of niet gelukt → download-fallback */ }
+    }
+    downloadJson(naam, inhoud);
+    setMelding("✓ Deelbestand gedownload — stuur het via WhatsApp of mail naar je collega. Klantgegevens, EAN en QR zijn eruit gehaald.");
+  };
+
+  const kiesBestand = (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const lezer = new FileReader();
+    lezer.onload = () => {
+      try {
+        const d = JSON.parse(lezer.result);
+        const lijst = d.type==="gedeeld-project" && d.project ? [d.project]
+                    : Array.isArray(d.projecten) ? d.projecten : null;
+        if (!lijst || !lijst.length) throw new Error("geen projecten gevonden");
+        setImportLijst(lijst.map(p => ({ ...p, _gedeeld: d.type==="gedeeld-project" })));
+        setMelding("");
+      } catch {
+        setMelding("⚠️ Dit bestand is geen YourWkb-back-up of gedeeld project.");
+        setImportLijst(null);
+      }
+    };
+    lezer.readAsText(f);
+    e.target.value = "";
+  };
+
+  const zetTerug = (welke) => {
+    const huidig = laadProjecten();
+    const bestaandeIds = new Set(huidig.map(p=>p.id));
+    let lijst = huidig;
+    welke.forEach(p => {
+      const kopie = { ...p };
+      delete kopie._gedeeld;
+      if (!kopie.id || bestaandeIds.has(kopie.id)) kopie.id = "p" + Date.now() + Math.floor(Math.random()*1000);
+      kopie.updatedAt = kopie.updatedAt || Date.now();
+      lijst = upsertProject(lijst, kopie);
+      bestaandeIds.add(kopie.id);
+    });
+    bewaarProjecten(lijst);
+    setProjecten(laadProjecten());
+    setImportLijst(null);
+    setMelding(`✓ ${welke.length} project${welke.length===1?"":"en"} teruggezet — zichtbaar op het startscherm.`);
+    onGewijzigd?.();
+    trackEvent("backup_geimporteerd", { aantal: welke.length });
+  };
+
+  return (
+    <div>
+      <div style={S.hdr}>
+        <button style={S.backBtn} onClick={onBack}>←</button>
+        <div><div style={{fontWeight:700,fontSize:15}}>Back-up & delen</div><div style={{fontSize:11,color:K.muted}}>Projecten veiligstellen of overdragen</div></div>
+      </div>
+      <div style={S.body}>
+
+        <div style={{...S.card, marginBottom:12}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Back-up maken</div>
+          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
+            Alle {projecten.length} project{projecten.length===1?"":"en"} (inclusief foto's) in één bestand.
+            Projecten staan alléén op dit apparaat — een back-up buiten de telefoon is je verzekering tegen verlies, wissen of een nieuw toestel.
+          </div>
+          <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000"}} onClick={exporteerAlles} disabled={!projecten.length}>
+            ⬇️ Download back-up ({projecten.length})
+          </button>
+        </div>
+
+        <div style={{...S.card, marginBottom:12}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Terugzetten / importeren</div>
+          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>Kies een back-upbestand of een gedeeld project van een collega.</div>
+          <input ref={fileRef} type="file" accept=".json,application/json" style={{display:"none"}} onChange={kiesBestand}/>
+          <button style={{...S.btn, width:"100%", background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={()=>fileRef.current?.click()}>
+            📂 Kies bestand…
+          </button>
+          {importLijst && (
+            <div style={{marginTop:12}}>
+              <div style={{fontSize:12, fontWeight:700, marginBottom:6}}>In dit bestand:</div>
+              {importLijst.map((p,i)=>(
+                <div key={i} style={{fontSize:12, padding:"7px 0", borderBottom:`1px solid ${K.border}`, display:"flex", justifyContent:"space-between", gap:8}}>
+                  <span style={{flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                    {omschrijf(p)}{p._gedeeld && <span style={{color:K.yellow}}> · gedeeld (geanonimiseerd)</span>}
+                  </span>
+                  <span style={{color:K.muted, flexShrink:0}}>{fmt(p.updatedAt)}</span>
+                </div>
+              ))}
+              <button style={{...S.btn, width:"100%", background:K.green, color:"#000", marginTop:10}} onClick={()=>zetTerug(importLijst)}>
+                ✓ {importLijst.length===1?"Dit project":"Alle "+importLijst.length+" projecten"} terugzetten
+              </button>
+              <div style={{fontSize:11, color:K.muted, marginTop:6}}>Bestaande projecten blijven staan; dubbele krijgen een nieuw nummer.</div>
+            </div>
+          )}
+        </div>
+
+        <div style={{...S.card, marginBottom:12}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Project delen met een collega</div>
+          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
+            Voor collegiale overname: klantgegevens, EAN en de paspoort-QR worden eruit gehaald.
+            Je collega vult eigen klant- en bedrijfsgegevens in en levert onder eigen naam op.
+          </div>
+          {!projecten.length && <div style={{fontSize:12, color:K.muted}}>Nog geen projecten om te delen.</div>}
+          {projecten.map(p=>(
+            <div key={p.id} style={{display:"flex", alignItems:"center", gap:8, padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
+              <span style={{flex:1, minWidth:0, fontSize:12, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{omschrijf(p)}</span>
+              <button style={{...S.btn, padding:"7px 12px", fontSize:12, background:K.card, border:`1px solid ${K.border}`, color:K.text, flexShrink:0}}
+                onClick={()=>deelProject(p)}>📤 Deel</button>
+            </div>
+          ))}
+        </div>
+
+        {melding && <div style={{...S.card, fontSize:12, borderLeft:`4px solid ${melding.startsWith("⚠")?K.orange:K.green}`}}>{melding}</div>}
+      </div>
+    </div>
+  );
+}
+
 function DisciplineKiezer({ onKies, onBack }) {
   return (
     <div>
@@ -3953,25 +4116,20 @@ function DisciplineKiezer({ onKies, onBack }) {
       <div style={S.body}>
         <div style={{fontSize:12,color:K.muted,marginBottom:16}}>Kies de discipline voor deze registratie. Elke discipline heeft eigen velden, normen en rapport.</div>
         {DISCIPLINES.map(d=>(
-          <div key={d.id} style={{...S.card,
-            cursor:d.available?"pointer":"not-allowed",
-            opacity:d.available?1:0.5,
-            border:`1px solid ${d.available?d.colorDim:K.border}`,
-            background:d.available?`linear-gradient(135deg,${d.colorDim},${K.card})`:K.card,
-          }} onClick={()=>d.available&&onKies(d.id)}>
+          <div key={d.id} style={{...S.card, cursor:"pointer",
+            border:`1px solid ${d.colorDim}`,
+            background:`linear-gradient(135deg,${d.colorDim},${K.card})`,
+          }} onClick={()=>onKies(d.id)}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:48,height:48,borderRadius:12,flexShrink:0,background:d.available?`${d.color}22`:K.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>
+              <div style={{width:48,height:48,borderRadius:12,flexShrink:0,background:`${d.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>
                 {d.icon}
               </div>
               <div style={{flex:1}}>
-                <div style={{fontWeight:700,fontSize:16,color:d.available?K.text:K.muted}}>{d.label}</div>
+                <div style={{fontWeight:700,fontSize:16,color:K.text}}>{d.label}</div>
                 <div style={{fontSize:12,color:K.muted}}>{d.sub}</div>
-                <div style={{fontSize:11,color:d.available?d.color:K.muted,fontWeight:600,marginTop:2}}>{d.norm}</div>
+                <div style={{fontSize:11,color:d.color,fontWeight:600,marginTop:2}}>{d.norm}</div>
               </div>
-              {d.available
-                ? <div style={{fontSize:20,color:d.color}}>→</div>
-                : <div style={{fontSize:11,color:K.muted,background:K.surface,padding:"3px 8px",borderRadius:10}}>Binnenkort</div>
-              }
+              <div style={{fontSize:20,color:d.color}}>→</div>
             </div>
           </div>
         ))}
@@ -3981,7 +4139,7 @@ function DisciplineKiezer({ onKies, onBack }) {
 }
 
 // ─── HOME SCHERM ──────────────────────────────────────────────────────────────
-function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar }) {
+function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
   const [projecten, setProjecten] = useState([]);
 
   useEffect(() => {
@@ -4039,17 +4197,22 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar }) {
           </div>
         </div>
 
-        {/* Discipline overzicht */}
-        <div style={S.sTitle}>Beschikbare disciplines</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+        {/* Snelkeuze disciplines — direct een klus starten */}
+        <div style={S.sTitle}>Start direct</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           {DISCIPLINES.map(d=>(
-            <div key={d.id} style={{...S.card,padding:14,opacity:d.available?1:0.5,cursor:d.available?"pointer":"default",border:`1px solid ${d.available?d.colorDim:K.border}`}} onClick={()=>d.available&&onNew(d.id)}>
+            <div key={d.id} style={{...S.card,padding:14,cursor:"pointer",border:`1px solid ${d.colorDim}`}} onClick={()=>onNew(d.id)}>
               <div style={{fontSize:24,marginBottom:6}}>{d.icon}</div>
               <div style={{fontWeight:700,fontSize:13}}>{d.label}</div>
-              <div style={{fontSize:10,color:d.available?d.color:K.muted,fontWeight:600,marginTop:2}}>{d.available?"Beschikbaar":"Binnenkort"}</div>
+              <div style={{fontSize:10,color:d.color,fontWeight:600,marginTop:2}}>{d.norm}</div>
             </div>
           ))}
         </div>
+        <button onClick={onBackup}
+          style={{width:"100%", marginBottom:20, padding:"12px", borderRadius:12, cursor:"pointer",
+                  background:K.card, border:`1px solid ${K.border}`, color:K.text, fontSize:13, fontWeight:600, fontFamily:"inherit"}}>
+          💾 Back-up & delen <span style={{color:K.muted, fontWeight:400}}>· veiligstellen of overdragen aan een collega</span>
+        </button>
 
         {/* Concepten */}
         {concepten.length > 0 && (
@@ -5504,7 +5667,8 @@ export default function App() {
             📷 Scan meterkastpaspoort <span style={{color:K.muted, fontWeight:400}}>· werkt ook zonder bereik</span>
           </button>
         )}
-        {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject}/>}
+        {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject} onBackup={()=>setScreen("backup")}/>}
+        {!mkpScan && screen==="backup" && <BackupScherm onBack={()=>setScreen("home")} onGewijzigd={()=>{}}/>}
         {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {!mkpScan && screen==="job"    && (
           <div>

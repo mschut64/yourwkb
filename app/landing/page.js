@@ -1,5 +1,45 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+function InstallBalk() {
+  const [prompt, setPrompt] = useState(null)
+  const [toon, setToon] = useState(false)
+  const [isIos, setIsIos] = useState(false)
+  useEffect(() => {
+    try { if (localStorage.getItem('ywkb_install_weg')) return } catch {}
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
+    if (standalone) return
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    if (ios) { setIsIos(true); setToon(true); return }
+    const vang = (e) => { e.preventDefault(); setPrompt(e); setToon(true) }
+    window.addEventListener('beforeinstallprompt', vang)
+    return () => window.removeEventListener('beforeinstallprompt', vang)
+  }, [])
+  const installeer = async () => {
+    if (!prompt) return
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') setToon(false)
+  }
+  const sluit = () => { setToon(false); try { localStorage.setItem('ywkb_install_weg','1') } catch {} }
+  if (!toon) return null
+  return (
+    <div style={{ position:'sticky', top:0, zIndex:60, background:'#F5C518', color:'#000',
+                  padding:'10px 14px', display:'flex', alignItems:'center', gap:10, fontSize:13 }}>
+      <span style={{fontSize:18}}>📲</span>
+      {isIos ? (
+        <span style={{flex:1}}><strong>Zet YourWkb op je beginscherm:</strong> tik op de deel-knop (vierkantje met pijl) en kies "Zet op beginscherm" — dan werkt de app ook offline.</span>
+      ) : (
+        <>
+          <span style={{flex:1}}><strong>Installeer YourWkb als app</strong> — werkt dan ook offline, in de kelder en op de bouwplaats.</span>
+          <button onClick={installeer} style={{ background:'#000', color:'#F5C518', border:'none', borderRadius:8,
+                  padding:'8px 14px', fontWeight:700, fontSize:13, cursor:'pointer' }}>Installeer</button>
+        </>
+      )}
+      <button onClick={sluit} aria-label="Sluiten" style={{ background:'transparent', border:'none', fontSize:16, cursor:'pointer', color:'#000' }}>✕</button>
+    </div>
+  )
+}
 
 export default function LandingPage() {
   const [openFaq, setOpenFaq] = useState(null)
@@ -12,12 +52,13 @@ export default function LandingPage() {
     { q: 'Is het rapport echt NEN1010-compliant?', a: 'Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
     { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Maak een back-up via de JSON-export of de gratis Dropbox-koppeling en bewaar je dossiers zelf, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
     { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels.' },
-    { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Laadpaal en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl.' },
+    { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen, combiketel, warmtepomp, laadpaal en thuisbatterij zijn allemaal beschikbaar, elk met eigen checkpunten, metingen en rapport. Specifieke wensen? Mail naar info@yourwkb.nl.' },
     { q: 'Wat kost het na de testperiode?', a: 'De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €7,50 per definitief rapport, of je kiest de voordeelbundel: 10 rapporten voor €55 (€5,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
   ]
 
   return (
     <>
+      <InstallBalk/>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
@@ -291,7 +332,7 @@ export default function LandingPage() {
             <div className="price-amount">€0</div>
             <div className="price-desc">Gratis.</div>
             <ul className="price-features">
-              {[['✓','Groepenkast'],['✓','Zonnepanelen'],['✓','Combiketel'],['✓','Warmtepomp'],['✓','Foto\'s, meetwaarden & normchecks'],['✓','Concept-rapport met watermerk'],['✓','Back-up via gratis Dropbox-account']].map(([i,l])=>(
+              {[['✓','Groepenkast · Zonnepanelen · Combiketel'],['✓','Warmtepomp · Laadpaal · Thuisbatterij'],['✓','Foto\'s, meetwaarden & normchecks'],['✓','QR-meterkastpaspoort op de kastdeur'],['✓','Werkt offline — ook in de kelder'],['✓','Concept-rapport met watermerk'],['✓','Back-up & delen met een collega']].map(([i,l])=>(
                 <li key={l}><span className={i==='✓'?'feat-check':'feat-dash'}>{i}</span>{l}</li>
               ))}
             </ul>
@@ -319,11 +360,8 @@ export default function LandingPage() {
           <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Binnenkort beschikbaar</div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
             {[
-              { icon:'🔌', title:'Laadpaal & thuisbatterij', desc:'Twee nieuwe disciplines, incl. type A/B-aardlekkeuze en plaatsingseisen.' },
               { icon:'🧮', title:'Meterkast-belastingcheck', desc:'Kan de kast het totaal aan? Hoofdaansluiting én railcapaciteit getoetst.' },
-              { icon:'📱', title:'QR meterkastpaspoort', desc:'Sticker op de kastdeur — elke volgende monteur scant en ziet wat er al hangt.' },
               { icon:'🏷️', title:'Eigen logo op rapport', desc:'Jouw huisstijl op elk rapport. Upload eenmalig je logo.' },
-              { icon:'💾', title:'Back-up & delen', desc:'Back-up/herstel van je projecten en geanonimiseerd delen met een collega.' },
             ].map(c => (
               <div key={c.title} style={{ background:'var(--card)', border:'1px solid var(--border)', borderRadius:12, padding:18, opacity:0.45, position:'relative', overflow:'hidden' }}>
                 <div style={{ position:'absolute', top:10, right:10, background:'var(--border)', color:'var(--muted)', fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:10 }}>BINNENKORT</div>
