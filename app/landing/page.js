@@ -24,8 +24,9 @@ function InstallBalk() {
   const sluit = () => { setToon(false); try { localStorage.setItem('ywkb_install_weg','1') } catch {} }
   if (!toon) return null
   return (
-    <div style={{ position:'sticky', top:0, zIndex:60, background:'#F5C518', color:'#000',
-                  padding:'10px 14px', display:'flex', alignItems:'center', gap:10, fontSize:13 }}>
+    <div style={{ position:'fixed', left:0, right:0, bottom:0, zIndex:200, background:'#F5C518', color:'#000',
+                  padding:'12px 14px calc(12px + env(safe-area-inset-bottom))', display:'flex', alignItems:'center', gap:10, fontSize:13,
+                  boxShadow:'0 -4px 20px rgba(0,0,0,0.35)' }}>
       <span style={{fontSize:18}}>📲</span>
       {isIos ? (
         <span style={{flex:1}}><strong>Zet YourWkb op je beginscherm:</strong> tik op de deel-knop (vierkantje met pijl) en kies "Zet op beginscherm" — dan werkt de app ook offline.</span>
@@ -215,7 +216,7 @@ export default function LandingPage() {
         <div className="hero-inner">
           <div className="hero-badge">
             <div className="badge-dot" />
-            Nu beschikbaar: elektricien, zonnepanelen & cv-monteur
+            Nu voor 6 disciplines: groepenkast · PV · cv · WP · laadpaal · thuisbatterij
           </div>
           <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
           <p className="hero-sub">De Wet kwaliteitsborging voor het bouwen legt de aansprakelijkheid voor je werk bij jou. YourWkb legt het bewijs vast: NEN-conform opleverrapport, in minuten, vanaf je telefoon.</p>

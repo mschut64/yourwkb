@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-A
+// YourWkb WkbApp.jsx — versie 2026-08-13-B
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -4182,7 +4182,7 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
   return (
     <div>
       <div style={S.hdr}>
-        <div style={{width:34,height:34,borderRadius:9,background:K.yellow,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,color:"#000"}}>W</div>
+        <div style={{width:34,height:34,borderRadius:9,background:K.yellow,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden="true"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z"/></svg></div>
         <div><div style={{fontWeight:700,fontSize:16}}>YourWkb</div><div style={{fontSize:11,color:K.muted}}>Installatie opleverrapporten</div></div>
       </div>
       <div style={S.body}>
