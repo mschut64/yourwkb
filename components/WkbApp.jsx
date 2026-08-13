@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-D
+// YourWkb WkbApp.jsx — versie 2026-08-13-E
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -4055,6 +4055,7 @@ function BackupScherm({ onBack, onGewijzigd }) {
           <div style={{fontSize:12, color:K.muted, marginBottom:6}}>
             Draag een project over aan een collega — klantgegevens, EAN en paspoort-QR worden automatisch verwijderd.
             De deelknop opent het deelmenu van je telefoon; kies daar <strong>WhatsApp</strong> (of mail).
+            Je collega downloadt het bestand en haalt het binnen via "Terugzetten" in zíjn app.
           </div>
           {!projecten.length && <div style={{fontSize:12, color:K.muted}}>Nog geen projecten om te delen.</div>}
           {projecten.map(p=>(
@@ -4088,7 +4089,11 @@ function BackupScherm({ onBack, onGewijzigd }) {
 
         <div style={{...S.card, marginBottom:12}}>
           <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Terugzetten / importeren</div>
-          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>Kies een back-upbestand of een gedeeld project van een collega.</div>
+          <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
+            Kies een back-upbestand of een gedeeld project van een collega.
+            <br/><strong>Uit WhatsApp?</strong> Tik daar eerst op het bestand zodat het wordt gedownload (het bestand zelf opent als tekst — dat hoort zo),
+            kom dan hierheen en kies het via de knop hieronder: je vindt het onder "Recent" of in de Downloads/WhatsApp-map.
+          </div>
           <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain" style={{display:"none"}} onChange={kiesBestand}/>
           <button style={{...S.btn, width:"100%", background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={()=>fileRef.current?.click()}>
             📂 Kies bestand…
