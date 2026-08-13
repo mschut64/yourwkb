@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-F
+// YourWkb WkbApp.jsx — versie 2026-08-13-G
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -3981,43 +3981,6 @@ function BackupScherm({ onBack, onGewijzigd }) {
     trackEvent("backup_geexporteerd", { aantal: projecten.length });
   };
 
-  const CODE_PREFIX = "YWKB1:";
-
-  const deelProjectCode = async (p) => {
-    const schoon = { ...p, id: undefined, status:"concept", job: anonimiseerJob(p.job||{}) };
-    if (schoon.job) { const j = { ...schoon.job }; delete j.fotos; schoon.job = j; }   // foto's passen niet in een bericht
-    const inhoud = { app:"yourwkb", type:"gedeeld-project", versie:1, geanonimiseerd:true, zonderFotos:true, project: schoon };
-    try {
-      const code = CODE_PREFIX + await mkpEncode(inhoud);
-      const bericht = `YourWkb-project (geanonimiseerd, zonder foto's).\nBinnenhalen: YourWkb-app → 💾 Back-up & delen → "Plak gedeelde code", nadat je dit hele bericht hebt gekopieerd.\n\n${code}`;
-      if (navigator.share) {
-        await navigator.share({ text: bericht });
-      } else {
-        await navigator.clipboard.writeText(bericht);
-        setMelding("✓ Bericht met projectcode staat op je klembord — plak het in WhatsApp.");
-      }
-      trackEvent("project_gedeeld", { discipline: p.discipline, via: "code" });
-    } catch { /* delen geannuleerd */ }
-  };
-
-  const plakCode = async () => {
-    let tekst = "";
-    try { tekst = await navigator.clipboard.readText(); } catch {}
-    if (!tekst) {
-      tekst = window.prompt("Plak hier het gekopieerde bericht of de code:") || "";
-    }
-    const m = tekst.match(/YWKB1:([A-Za-z0-9_-]+)/);
-    if (!m) { setMelding("⚠️ Geen YourWkb-projectcode gevonden — kopieer het héle WhatsApp-bericht en probeer opnieuw."); return; }
-    try {
-      const inhoud = await mkpDecode(m[1]);
-      if (inhoud?.type !== "gedeeld-project" || !inhoud.project) throw new Error("onbekend");
-      setImportLijst([{ ...inhoud.project, _gedeeld: true, _zonderFotos: !!inhoud.zonderFotos }]);
-      setMelding("");
-    } catch {
-      setMelding("⚠️ De code is beschadigd of onvolledig — zorg dat het hele bericht gekopieerd is.");
-    }
-  };
-
   const deelProject = async (p) => {
     const schoon = { ...p, id: undefined, status:"concept", job: anonimiseerJob(p.job||{}) };
     const inhoud = { app:"yourwkb", type:"gedeeld-project", versie:1, geanonimiseerd:true, project: schoon };
@@ -4065,7 +4028,7 @@ function BackupScherm({ onBack, onGewijzigd }) {
     let lijst = huidig;
     welke.forEach(p => {
       const kopie = { ...p };
-      delete kopie._gedeeld; delete kopie._zonderFotos;
+      delete kopie._gedeeld;
       if (!kopie.id || bestaandeIds.has(kopie.id)) kopie.id = "p" + Date.now() + Math.floor(Math.random()*1000);
       kopie.updatedAt = kopie.updatedAt || Date.now();
       lijst = upsertProject(lijst, kopie);
@@ -4091,9 +4054,8 @@ function BackupScherm({ onBack, onGewijzigd }) {
           <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Project back-up & delen</div>
           <div style={{fontSize:12, color:K.muted, marginBottom:6}}>
             Draag een project over aan een collega — klantgegevens, EAN en paspoort-QR worden automatisch verwijderd.
-            <strong>💬 Deel</strong> stuurt een tekstbericht met projectcode (zonder foto's) — je collega kopieert het bericht
-            en tikt in zijn app op "Plak gedeelde code". Geen bestanden, geen gedoe.
-            Foto's erbij nodig? Gebruik de bestand-route eronder.
+            <strong>💬 Deel</strong> stuurt het complete project als bestand — inclusief alle foto's, zodat je collega
+            het werk goed kan beoordelen. Kies in het deelmenu <strong>WhatsApp</strong> (of mail).
           </div>
           {!projecten.length && <div style={{fontSize:12, color:K.muted}}>Nog geen projecten om te delen.</div>}
           {projecten.map(p=>(
@@ -4107,14 +4069,9 @@ function BackupScherm({ onBack, onGewijzigd }) {
                   {(DISCIPLINES.find(d=>d.id===p.discipline)||{}).label||p.discipline||"—"} · {fmt(p.updatedAt)}{p.status==="opgeleverd"?" · opgeleverd":""}
                 </div>
               </div>
-              <div style={{display:"flex", flexDirection:"column", gap:6, flexShrink:0}}>
-                <button style={{padding:"9px 14px", fontSize:12, fontWeight:700, borderRadius:9, cursor:"pointer", fontFamily:"inherit",
-                                background:"#25D366", border:"none", color:"#000"}}
-                  onClick={()=>deelProjectCode(p)}>💬 Deel</button>
-                <button style={{padding:"5px 10px", fontSize:10, borderRadius:7, cursor:"pointer", fontFamily:"inherit",
-                                background:K.card, border:`1px solid ${K.border}`, color:K.muted}}
-                  onClick={()=>deelProject(p)}>📎 mét foto's (bestand)</button>
-              </div>
+              <button style={{padding:"9px 14px", fontSize:12, fontWeight:700, borderRadius:9, cursor:"pointer", fontFamily:"inherit",
+                              background:"#25D366", border:"none", color:"#000", flexShrink:0}}
+                onClick={()=>deelProject(p)}>💬 Deel</button>
             </div>
           ))}
         </div>
@@ -4134,15 +4091,14 @@ function BackupScherm({ onBack, onGewijzigd }) {
           <div style={{fontWeight:700, fontSize:13, marginBottom:4}}>Terugzetten / importeren</div>
           <div style={{fontSize:12, color:K.muted, marginBottom:10}}>
             Kies een back-upbestand of een gedeeld project van een collega.
-            <br/><strong>Uit WhatsApp?</strong> Tik daar eerst op het bestand zodat het wordt gedownload (het bestand zelf opent als tekst — dat hoort zo),
-            kom dan hierheen en kies het via de knop hieronder: je vindt het onder "Recent" of in de Downloads/WhatsApp-map.
+            <br/><strong>Ontvangen via WhatsApp? Zo werkt het:</strong>
+            <br/>1. Tik in WhatsApp één keer op het bestand — dan wordt het gedownload. (Opent hij als tekst? Gewoon sluiten, dat hoort zo.)
+            <br/>2. Kom terug naar dit scherm en tik op "Kies bestand…".
+            <br/>3. Het bestand staat bovenaan onder <strong>Recent</strong> — anders via Bladeren → Downloads of de WhatsApp-map.
           </div>
           <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain" style={{display:"none"}} onChange={kiesBestand}/>
-          <button style={{...S.btn, width:"100%", background:"#25D366", color:"#000", marginBottom:8}} onClick={plakCode}>
-            📋 Plak gedeelde code (uit WhatsApp)
-          </button>
-          <button style={{...S.btn, width:"100%", background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={()=>fileRef.current?.click()}>
-            📂 Kies bestand… (back-up of project mét foto's)
+          <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000"}} onClick={()=>fileRef.current?.click()}>
+            📂 Kies bestand…
           </button>
           {importLijst && (
             <div style={{marginTop:12}}>
@@ -4150,7 +4106,7 @@ function BackupScherm({ onBack, onGewijzigd }) {
               {importLijst.map((p,i)=>(
                 <div key={i} style={{fontSize:12, padding:"7px 0", borderBottom:`1px solid ${K.border}`, display:"flex", justifyContent:"space-between", gap:8}}>
                   <span style={{flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {omschrijf(p)}{p._gedeeld && <span style={{color:K.yellow}}> · gedeeld (geanonimiseerd{p._zonderFotos?", zonder foto's":""})</span>}
+                    {omschrijf(p)}{p._gedeeld && <span style={{color:K.yellow}}> · gedeeld (geanonimiseerd)</span>}
                   </span>
                   <span style={{color:K.muted, flexShrink:0}}>{fmt(p.updatedAt)}</span>
                 </div>
