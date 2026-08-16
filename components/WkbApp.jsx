@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-15-A
+// YourWkb WkbApp.jsx — versie 2026-08-16-A (design-spec fundamentlaag)
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -46,26 +46,43 @@ const toNum = (v) => {
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const K = {
   bg:"#111318", surface:"#1A1D25", card:"#20242F", border:"#2E3347",
+  borderStrong:"#3E4459",                    // rand van invoervelden en ghost-knoppen
   yellow:"#F5C518", yellowDim:"#2A240A",
+  yellowPress:"#D9AE0F",                     // :active van de primaire knop
   green:"#27AE60",  greenDim:"#0C2418",
   orange:"#F59E0B", orangeDim:"#2A1E08",
-  red:"#E53935",    redDim:"#2A0C0C",
+  red:"#FF5A52",    redDim:"#2A0C0C",        // was #E53935 — haalde AA niet (design-spec §6)
   blue:"#2196F3",   blueDim:"#0A1A2A",
   purple:"#9B59B6", purpleDim:"#1E0A2A",
-  text:"#ECEEF5",   muted:"#636880",
+  text:"#ECEEF5",
+  textSoft:"#C2C8D8",                        // tweede regel in een kaart
+  muted:"#9BA3B8",                           // was #636880 — 2,82:1, onder AA (design-spec §6)
+  tap:52, radius:14, radiusSm:10,            // maten als token
 };
 const S = {
   app:    { background:K.bg, minHeight:"100vh", maxWidth:430, margin:"0 auto", fontFamily:"'IBM Plex Sans',sans-serif", color:K.text },
-  hdr:    { padding:"16px 18px 14px", display:"flex", alignItems:"center", gap:12, background:K.surface, borderBottom:`1px solid ${K.border}`, position:"sticky", top:0, zIndex:20 },
+  hdr:    { padding:"12px 18px 12px", display:"flex", alignItems:"center", gap:12, background:K.surface, borderBottom:`1px solid ${K.border}`, position:"sticky", top:0, zIndex:20 },
   body:   { padding:"18px 18px 100px" },
-  card:   { background:K.card, borderRadius:14, padding:16, border:`1px solid ${K.border}`, marginBottom:12 },
-  btn:    { width:"100%", padding:"15px", borderRadius:12, border:"none", cursor:"pointer", fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600, fontSize:15, marginBottom:10 },
-  input:  { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none" },
-  select: { width:"100%", padding:"11px 13px", borderRadius:10, border:`1px solid ${K.border}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:14, boxSizing:"border-box", outline:"none", appearance:"none" },
-  label:  { fontSize:11, color:"#A8B0C0", fontWeight:700, letterSpacing:0.5, textTransform:"uppercase", marginBottom:5, display:"block" },
-  sTitle: { fontSize:11, color:K.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:10 },
-  backBtn:{ width:34, height:34, borderRadius:8, border:`1px solid ${K.border}`, background:"transparent", color:K.text, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 },
-  tag:    { display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:700 },
+  card:   { background:K.card, borderRadius:K.radius, padding:16, border:`1px solid ${K.border}`, marginBottom:12 },
+
+  btn:    { width:"100%", minHeight:56, boxSizing:"border-box", padding:"0 18px", borderRadius:12, border:"none", cursor:"pointer", fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:700, fontSize:17, lineHeight:1.2, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:8, WebkitTapHighlightColor:"transparent" },
+  btnGhost:{ width:"100%", minHeight:K.tap, boxSizing:"border-box", padding:"0 18px", borderRadius:12, border:`1px solid ${K.borderStrong}`, background:K.surface, color:K.text, cursor:"pointer", fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600, fontSize:17, lineHeight:1.2, marginBottom:10, display:"flex", alignItems:"center", justifyContent:"center", gap:8 },
+
+  input:  { width:"100%", minHeight:K.tap, boxSizing:"border-box", padding:"0 14px", borderRadius:K.radiusSm, border:`1px solid ${K.borderStrong}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:16, fontWeight:500 },
+  inputMeting:{ width:"100%", minHeight:64, boxSizing:"border-box", padding:"0 14px", borderRadius:K.radiusSm, border:`1px solid ${K.borderStrong}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:32, fontWeight:700, letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums" },
+  eenheid:{ fontSize:17, fontWeight:600, color:K.muted, marginLeft:10, whiteSpace:"nowrap" },
+  select: { width:"100%", minHeight:K.tap, boxSizing:"border-box", padding:"0 14px", borderRadius:K.radiusSm, border:`1px solid ${K.borderStrong}`, background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif", fontSize:16, fontWeight:500, appearance:"none" },
+
+  label:  { fontSize:12, color:"#C2C8D8", fontWeight:700, letterSpacing:0.6, textTransform:"uppercase", marginBottom:6, display:"block" },
+  sTitle: { fontSize:12, color:K.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:10 },
+  hint:   { fontSize:14, lineHeight:1.45, color:K.muted, margin:0 },
+
+  backBtn:{ width:48, height:48, flex:"0 0 48px", borderRadius:12, border:`1px solid ${K.border}`, background:"transparent", color:K.text, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, WebkitTapHighlightColor:"transparent" },
+  tag:    { display:"inline-flex", alignItems:"center", gap:5, minHeight:30, padding:"0 11px", borderRadius:20, fontSize:13, fontWeight:700, lineHeight:1, border:"1px solid transparent" },
+
+  rij:    { minHeight:56, background:K.card, border:`1px solid ${K.border}`, borderRadius:12, padding:"0 14px", display:"flex", alignItems:"center", gap:12, fontSize:16, color:K.text, marginBottom:10 },
+  bar:    { height:4, borderRadius:999, background:K.border, overflow:"hidden" },
+  barFill:{ height:4, background:K.yellow },
 };
 
 // ─── DISCIPLINE DEFINITIES ────────────────────────────────────────────────────
@@ -498,23 +515,24 @@ function pvCrossChecks(strings, instMet, materiaal) {
 // ─── GEDEELDE HELPERS ─────────────────────────────────────────────────────────
 const Pill = ({ active, onClick, children, small }) => (
   <button onClick={onClick} style={{
-    padding: small ? "6px 10px" : "8px 14px", borderRadius:20,
+    minHeight: small ? 40 : 48, padding: small ? "0 12px" : "0 16px", borderRadius:20,
     border:`1px solid ${active ? K.yellow : K.border}`,
     background: active ? K.yellowDim : "transparent",
     color: active ? K.yellow : K.muted,
     fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600,
-    fontSize: small ? 12 : 13, cursor:"pointer", whiteSpace:"nowrap",
+    fontSize: small ? 14 : 15, cursor:"pointer", whiteSpace:"nowrap",
+    display:"inline-flex", alignItems:"center", WebkitTapHighlightColor:"transparent",
   }}>{children}</button>
 );
 
 const StatusTag = ({ level }) => {
   const cfg = {
-    ok:     { bg:K.greenDim,  color:K.green,   label:"✓ OK" },
-    orange: { bg:K.orangeDim, color:K.orange,  label:"⚠ Let op" },
-    red:    { bg:K.redDim,    color:K.red,     label:"✗ Afwijking" },
+    ok:     { bg:K.greenDim,  color:K.green,  line:"rgba(39,174,96,0.45)",  label:"✓ OK" },
+    orange: { bg:K.orangeDim, color:K.orange, line:"rgba(245,158,11,0.45)", label:"⚠ Let op" },
+    red:    { bg:K.redDim,    color:K.red,    line:"rgba(255,90,82,0.50)",  label:"✗ Afwijking" },
   };
   const c = cfg[level] || cfg.ok;
-  return <span style={{ ...S.tag, background:c.bg, color:c.color }}>{c.label}</span>;
+  return <span style={{ ...S.tag, background:c.bg, color:c.color, borderColor:c.line }}>{c.label}</span>;
 };
 
 // ─── LEERVIDEO'S ──────────────────────────────────────────────────────────────
