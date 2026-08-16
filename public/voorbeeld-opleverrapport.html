@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Voorbeeld-opleverrapport · YourWkb</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact; }
+  body { font-family: Arial, sans-serif; font-size:10px; color:#222; background:#e8e8e8; }
+  .vel { max-width:760px; margin:0 auto; background:#fff; padding:24px; position:relative; overflow:hidden;
+         box-shadow:0 2px 14px rgba(0,0,0,0.15); }
+  .vel + .vel { margin-top:14px; }
+  h1 { font-size:18px; color:#F5C518; margin-bottom:2px; }
+  h2 { font-size:11px; color:#F5C518; text-transform:uppercase; letter-spacing:0.5px; margin:12px 0 4px;
+       border-bottom:2px solid #F5C518; padding-bottom:2px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:8px; }
+  td, th { border:1px solid #ddd; padding:4px 6px; font-size:9px; }
+  th { background:#F5C518; color:#000; font-weight:bold; text-align:left; }
+  tr:nth-child(even) td { background:#f9f9f9; }
+  .ok  { color:#166534; font-weight:bold; background:#dcfce7; }
+  .warn{ color:#92400e; font-weight:bold; background:#fef3c7; }
+  .watermerk { position:absolute; top:42%; left:50%; transform:translate(-50%,-50%) rotate(-28deg);
+               font-size:74px; font-weight:900; color:rgba(200,60,60,0.12); letter-spacing:6px;
+               pointer-events:none; white-space:nowrap; }
+  .kop { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .blokje { width:34px; height:34px; border-radius:9px; background:#F5C518;
+            display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .foto-rij { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .foto { width:110px; height:82px; background:#eee; border:1px solid #ddd; border-radius:4px;
+          display:flex; align-items:center; justify-content:center; color:#999; font-size:8px; text-align:center; padding:4px; }
+  .voetnoot { font-size:8px; color:#666; margin-top:6px; }
+  .sign { margin-top:14px; padding:10px; border:1px solid #ddd; border-radius:6px; background:#fafafa; }
+  .balk { background:#111; color:#fff; padding:12px 16px; text-align:center; font-size:12px;
+          font-family: Arial, sans-serif; }
+  .balk a { color:#F5C518; font-weight:bold; text-decoration:none; }
+  .sticker-wrap { text-align:center; padding:18px 0; }
+  .sticker { display:inline-block; border:2px dashed #999; border-radius:14px; padding:16px 26px; }
+  .knip { font-size:8px; color:#888; margin-top:8px; }
+  @media print { body { background:#fff; } .vel { box-shadow:none; max-width:none; } .balk { display:none; } }
+</style>
+</head>
+<body>
+
+<div class="balk">
+  Dit is een <strong>voorbeeldrapport</strong> met fictieve gegevens — zo ziet elke oplevering uit YourWkb eruit.
+  &nbsp;·&nbsp; <a href="/landing">← terug naar yourwkb.nl</a>
+</div>
+
+<div class="vel">
+  <div class="watermerk">VOORBEELD</div>
+  <div class="kop">
+    <div class="blokje"><svg width="18" height="18" viewBox="0 0 24 24" fill="#000"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z"/></svg></div>
+    <div>
+      <h1>Opleveringsrapport</h1>
+      <p style="font-size:11px;color:#555">Groepenkastvervanging · NEN 1010 · projectnr. 2801AB-12-2026</p>
+    </div>
+  </div>
+
+  <h2>Gegevens</h2>
+  <table>
+    <tr><td style="width:25%"><strong>Klant</strong></td><td>J. de Voorbeeld</td><td style="width:25%"><strong>Datum oplevering</strong></td><td>06-08-2026</td></tr>
+    <tr><td><strong>Adres</strong></td><td>Voorbeeldstraat 12, 2801 AB Gouda</td><td><strong>Installateur</strong></td><td>Demo Installatietechniek · KvK 12345678</td></tr>
+    <tr><td><strong>Object</strong></td><td>Woonhuis, bouwjaar kast ±1995</td><td><strong>Werkzaamheden</strong></td><td>Groepenkast vervangen, laadpaalgroep bijgeplaatst</td></tr>
+  </table>
+
+  <h2>Installatiegegevens</h2>
+  <table>
+    <tr><td style="width:25%"><strong>Hoofdaansluiting</strong></td><td>3-fase × 25 A</td><td style="width:25%"><strong>Stelsel</strong></td><td>TN-S</td></tr>
+    <tr><td><strong>Kam / railcapaciteit</strong></td><td>10 mm² · 40 A</td><td><strong>Hoofdschakelaar</strong></td><td>4-polig, 40 A</td></tr>
+  </table>
+
+  <h2>Metingen meterkast</h2>
+  <table>
+    <tr><th>Meting</th><th>Waarde</th><th>Norm</th><th>Resultaat</th></tr>
+    <tr><td>Impedantie Z L-N</td><td>0,28 Ω</td><td>—</td><td class="ok">referentie</td></tr>
+    <tr><td>Impedantie Z L-PE</td><td>0,31 Ω</td><td>—</td><td class="ok">referentie</td></tr>
+    <tr><td>Isolatieweerstand (per groep, naar aarde)</td><td>≥ 12 MΩ</td><td>≥ 0,23 MΩ</td><td class="ok">voldoet</td></tr>
+    <tr><td>Aardlektest 30 mA (alle aardlekken)</td><td>22–26 ms</td><td>≤ 300 ms</td><td class="ok">voldoet</td></tr>
+    <tr><td>Aardverspreidingsweerstand</td><td>1,8 Ω</td><td>—</td><td class="ok">gemeten</td></tr>
+  </table>
+
+  <h2>Groepenoverzicht</h2>
+  <table>
+    <tr><th>Groep</th><th>Automaat</th><th>Aardlek</th><th>Omschrijving</th></tr>
+    <tr><td>1</td><td>B16</td><td>ALS 1 · 30 mA</td><td>Verlichting begane grond</td></tr>
+    <tr><td>2</td><td>B16</td><td>ALS 1 · 30 mA</td><td>WCD woonkamer/keuken</td></tr>
+    <tr><td>3</td><td>B16 · 2-fase</td><td>ALS 2 · 30 mA</td><td>Kookgroep (7,4 kW)</td></tr>
+    <tr><td>4</td><td>B16</td><td>ALS 2 · 30 mA</td><td>Warmtepomp (3,5 kW)</td></tr>
+    <tr><td>5</td><td>B16</td><td>ALS 2 · 30 mA</td><td>PV-omvormer 4,2 kW ↩︎ voedend</td></tr>
+    <tr><td>6</td><td>B16 · 3-fase</td><td>Type A-EV · 30 mA</td><td>Laadpaal 11 kW · dynamische load balancing (regisseur: HEMS, begrensd 25 A)</td></tr>
+  </table>
+
+  <h2>Veldmeting verste groep</h2>
+  <table>
+    <tr><th>Groep</th><th>Z L-N</th><th>Z L-PE</th><th>Resultaat</th></tr>
+    <tr><td>Groep 6 · laadpaal (garage)</td><td>0,82 Ω</td><td>0,89 Ω</td><td class="ok">voldoet · hoger dan kastmeting ✓</td></tr>
+  </table>
+
+  <h2>Foto's (selectie)</h2>
+  <div class="foto-rij">
+    <div class="foto">Meterkast vóór vervanging</div>
+    <div class="foto">Nieuwe kast gemonteerd</div>
+    <div class="foto">Groepenverklaring op deur</div>
+    <div class="foto">Laadpaal + typeplaatje</div>
+    <div class="foto">Meetopstelling veldmeting</div>
+  </div>
+  <p class="voetnoot">In het echte rapport staan hier de werkfoto's van de monteur, per checkpoint vastgelegd tijdens de klus.</p>
+
+  <h2>Conformiteitsverklaring</h2>
+  <div class="sign">
+    <p style="font-size:9px">De installatie is aangelegd en gecontroleerd conform <strong>NEN 1010</strong>. De metingen voldoen aan de gestelde eisen; de installatie is veilig in bedrijf gesteld. De load-balancing-instelling is vastgelegd in het meterkastpaspoort.</p>
+    <p class="voetnoot">Getoetst aan NEN 1010:2020. In de Omgevingsregeling is momenteel NEN 1010:2015 aangewezen; toepassing van een nieuwere editie is toegestaan.</p>
+    <table style="margin-top:8px">
+      <tr><td style="width:33%"><strong>Naam</strong><br>M. Demo</td>
+          <td style="width:33%"><strong>Bedrijf</strong><br>Demo Installatietechniek</td>
+          <td><strong>Handtekening</strong><br><span style="font-family:'Brush Script MT',cursive;font-size:16px;color:#334">M. Demo</span></td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="vel">
+  <div class="watermerk">VOORBEELD</div>
+  <h2>Meterkastpaspoort — uitknipsticker</h2>
+  <div class="sticker-wrap">
+    <div class="sticker">
+      <p style="font-weight:bold;font-size:12px">⚡ METERKASTPASPOORT</p>
+      <p style="font-size:9px;color:#555;margin-bottom:8px">2801AB 12</p>
+      <img src="/mkp-demo-qr.png" alt="Demo meterkastpaspoort QR" width="210" height="210" style="display:block;margin:0 auto">
+      <p style="font-size:9px;color:#555;margin-top:8px">Scan met je telefooncamera · bijgewerkt 6-8-2026</p>
+      <p style="font-size:8px;color:#888">meterkastpaspoort.nl — open standaard · gemaakt met YourWkb</p>
+    </div>
+    <p class="knip">✂️ Knip uit en plak op de binnenzijde van de meterkastdeur.</p>
+    <p class="voetnoot" style="max-width:420px;margin:8px auto 0">
+      <strong>Dit rapport is tevens de reservekopie van het paspoort.</strong> Sticker kwijt of beschadigd (bijv. door brand)?
+      Scan de QR hierboven uit dit document en print opnieuw — elk opleverrapport bevat de paspoortstand van dat moment.
+    </p>
+    <p style="font-size:10px;color:#166534;margin-top:12px"><strong>Probeer het:</strong> deze demo-QR werkt écht — scan hem met je telefoon en bekijk het paspoort, inclusief het logboek met drie monteurs.</p>
+  </div>
+</div>
+
+<div class="balk" style="margin-top:14px">
+  Zelf zo'n rapport maken? <a href="/app">Start gratis in YourWkb →</a>
+</div>
+
+</body>
+</html>

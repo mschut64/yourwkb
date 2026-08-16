@@ -1,8 +1,8 @@
 export const metadata = {
   metadataBase: new URL('https://yourwkb.nl'),
-  title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
-  description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon. Voor zzp-elektriciens, PV-, cv- en warmtepompinstallateurs. Automatische normcheck, klaar in minuten.',
-  keywords: ['Wkb opleverrapport', 'NEN1010 app', 'opleverdossier elektricien', 'Wkb consumentendossier', 'groepenkast opleverrapport', 'installateur software'],
+  title: 'YourWkb — Wkb-opleverrapport & NEN 1010 app voor installateurs',
+  description: 'Maak je Wkb-opleverdossier en NEN 1010-rapport direct op je telefoon. Voor zzp-elektriciens, PV-, cv- en warmtepompinstallateurs. Automatische normcheck, klaar in minuten.',
+  keywords: ['Wkb opleverrapport', 'NEN 1010 app', 'opleverdossier elektricien', 'Wkb consumentendossier', 'groepenkast opleverrapport', 'installateur software'],
   alternates: {
     canonical: 'https://yourwkb.nl',
   },
@@ -31,17 +31,19 @@ export const metadata = {
     ],
   },
   openGraph: {
-    title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
-    description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon. Automatische normcheck, klaar in minuten.',
+    title: 'YourWkb — Wkb-opleverrapport & NEN 1010 app voor installateurs',
+    description: 'Maak je Wkb-opleverdossier en NEN 1010-rapport direct op je telefoon. Automatische normcheck, klaar in minuten.',
     url: 'https://yourwkb.nl',
     siteName: 'YourWkb',
     locale: 'nl_NL',
     type: 'website',
+    images: [{ url: 'https://yourwkb.nl/og-cover.png', width: 1200, height: 630, alt: 'YourWkb — Wkb-opleverrapport en NEN 1010-rapport op je telefoon' }],
   },
   twitter: {
-    card: 'summary',
-    title: 'YourWkb — Wkb-opleverrapport & NEN1010 app voor installateurs',
-    description: 'Maak je Wkb-opleverdossier en NEN1010-rapport direct op je telefoon.',
+    card: 'summary_large_image',
+    images: ['https://yourwkb.nl/og-cover.png'],
+    title: 'YourWkb — Wkb-opleverrapport & NEN 1010 app voor installateurs',
+    description: 'Maak je Wkb-opleverdossier en NEN 1010-rapport direct op je telefoon.',
   },
 }
 
@@ -79,7 +81,7 @@ export default function RootLayout({ children }) {
         "name": "YourWkb",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
-        "description": "Wkb-opleverdossier en NEN1010-rapport maken op je telefoon, voor zzp-installateurs elektra, PV, cv en warmtepomp.",
+        "description": "Wkb-opleverdossier en NEN 1010-rapport maken op je telefoon, voor zzp-installateurs elektra, PV, cv en warmtepomp.",
         "url": "https://yourwkb.nl",
         "offers": {
           "@type": "Offer",
@@ -92,7 +94,7 @@ export default function RootLayout({ children }) {
         "@type": "FAQPage",
         "mainEntity": [
           { "@type": "Question", "name": "Moet ik iets installeren?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates." } },
-          { "@type": "Question", "name": "Is het rapport echt NEN1010-compliant?", "acceptedAnswer": { "@type": "Answer", "text": "Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden." } },
+          { "@type": "Question", "name": "Is het rapport echt NEN 1010-compliant?", "acceptedAnswer": { "@type": "Answer", "text": "Het rapport is gebaseerd op NEN 1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden." } },
           { "@type": "Question", "name": "Hoe lang worden mijn dossiers bewaard?", "acceptedAnswer": { "@type": "Answer", "text": "Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie (JSON-export of gratis Dropbox-koppeling) om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn." } },
           { "@type": "Question", "name": "Worden er advertenties getoond of wordt mijn data verkocht?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels." } },
           { "@type": "Question", "name": "Werkt het ook voor andere disciplines?", "acceptedAnswer": { "@type": "Answer", "text": "Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Laadpaal en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl." } },

@@ -1,5 +1,5 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-13-H
+// YourWkb WkbApp.jsx — versie 2026-08-15-A
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -5469,6 +5469,10 @@ export default function App() {
   // (WhatsApp-bestand). De service worker heeft de inhoud geparkeerd; wij halen
   // hem op, openen het Back-up & delen-scherm en zetten het bestand klaar.
   const [gedeeldBestand, setGedeeldBestand] = useState(null);
+
+  // Demo-paspoort van de landingspagina herkennen (fictief adres 2801AB 12):
+  // apart event zodat in PostHog zichtbaar is of de demo-QR tot scans leidt.
+  const isDemoPaspoort = (p) => p?.pc === "2801AB" && String(p?.nr||"").trim().startsWith("12");
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.location.search.includes("gedeeld=1")) return;
@@ -5498,6 +5502,7 @@ export default function App() {
         const p = await mkpDecode(frag.slice(1));
         setMkpScan(p);
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        if (isDemoPaspoort(p)) trackEvent("qr_demo_gescand", { via: "camera" });
         trackEvent("mkp_gescand", { velden: Object.keys(p).length });
       } catch { /* geen (geldig) paspoort-fragment — stil negeren */ }
     })();
@@ -5707,7 +5712,7 @@ export default function App() {
             ⬆️ Nieuwe versie beschikbaar — tik om te verversen
           </button>
         )}
-        {scannerOpen && <MkpScanner onResult={(p)=>{ setScannerOpen(false); setMkpScan(p); trackEvent("mkp_gescand_inapp",{}); }} onSluit={()=>setScannerOpen(false)}/>}
+        {scannerOpen && <MkpScanner onResult={(p)=>{ setScannerOpen(false); setMkpScan(p); if (isDemoPaspoort(p)) trackEvent("qr_demo_gescand", { via: "inapp" }); trackEvent("mkp_gescand_inapp",{}); }} onSluit={()=>setScannerOpen(false)}/>}
         {mkpScan && !scannerOpen && <MkpViewer p={mkpScan} onNieuw={startMetPaspoort} onSluit={()=>setMkpScan(null)}/>}
         {!mkpScan && !scannerOpen && screen==="home" && (
           <button onClick={()=>setScannerOpen(true)}

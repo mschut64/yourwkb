@@ -50,7 +50,7 @@ export default function LandingPage() {
   const faqs = [
     { q: 'Wat als de paspoort-sticker verloren gaat, bijvoorbeeld door brand?', a: 'Elk opleverrapport bevat dezelfde QR-code als uitknippagina — het rapport bij de klant (en in jouw administratie) is dus automatisch de reservekopie. Scannen uit het rapport en opnieuw printen is genoeg. Er is bewust geen centrale database: de historie is zo vaak bewaard als er rapporten zijn.' },
     { q: 'Moet ik iets installeren?', a: 'Nee. YourWkb is een website die je opent in Safari of Chrome op je telefoon. Je kunt hem toevoegen aan je homescreen — dan ziet het eruit als een app. Geen app store, geen updates.' },
-    { q: 'Is het rapport echt NEN1010-compliant?', a: 'Het rapport is gebaseerd op NEN1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
+    { q: 'Is het rapport echt NEN 1010-compliant?', a: 'Het rapport is gebaseerd op NEN 1010 deel 6 en bevat alle verplichte onderdelen: NAW-gegevens, meetapparatuur, eindgroepen-meetstaat met ISO, ΔT en ΔI, impedantie, aardingswaarden en een conformverklaring. Jij bent verantwoordelijk voor de juistheid van de ingevoerde meetwaarden.' },
     { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Maak een back-up via de JSON-export of de gratis Dropbox-koppeling en bewaar je dossiers zelf, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
     { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels.' },
     { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen, combiketel, warmtepomp, laadpaal en thuisbatterij zijn allemaal beschikbaar, elk met eigen checkpunten, metingen en rapport. Specifieke wensen? Mail naar info@yourwkb.nl.' },
@@ -86,7 +86,8 @@ export default function LandingPage() {
         .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
         h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(30px, 6vw, 54px); line-height: 1.12; letter-spacing: -1px; color: var(--white); margin-bottom: 24px; word-break: keep-all; overflow-wrap: normal; hyphens: none; }
-        h1 span { color: var(--yellow); }
+        .payoff { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(30px, 6vw, 54px); line-height: 1.12; letter-spacing: -1px; color: var(--white); margin-bottom: 24px; word-break: keep-all; overflow-wrap: normal; hyphens: none; }
+        h1 span { color: var(--yellow); } .payoff span { color: var(--yellow); }
         .hero-sub { font-size: clamp(16px, 2vw, 19px); color: var(--muted); max-width: 520px; margin-bottom: 40px; line-height: 1.65; }
         .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
         .btn-primary { background: var(--yellow); color: #000; padding: 15px 32px; border-radius: 10px; font-weight: 700; font-size: 16px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
@@ -189,7 +190,7 @@ export default function LandingPage() {
           .price-grid { grid-template-columns: 1fr; }
           .hero-trust { flex-direction: column; gap: 12px; }
           nav .nav-link { display: none; }
-          h1 { font-size: clamp(26px, 7.8vw, 40px); }
+          h1 { font-size: clamp(26px, 7.8vw, 40px); } .payoff { font-size: clamp(26px, 7.8vw, 40px); }
         }
       `}</style>
 
@@ -218,11 +219,14 @@ export default function LandingPage() {
             <div className="badge-dot" />
             Nu voor 6 disciplines: groepenkast · PV · cv · WP · laadpaal · thuisbatterij
           </div>
-          <h1>De standaard<br /><span>voor je</span><br />opleverrapport.</h1>
+          <h1 style={{ fontFamily: 'inherit', fontWeight: 600, fontSize: 15, letterSpacing: 0.3, color: 'var(--muted)', margin: '0 0 14px', lineHeight: 1.4 }}>
+            Wkb-opleverrapport &amp; NEN 1010-rapport maken — de app voor installateurs
+          </h1>
+          <p className="payoff">De standaard<br /><span>voor je</span><br />opleverrapport.</p>
           <p className="hero-sub">De Wet kwaliteitsborging voor het bouwen legt de aansprakelijkheid voor je werk bij jou. YourWkb legt het bewijs vast: NEN-conform opleverrapport, in minuten, vanaf je telefoon.</p>
           <div className="hero-cta">
             <a href="/app" className="btn-primary">Gratis beginnen →</a>
-            <a href="#stappen" className="btn-ghost">Bekijk hoe het werkt ↓</a>
+
           </div>
           <div className="hero-trust">
             <div className="trust-item"><span className="trust-icon">✓</span> Gratis te gebruiken</div>
@@ -238,7 +242,7 @@ export default function LandingPage() {
             <div className="phone-screen">
               <div className="phone-hdr">
                 <div className="phone-logo"><svg width="13" height="13" viewBox="0 0 24 24" fill="#000000" aria-hidden="true"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z" /></svg></div>
-                <div><div className="phone-title">YourWkb</div><div className="phone-sub">NEN1010 · groepenkast</div></div>
+                <div><div className="phone-title">YourWkb</div><div className="phone-sub">NEN 1010 · groepenkast</div></div>
               </div>
               <img className="phone-shot" src="/yourwkbpromo.gif" alt="YourWkb app — van meting naar rapport" />
               <div className="phone-btn">📬 Rapport genereren →</div>
@@ -246,6 +250,74 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <section id="voorbeeldrapport" style={{ padding: '72px 24px', maxWidth: 1060, margin: '0 auto', textAlign: 'center' }}>
+        <div className="section-label">📄 Het bewijs</div>
+        <h2 className="section-title">Zo ziet jouw oplevering eruit</h2>
+        <p className="section-sub" style={{ maxWidth: 620, margin: '0 auto 32px' }}>
+          Geen belofte maar een document: metingen getoetst aan de norm, groepenoverzicht, foto's,
+          conformiteitsverklaring — en de paspoort-sticker als uitknippagina.
+        </p>
+        <div style={{ maxWidth: 560, margin: '0 auto', background: '#fff', borderRadius: 12, padding: '22px 26px',
+                      textAlign: 'left', boxShadow: '0 12px 40px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%,-50%) rotate(-24deg)',
+                        fontSize: 54, fontWeight: 900, color: 'rgba(200,60,60,0.10)', letterSpacing: 4, pointerEvents: 'none' }}>VOORBEELD</div>
+          <p style={{ color: '#F5C518', fontWeight: 800, fontSize: 20, fontFamily: 'Arial, sans-serif' }}>Opleveringsrapport</p>
+          <p style={{ color: '#555', fontSize: 12, marginBottom: 14, fontFamily: 'Arial, sans-serif' }}>Groepenkastvervanging · NEN 1010 · 06-08-2026</p>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Isolatieweerstand (per groep)</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>≥ 12 MΩ <span style={{ color: '#888' }}>(norm ≥ 0,23)</span></td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet</td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>Aardlektest 30 mA</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>22–26 ms <span style={{ color: '#888' }}>(≤ 300)</span></td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet</td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Veldmeting verste groep (Z L-PE)</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>0,89 Ω</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet ✓</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ color: '#999', fontSize: 11, marginTop: 10, fontFamily: 'Arial, sans-serif' }}>… + groepenoverzicht, foto's, conformiteitsverklaring en paspoort-sticker</p>
+        </div>
+        <a href="/voorbeeld-opleverrapport.html" target="_blank" rel="noopener" className="btn-primary"
+           style={{ display: 'inline-block', marginTop: 28 }}
+           onClick={() => { try { window.posthog?.capture('voorbeeldrapport_bekeken') } catch {} }}>
+          Open het volledige voorbeeldrapport →
+        </a>
+      </section>
+
+      <section id="meterkastpaspoort" style={{ padding: '72px 24px', maxWidth: 1060, margin: '0 auto', textAlign: 'center' }}>
+        <div className="section-label">⚡ Het meterkastpaspoort</div>
+        <h2 className="section-title">De kastdeur onthoudt wat jij hebt gedaan</h2>
+        <p className="section-sub" style={{ maxWidth: 640, margin: '0 auto 36px' }}>
+          Elk YourWkb-rapport levert een QR-sticker voor op de meterkastdeur: wie heeft wat gedaan, wat hangt er,
+          hoe is de load balancing ingesteld. Elke volgende monteur scant en weet het — en schrijft zíjn werk bij.
+          Alle gegevens zitten in de QR zelf: geen account, geen database, werkt in een kelder zonder bereik.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 36, alignItems: 'center', justifyContent: 'center' }}>
+          <img src="/mkp-demo-sticker.png" alt="Demo meterkastpaspoort — scan met je telefooncamera"
+               style={{ width: 280, maxWidth: '86vw', borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.45)' }} />
+          <div style={{ maxWidth: 380, textAlign: 'left' }}>
+            <p style={{ color: '#F5C518', fontWeight: 700, fontSize: 15, marginBottom: 10 }}>📱 Probeer het nu — scan de demo</p>
+            <p style={{ color: '#9aa0a6', fontSize: 14, lineHeight: 1.6, marginBottom: 14 }}>
+              Dit is een écht werkend paspoort: richt je telefooncamera op de QR en bekijk de kast —
+              3×25 A uit ±1995, zonnepanelen, laadpaal met dynamische load balancing, en een logboek
+              met drie monteurs over zeven jaar.
+            </p>
+            <p style={{ color: '#9aa0a6', fontSize: 13, lineHeight: 1.6 }}>
+              Het paspoort is een <a href="https://meterkastpaspoort.nl" target="_blank" rel="noopener" style={{ color: '#F5C518' }}>open standaard</a> —
+              van de sector, niet van ons. De sticker zit standaard als uitknippagina in elk opleverrapport.
+            </p>
+          </div>
+        </div>
+      </section>
+
 
       {/* WAAROM DIT BELANGRIJK IS */}
       <div className="wkb-explainer">
@@ -272,8 +344,8 @@ export default function LandingPage() {
             { icon: '📍', n: 1, title: 'Klant en locatie', desc: 'Postcode + huisnummer — dat wordt meteen je projectnummer en bestandsnaam.' },
             { icon: '🔌', n: 2, title: 'Materiaal kiezen', desc: 'Tik de fabrikant aan, kies de serie, tik de automaten. Alles staat er al in.' },
             { icon: '📷', n: 3, title: "Foto's per checkpoint", desc: 'Vaste checkpoints: kast leeg, bedrading, aarding, verdeler dicht.' },
-            { icon: '📏', n: 4, title: 'Meetwaarden invoeren', desc: 'Per groep: ISO, ΔT, ΔI, Z L-PE. Direct groen of rood op NEN1010 normen.' },
-            { icon: '📄', n: 5, title: 'Rapport gegenereerd', desc: 'AI stelt het volledige NEN1010 opleverrapport op. Jij hoeft niks te typen.' },
+            { icon: '📏', n: 4, title: 'Meetwaarden invoeren', desc: 'Per groep: ISO, ΔT, ΔI, Z L-PE. Direct groen of rood op NEN 1010 normen.' },
+            { icon: '📄', n: 5, title: 'Rapport gegenereerd', desc: 'AI stelt het volledige NEN 1010 opleverrapport op. Jij hoeft niks te typen.' },
             { icon: '📬', n: 6, title: 'Naar de klant', desc: 'PDF direct per e-mail naar de opdrachtgever. Project wordt gearchiveerd.' },
           ].map(s => (
             <div key={s.n} className="step-card">
@@ -292,8 +364,8 @@ export default function LandingPage() {
         <h2>Gemaakt voor de ZZP'er<br />op de bouwplaats</h2>
         <div className="check-grid">
           {[
-            { title: "⚡ Elektricien ZZP'er", desc: 'Groepenkast plaatsen of vervangen — NEN1010 rapport automatisch gegenereerd.' },
-            { title: '☀️ PV-installateur', desc: 'Zonnepanelen installatie — NEN1010:712 rapport met string metingen en visuele inspectie.' },
+            { title: "⚡ Elektricien ZZP'er", desc: 'Groepenkast plaatsen of vervangen — NEN 1010 rapport automatisch gegenereerd.' },
+            { title: '☀️ PV-installateur', desc: 'Zonnepanelen installatie — NEN 1010:712 rapport met string metingen en visuele inspectie.' },
             { title: '🔥 CV-monteur', desc: 'Combiketel plaatsen of vervangen — BRL6000-25 rapport met rookgasanalyse en CO-meting.' },
             { title: '🌡️ Warmtepomp-monteur', desc: 'Warmtepomp installatie — opleverrapport met elektrische en hydraulische controles.' },
             { title: 'Wkb-plicht vanaf 2024', desc: 'Aantoonbaar voldoen aan de Wet kwaliteitsborging voor het bouwen.' },
@@ -348,7 +420,7 @@ export default function LandingPage() {
             </div>
             <div className="price-desc">Los €7,50 · bundel 10 voor €55 (€5,50/st). Gratis tijdens testfase.</div>
             <ul className="price-features">
-              {[['✓','PDF zonder watermerk'],['✓','Conform NEN1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Jouw naam & erkenningsnummer'],['✓','Eigen logo op het rapport'],['✓','Direct naar klant']].map(([i,l])=>(
+              {[['✓','PDF zonder watermerk'],['✓','Conform NEN 1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Jouw naam & erkenningsnummer'],['✓','Eigen logo op het rapport'],['✓','Direct naar klant']].map(([i,l])=>(
                 <li key={l}><span className="feat-check">{i}</span>{l}</li>
               ))}
             </ul>
