@@ -767,7 +767,7 @@ const WarnBox = ({ warnings }) => {
 };
 
 // AI technische analyse — redeneert over de combinatie van meetwaarden
-function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
+function AIAnalyseBox({ aiData, discipline, analyse, onAnalyse }) {
   const [status, setStatus] = useState(analyse ? "done" : "idle");
   const [errMsg, setErrMsg] = useState("");
 
@@ -778,12 +778,13 @@ function AIAnalyseBox({ prompt, analyse, onAnalyse }) {
       const resp = await fetch("/api/rapport", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ prompt })
+        body:JSON.stringify({ discipline, data: aiData })
       });
       const json = await resp.json();
       if (json.error) throw new Error(json.error);
-      if (!json.html) throw new Error("Geen antwoord ontvangen van de AI");
-      onAnalyse(json.html);
+      const aiTekst = json.tekst || json.html || "";
+      if (!aiTekst) throw new Error("Geen antwoord ontvangen van de AI");
+      onAnalyse(aiTekst);
       setStatus("done");
       trackEvent("ai_analyse_gebruikt", { success: true });
     } catch(e) {
@@ -1972,9 +1973,8 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <AIAnalyseBox
           analyse={data.aiAnalyse}
           onAnalyse={(t)=>onChange("aiAnalyse",t)}
-          prompt={`Je bent een ervaren elektrotechnisch inspecteur (NEN1010). Analyseer onderstaande meetwaarden van een elektrische installatie als geheel. Let op combinaties van waarden die samen een risico vormen, ook als ze individueel binnen de norm vallen (bijv. ISO net boven minimum bij meerdere aardlekgroepen, spanningsasymmetrie, ΔT dicht tegen de norm voor het gekozen stelsel). Geef een korte professionele beoordeling in het Nederlands: max 6 zinnen, gevolgd door maximaal 3 concrete aanbevelingen, elk op een nieuwe regel beginnend met "- ". Geen inleiding, geen disclaimer, alleen platte tekst (geen markdown opmaak, geen HTML).
-
-STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
+          discipline="groepenkast"
+          aiData={`STELSEL: ${stelsel} (ΔT-norm eindgroep ≤${dtNorm}ms) | KASTUITVOERING: ${data.kastType||"kunststof"}
 HOOGST AFGAANDE GROEP: ${inst.hoogstKar||"—"}${inst.hoogstAmpere||"—"}A
 Z L-N: ${inst.zln||"—"} Ohm | Z L-PE: ${inst.zlpe||"—"} Ohm (aardlekschakelaar ${rcdAanwezig?"AANWEZIG → norm Z L-PE ≤166 Ohm":"AFWEZIG → norm Z L-PE = foutstroom-norm Z_max"}) | ISO totaal Fase-Aarde: ${inst.isoTotFA||"—"} MOhm | ISO totaal Nul-Aarde: ${inst.isoTotNA||"—"} MOhm
 SPANNINGEN: L1/N ${inst["span_L1/N"]||"—"}V / L1/PE ${inst["span_L1/PE"]||"—"}V / L2/N ${inst["span_L2/N"]||"—"}V / L2/PE ${inst["span_L2/PE"]||"—"}V / L3/N ${inst["span_L3/N"]||"—"}V / L3/PE ${inst["span_L3/PE"]||"—"}V / L1/L2 ${inst["span_L1/L2"]||"—"}V / L2/L3 ${inst["span_L2/L3"]||"—"}V / L1/L3 ${inst["span_L1/L3"]||"—"}V | FREQUENTIE: ${inst.frequentie||"—"}Hz
@@ -2962,10 +2962,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <div class="naw">
         <div class="naw-box">
           <strong>Opdrachtgever</strong>
-          <p>${data.naam||"—"}</p>
-          <p>${data.straat||""} ${data.huisnummer||""}</p>
-          <p>${data.postcode||""} ${data.plaats||""}</p>
-          <p>${data.email||""}</p>
+          <p>${esc(data.naam||"—")}</p>
+          <p>${esc(data.straat||"")} ${esc(data.huisnummer||"")}</p>
+          <p>${esc(data.postcode||"")} ${esc(data.plaats||"")}</p>
+          <p>${esc(data.email||"")}</p>
         </div>
         <div class="naw-box">
           <strong>Installateur</strong>
@@ -2977,10 +2977,10 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </div>
       </div>
       <table>
-        <tr><td><strong>Object</strong></td><td>${data.straat||""} ${data.huisnummer||""}, ${data.postcode||""} ${data.plaats||""}</td>
+        <tr><td><strong>Object</strong></td><td>${esc(data.straat||"")} ${esc(data.huisnummer||"")}, ${esc(data.postcode||"")} ${esc(data.plaats||"")}</td>
             <td><strong>Datum oplevering</strong></td><td>${datum}</td></tr>
         <tr><td><strong>Type werk</strong></td><td>${data.typewerk||"—"}</td>
-            <td><strong>Projectnummer</strong></td><td>${data.projectId||"—"}</td></tr>
+            <td><strong>Projectnummer</strong></td><td>${esc(data.projectId||"—")}</td></tr>
       </table>`;
 
     const waarschuwingHtml = () => allWarnings.length > 0 ? `
@@ -3002,11 +3002,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
 
     const aiHtml = () => data.aiAnalyse ? `
       <h2>Technische beoordeling</h2>
-      <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap;background:#fafaff">${data.aiAnalyse}</div>` : "";
+      <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap;background:#fafaff">${esc(data.aiAnalyse)}</div>` : "";
 
     const notitieHtml = () => data.notitie ? `
       <h2>Opmerkingen</h2>
-      <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap">${data.notitie}</div>` : "";
+      <div style="border:1px solid #ddd;border-radius:4px;padding:10px;font-size:9px;line-height:1.6;white-space:pre-wrap">${esc(data.notitie)}</div>` : "";
 
     // ── GROEPENSCHEMA — boomstructuur per aardlekschakelaar ─────────────────
     // Wordt automatisch gegenereerd uit aardlekgroep → eindgroep data.
@@ -3023,13 +3023,13 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         const rcdKleur = ag.rcdType === "geen" ? "#999" : "#1565C0";
         const eindGroepen = (ag.eindgroepen||[]).map((e, idx) => `
           <div style="border:1px solid #ccc;padding:6px 8px;margin-top:4px;background:#fff;border-radius:3px;font-size:9px">
-            <div style="font-weight:700;color:#333">${idx+1}. ${eindgroepIcoon(e.type)} ${e.naam||"—"}</div>
+            <div style="font-weight:700;color:#333">${idx+1}. ${eindgroepIcoon(e.type)} ${esc(e.naam||"—")}</div>
             <div style="color:#666;font-size:8px;margin-top:2px">${e.kar||"B"}${e.ampere||"16A"}</div>
           </div>`).join("");
         return `
           <div style="flex:1;min-width:120px;page-break-inside:avoid">
             <div style="background:${rcdKleur};color:#fff;padding:6px 8px;border-radius:3px;font-size:10px;font-weight:700;text-align:center">
-              ${ag.naam}<br><span style="font-size:8px;font-weight:500;opacity:0.9">${rcdLabel}</span>
+              ${esc(ag.naam)}<br><span style="font-size:8px;font-weight:500;opacity:0.9">${rcdLabel}</span>
             </div>
             <div style="border-left:2px dashed #ccc;margin-left:50%;height:8px"></div>
             ${eindGroepen}
@@ -3051,7 +3051,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         (ag.eindgroepen||[]).forEach((e, idx) => {
           alleLabels.push({
             nummer: `${ag.naam.replace(/[^A-Z]/g,"")||"?"}${idx+1}`,
-            naam: `${eindgroepIcoon(e.type)} ${e.naam || "—"}`.trim(),
+            naam: `${eindgroepIcoon(e.type)} ${esc(e.naam || "—")}`.trim(),
             kar: `${e.kar||"B"}${e.ampere||"16A"}`,
           });
         });
@@ -3060,7 +3060,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       // 4 kolommen × n rijen, met snijlijnen (dashed border) tussen labels
       const labelHtml = alleLabels.map(l => `
         <div style="border:1px dashed #999;padding:6px 8px;text-align:center;background:#fff;page-break-inside:avoid;height:52px;display:flex;flex-direction:column;justify-content:center">
-          <div style="font-weight:800;font-size:10px;color:#000;letter-spacing:0.5px">${l.nummer} · ${l.naam}</div>
+          <div style="font-weight:800;font-size:10px;color:#000;letter-spacing:0.5px">${l.nummer} · ${esc(l.naam)}</div>
           <div style="font-size:8px;color:#666;margin-top:2px">${l.kar}</div>
         </div>`).join("");
       return `
@@ -3169,7 +3169,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const zPeChkRap = v => rcdAanwezigRap ? toNum(v)<=166 : (zPeMaxRap ? toNum(v)<=zPeMaxRap : true);
       const zPeNormTxtRap = rcdAanwezigRap ? "≤166Ω (achter aardlek)" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-groepenkast</title>
+        <title>${esc(data.projectId)}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3187,7 +3187,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><td><strong>Bouwjaar</strong></td><td>${data.bouwjaar||"—"}</td>
               <td><strong>Kastklasse</strong></td><td>${data.kastType==="klasse1"?"Klasse 1 — metaal (geaard)":"Klasse 2 — dubbel geïsoleerd (kunststof)"}</td></tr>
           <tr><td><strong>Automaten</strong></td><td colspan="3">${automaten.map(a=>`${a.aantal}× ${a.fab} ${a.type!=="handmatig"?a.type:""} ${a.serie?`(${a.serie})`:""}`).join(", ")||`${aardlekgroepen.reduce((t,ag)=>t+(ag.eindgroepen||[]).length,0)}× — zie groepenoverzicht (merk/serie niet ingevuld in stap 5)`}</td></tr>
-          <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${ag.naam}: geen RCD`:`${ag.naam}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
+          <tr><td><strong>Aardlekschakelaars</strong></td><td colspan="3">${aardlekgroepen.map(ag=>ag.rcdType==="geen"?`${esc(ag.naam)}: geen RCD`:`${esc(ag.naam)}: ${ag.rcdMa}mA type-${ag.rcdType}`).join(" · ")||"—"}</td></tr>
         </table>
         <h2>Meetgegevens installatie (AC)</h2>
         <table>
@@ -3261,7 +3261,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
               const st = v&&v!=="—" ? (toNum(v)>=norm?`class="ok"`:`class="nok"`) : "";
               return `<span ${st} style="padding:1px 4px;border-radius:3px;margin-right:4px;display:inline-block">${lbl}: ${v||"—"}</span>`;
             }).join("");
-            return `<tr><td><strong>${g.naam||`Groep ${i+1}`}</strong></td><td>${g.driefase?"3-fase":"1-fase"} (≥${norm} MΩ)</td><td>${cel}</td></tr>`;
+            return `<tr><td><strong>${esc(g.naam||`Groep ${i+1}`)}</strong></td><td>${g.driefase?"3-fase":"1-fase"} (≥${norm} MΩ)</td><td>${cel}</td></tr>`;
           }).join("");
           return `
           <h2>Isolatieweerstand per groep</h2>
@@ -3289,7 +3289,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const zlpeChkRap = v => rcdVeldRap ? toNum(v)<=166 : (zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true);
             const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
             return `<tr>
-              <td><strong>${ag.naam}</strong></td>
+              <td><strong>${esc(ag.naam)}</strong></td>
               <td>${dikte} mm²</td>
               <td ${statusGK(zlnV, v=>zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true)}>${zlnV||"—"} Ω</td>
               <td>${lenZln}m</td>
@@ -3331,9 +3331,9 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const tkOk = geenRcd || tk==="OK";
             const allOk = dtOk2&&diOk&&tkOk;
             const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
-            const eindLijst = (ag.eindgroepen||[]).map(e=>`${e.id===hoogst?.id?"⭐ ":""}${eindgroepIcoon(e.type)} ${e.naam} (${e.kar}${e.ampere})`).join("<br>");
+            const eindLijst = (ag.eindgroepen||[]).map(e=>`${e.id===hoogst?.id?"⭐ ":""}${eindgroepIcoon(e.type)} ${esc(e.naam)} (${e.kar}${e.ampere})`).join("<br>");
             return `<tr>
-              <td><strong>${ag.naam}</strong></td>
+              <td><strong>${esc(ag.naam)}</strong></td>
               <td style="font-size:8px">${eindLijst}</td>
               <td>${ag.fase==="3"?"3F 400V":"1F 230V"}</td>
               <td>${geenRcd?"Geen":`${ag.rcdMa}mA ${ag.rcdType}`}</td>
@@ -3367,7 +3367,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const accentCV = "#DC2626";
       const statusCV = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-combiketel</title>
+        <title>${esc(data.projectId)}-combiketel</title>
         <style>${css(accentCV)}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3456,7 +3456,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const statusWP = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
       const dtWp = (wpMeet.aanvoerTemp&&wpMeet.retourTemp) ? Math.abs(toNum(wpMeet.aanvoerTemp)-toNum(wpMeet.retourTemp)) : null;
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-warmtepomp</title>
+        <title>${esc(data.projectId)}-warmtepomp</title>
         <style>${css(accentWP)}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3522,7 +3522,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const lm = data.lpMeet || {};
       const lb = data.mkp || {};
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-laadpaal</title>
+        <title>${esc(data.projectId)}-laadpaal</title>
         <style>${css("#22C55E")}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3556,7 +3556,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const mk = data.mkp || {};
       const plaatsing = { ventilatie:"Ventilatie", temp:"Temperatuurbereik", brandbaar:"Afstand brandbaar", vluchtweg:"Buiten vluchtweg", dragend:"Dragende ondergrond" };
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-thuisbatterij</title>
+        <title>${esc(data.projectId)}-thuisbatterij</title>
         <style>${css("#8B5CF6")}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3587,7 +3587,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const statusPV = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
       const totaalKwp = ((parseInt(data.aantalPanelen)||0)*(parseInt(data.paneelWp)||0)/1000).toFixed(2);
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-zonnepanelen</title>
+        <title>${esc(data.projectId)}-zonnepanelen</title>
         <style>${css(accentPV)}</style></head><body>
         ${logoHtml()}
         <h1>Opleveringsrapport</h1>
@@ -3679,11 +3679,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const schemaSchoon = schemaSectie.replace('<h2 style="page-break-before:always">', '<h1>');
       const labelsSchoon = labelsSectie;
       const bijlage = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <title>${data.projectId}-bijlage</title>
+        <title>${esc(data.projectId)}-bijlage</title>
         <style>${css(accentGK)}</style></head><body>
         ${logoHtml()}
         <h1>Bijlage opleverrapport</h1>
-        <p style="font-size:11px;color:#555;margin-bottom:16px">Behoort bij rapport <strong>${data.projectId||""}</strong> · ${data.straat||""} ${data.huisnummer||""}, ${data.plaats||""}</p>
+        <p style="font-size:11px;color:#555;margin-bottom:16px">Behoort bij rapport <strong>${esc(data.projectId||"")}</strong> · ${esc(data.straat||"")} ${esc(data.huisnummer||"")}, ${esc(data.plaats||"")}</p>
         ${schemaSchoon}
         ${labelsSchoon}
         </body></html>`;
@@ -3695,34 +3695,20 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   };
 
   const download = () => {
-    // Open rapport in nieuw venster met print-naar-PDF instructie
-    const win = window.open("", "_blank");
-    win.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${data.projectId||"rapport"}-${discipline}</title>
-        <style>
-          @media print {
-            .print-btn { display:none !important; }
-            body { margin:0; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="print-btn" style="position:fixed;top:12px;right:12px;z-index:999;display:flex;gap:8px;">
-          <button onclick="window.print()" style="background:#F5C518;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">
-            🖨️ Opslaan als PDF
-          </button>
-          <button onclick="window.close()" style="background:#2E3347;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">
-            ✕ Sluiten
-          </button>
-        </div>
-        ${pdfHtml}
-      </body>
-      </html>
-    `);
-    win.document.close();
+    // Print via een verborgen sandboxed iframe (audit BEV-03): het rapport kan
+    // printen (allow-same-origin + allow-modals) maar script erin draait niet.
+    const oud = document.getElementById("ywkb-print-frame");
+    if (oud) oud.remove();
+    const frame = document.createElement("iframe");
+    frame.id = "ywkb-print-frame";
+    frame.setAttribute("sandbox", "allow-same-origin allow-modals");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    frame.srcdoc = `<!DOCTYPE html><html><head><title>${esc(data.projectId||"rapport")}-${esc(discipline)}</title><style>@media print{body{margin:0}}</style></head><body>${pdfHtml}</body></html>`;
+    frame.onload = () => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch { alert("Printen lukte niet — gebruik het voorbeeld en je browser-printfunctie."); }
+    };
+    document.body.appendChild(frame);
   };
 
   const verstuurEmail = async () => {
@@ -3748,7 +3734,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const introHtml = htmlZonderFotos.replace(
         "<body>",
         `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
-          <p>Beste ${data.naam||""},</p>
+          <p>Beste ${esc(data.naam||"")},</p>
           <p>Hierbij ontvangt u het opleverrapport van de werkzaamheden uitgevoerd door ${data.instNaam||"uw installateur"}. Dit rapport voldoet aan de geldende normen en is automatisch gegenereerd via YourWkb.</p>
         </div>`
       );
@@ -3872,7 +3858,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <>
             <div style={{...S.sTitle,marginTop:8}}>Voorbeeld</div>
             <div style={{borderRadius:14,overflow:"hidden",border:`1px solid ${K.border}`,marginBottom:12,height:380}}>
-              <iframe srcDoc={pdfHtml} style={{width:"100%",height:"100%",border:"none",background:"#fff"}} title="rapport"/>
+              <iframe srcDoc={pdfHtml} sandbox="" style={{width:"100%",height:"100%",border:"none",background:"#fff"}} title="rapport"/>
             </div>
             <button style={{...S.btn,background:K.green,color:"#fff"}} onClick={download}>
               🖨️ Openen &amp; opslaan als PDF
@@ -3884,7 +3870,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
                 const win = window.open("", "_blank");
                 win.document.write(`
                   <!DOCTYPE html><html><head>
-                    <title>${data.projectId||"rapport"}-bijlage</title>
+                    <title>${esc(data.projectId||"rapport")}-bijlage</title>
                     <style>@media print { .print-btn { display:none !important; } body { margin:0; } }</style>
                   </head><body>
                     <div class="print-btn" style="position:fixed;top:12px;right:12px;z-index:999;display:flex;gap:8px;">
@@ -3903,7 +3889,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             {/* Mail rapport naar klant — via Resend */}
             {mailStatus==="idle" && (
               <button style={{...S.btn,background:K.blue,color:"#fff"}} onClick={verstuurEmail}>
-                📧 Mail rapport naar klant{data.email?` (${data.email})`:""}
+                📧 Mail rapport naar klant{data.email?` (${esc(data.email)})`:""}
               </button>
             )}
             {mailStatus==="sending" && (
@@ -4991,12 +4977,55 @@ function exporteerProjecten() {
   return lijst.length;
 }
 
+// HTML-escaping voor gebruikersinvoer in rapport-HTML (audit BEV-03)
+function esc(v) {
+  return String(v ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// Schema-validatie en -sanering voor geïmporteerde back-ups en gedeelde
+// projecten (audit BEV-04): strings begrensd, foto's alleen als raster-dataURL,
+// aantallen en diepte gecapt. Onbekende velden blijven behouden (compatibiliteit)
+// maar worden wel gesaneerd.
+const FOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+function saneerWaarde(v, diepte) {
+  if (diepte > 7) return undefined;
+  if (typeof v === "string") {
+    if (v.startsWith("data:")) return FOTO_RE.test(v) && v.length < 9_000_000 ? v : undefined;
+    return v.slice(0, 4000);
+  }
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "boolean" || v == null) return v;
+  if (Array.isArray(v)) return v.slice(0, 400).map(x => saneerWaarde(x, diepte+1));
+  if (typeof v === "object") {
+    const uit = {};
+    let n = 0;
+    for (const k of Object.keys(v)) {
+      if (++n > 120) break;
+      const w = saneerWaarde(v[k], diepte+1);
+      if (w !== undefined) uit[k.slice(0,64)] = w;
+    }
+    return uit;
+  }
+  return undefined;
+}
+function saneerProject(p) {
+  if (!p || typeof p !== "object" || typeof p.id !== "string" || p.id.length > 64) return null;
+  const schoon = saneerWaarde(p, 0);
+  return schoon && schoon.id ? schoon : null;
+}
+
 function importeerProjecten(jsonText) {
+  if (typeof jsonText !== "string" || jsonText.length > 60_000_000)
+    throw new Error("Bestand is te groot om te importeren");
   let data;
   try { data = JSON.parse(jsonText); }
   catch { throw new Error("Ongeldig JSON-bestand"); }
-  const inkomend = Array.isArray(data) ? data : data.projecten;
-  if (!Array.isArray(inkomend)) throw new Error("Geen geldig YourWkb back-up bestand");
+  const rauw = Array.isArray(data) ? data : data.projecten;
+  if (!Array.isArray(rauw)) throw new Error("Geen geldig YourWkb back-up bestand");
+  const inkomend = rauw.slice(0, 500).map(saneerProject).filter(Boolean);
+  if (!inkomend.length) throw new Error("Geen geldige projecten in dit bestand");
   const bestaand = laadProjecten();
   const bestaandIds = new Set(bestaand.map(p => p.id));
   // Bestaande projecten met dezelfde id krijgen voorrang als ze nieuwer zijn,
