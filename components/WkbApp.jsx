@@ -3730,8 +3730,17 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         fotoNotitie
       );
 
+      // Meterkastpaspoort-QR: mailclients blokkeren data-URI-afbeeldingen,
+      // dus de QR gaat als inline-bijlage mee (cid) — de route zet hem als
+      // attachment met content_id, en hier verwijst de img daarnaar.
+      const qrPng = (typeof data.mkpQr === "string" && data.mkpQr.startsWith("data:image/png;base64,"))
+        ? data.mkpQr : null;
+      const htmlMetQr = qrPng
+        ? htmlZonderFotos.split(qrPng).join("cid:mkpqr")
+        : htmlZonderFotos;
+
       // Persoonlijke aanhef toevoegen vóór de inhoud van het rapport
-      const introHtml = htmlZonderFotos.replace(
+      const introHtml = htmlMetQr.replace(
         "<body>",
         `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
           <p>Beste ${esc(data.naam||"")},</p>
@@ -3751,6 +3760,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           to: data.email,
           replyTo: geldigeReplyTo,
           subject: `Opleverrapport ${data.projectId||""} – ${data.straat||""} ${data.huisnummer||""}`.trim(),
+          qr: qrPng || undefined,
           html: introHtml,
         }),
       });
@@ -4267,16 +4277,6 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
             <div style={{fontSize:13,color:K.muted}}>Nog geen projecten — start hierboven je eerste registratie.</div>
           </div>
         )}
-
-        {/* Doorverwijzing naar het volwaardige Back-up & delen-scherm */}
-        <div style={{...S.card, marginTop:24, display:"flex", alignItems:"center", gap:12, cursor:"pointer"}} onClick={onBackup}>
-          <span style={{fontSize:22}}>💾</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:14, fontWeight:700}}>Back-up &amp; delen</div>
-            <div style={{fontSize:12, color:K.muted}}>Projecten veiligstellen of overdragen aan een collega</div>
-          </div>
-          <span style={{color:K.muted, fontSize:18}}>›</span>
-        </div>
 
         <div style={{fontSize:11,color:K.muted,textAlign:"center",marginTop:16,lineHeight:1.6}}>
           🔒 Projecten staan alleen op dit toestel opgeslagen.<br/>Wij bewaren niets op een server.

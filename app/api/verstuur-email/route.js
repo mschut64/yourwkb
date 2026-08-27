@@ -19,7 +19,7 @@ export async function POST(request) {
     return fout(400, "Aanvraag te groot of onleesbaar — zonder foto's proberen te versturen");
   }
 
-  const { to, html, replyTo, subject } = body || {};
+  const { to, html, replyTo, subject, qr } = body || {};
   if (typeof to !== "string" || !MAIL_RE.test(to.trim()))
     return fout(400, "Geen geldig e-mailadres opgegeven");
   if (replyTo != null && (typeof replyTo !== "string" || !MAIL_RE.test(replyTo.trim())))
@@ -32,6 +32,17 @@ export async function POST(request) {
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*')/gi, "")
     .replace(/javascript:/gi, "");
+
+  // Meterkastpaspoort-QR als inline-bijlage (cid) — strikt gevalideerd:
+  // alleen een base64-PNG van beperkte omvang.
+  let qrBijlage = null;
+  if (qr != null) {
+    if (typeof qr === "string" &&
+        /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(qr) &&
+        qr.length < 300_000) {
+      qrBijlage = qr.split(",")[1];
+    } // ongeldig? → stil zonder bijlage versturen; het rapport zelf blijft compleet
+  }
 
   if (!process.env.RESEND_API_KEY)
     return fout(500, "E-mailversturen is tijdelijk niet beschikbaar");
@@ -55,6 +66,12 @@ export async function POST(request) {
                  ? subject
                  : "Je opleverrapport van YourWkb",
         html: schoon,
+        attachments: qrBijlage ? [{
+          filename: "meterkastpaspoort-qr.png",
+          content: qrBijlage,
+          content_type: "image/png",
+          content_id: "mkpqr",
+        }] : undefined,
       }),
     });
     if (!response.ok) {
