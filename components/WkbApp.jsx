@@ -4282,126 +4282,14 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
           </div>
         )}
 
-        {/* Back-up & herstel */}
-        <div style={{...S.sTitle,marginTop:24}}>💾 Back-up &amp; herstel</div>
-        <div style={S.card}>
-          <div style={{fontSize:11,color:K.muted,lineHeight:1.5,marginBottom:12}}>
-            Bewaar al je projecten als één bestand op je telefoon, in iCloud, Google Drive of Dropbox. Bij verlies of nieuwe telefoon kun je ze hier weer importeren.
+        {/* Doorverwijzing naar het volwaardige Back-up & delen-scherm */}
+        <div style={{...S.card, marginTop:24, display:"flex", alignItems:"center", gap:12, cursor:"pointer"}} onClick={onBackup}>
+          <span style={{fontSize:22}}>💾</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14, fontWeight:700}}>Back-up &amp; delen</div>
+            <div style={{fontSize:12, color:K.muted}}>Projecten veiligstellen of overdragen aan een collega</div>
           </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-            <button onClick={() => {
-              try {
-                const n = exporteerProjecten();
-                trackEvent("backup_gemaakt", { methode: "json", aantal: n });
-                alert(`✅ Back-up gemaakt van ${n} project${n===1?"":"en"}. Sla het JSON-bestand op in iCloud/Drive/Dropbox.`);
-              } catch (e) {
-                alert(`Back-up mislukt: ${e.message}`);
-              }
-            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:"none",background:K.yellow,color:"#000",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
-              📥 Back-up downloaden
-            </button>
-            <button onClick={() => {
-              const input = document.createElement("input");
-              input.type = "file"; input.accept = "application/json,.json";
-              input.onchange = async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const text = await file.text();
-                  const r = importeerProjecten(text);
-                  alert(`✅ Geïmporteerd: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt (totaal in back-up: ${r.totaal}).`);
-                  setProjecten(laadProjecten());
-                } catch (err) {
-                  alert(`Importeren mislukt: ${err.message}`);
-                }
-              };
-              input.click();
-            }} style={{flex:1,minWidth:140,padding:"11px 14px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
-              📤 Back-up herstellen
-            </button>
-          </div>
-
-          {/* Dropbox koppeling — werkt zonder OAuth via Dropbox Saver/Chooser widgets.
-              Vereist Dropbox App Key (zie https://www.dropbox.com/developers/apps).
-              Tot die er is, vervang DROPBOX_APP_KEY door je echte key. */}
-          <div style={{borderTop:`1px solid ${K.border}`,paddingTop:10,marginTop:4}}>
-            <div style={{fontSize:11,color:K.muted,marginBottom:8,lineHeight:1.5}}>
-              <strong style={{color:K.text}}>📦 Dropbox</strong> — sla direct op in of laad uit je Dropbox (2GB gratis, ~1.300 projecten).
-            </div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              <button onClick={() => {
-                // Dropbox Saver werkt via een URL die Dropbox zelf ophaalt.
-                // blob:// URLs bestaan alleen in de browser en kunnen niet door Dropbox worden opgehaald.
-                // Oplossing: data-URL — bevat de data direct in de URL zelf.
-                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || "";
-                if (!DROPBOX_APP_KEY) {
-                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig en upload zelf naar Dropbox.");
-                  return;
-                }
-                const lijst = laadProjecten();
-                const jsonText = JSON.stringify({version:1,exportedAt:new Date().toISOString(),projecten:lijst},null,2);
-                const groottMB = (jsonText.length / (1024*1024)).toFixed(2);
-                const datum = new Date().toISOString().slice(0,10);
-                const filename = `yourwkb-backup-${datum}.json`;
-
-                // Data URL — werkt tot ~150MB, ruim genoeg voor typische back-ups
-                const dataUrl = "data:application/json;base64," + btoa(unescape(encodeURIComponent(jsonText)));
-
-                const startSave = () => {
-                  if (!window.Dropbox?.save) {
-                    alert("⚠️ Dropbox SDK niet correct geladen — probeer nogmaals of gebruik de handmatige back-up-knop.");
-                    return;
-                  }
-                  window.Dropbox.save({
-                    files: [{ url: dataUrl, filename }],
-                    success: () => alert(`✅ Opgeslagen in Dropbox (${groottMB} MB, ${lijst.length} project${lijst.length===1?"":"en"})`),
-                    error: (msg) => alert(`Dropbox-opslag mislukt: ${msg}`),
-                    cancel: () => {},
-                  });
-                };
-
-                if (!window.Dropbox) {
-                  const s = document.createElement("script");
-                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
-                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
-                  s.onload = startSave;
-                  s.onerror = () => alert("Kon Dropbox SDK niet laden — controleer je internetverbinding.");
-                  document.body.appendChild(s);
-                } else startSave();
-              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
-                ☁️ Opslaan in Dropbox
-              </button>
-              <button onClick={() => {
-                const DROPBOX_APP_KEY = window.__YWKB_DROPBOX_KEY__ || "";
-                if (!DROPBOX_APP_KEY) {
-                  alert("⚠️ Dropbox-koppeling nog niet geconfigureerd. Voor nu: download de back-up handmatig uit Dropbox en gebruik 'Herstellen'.");
-                  return;
-                }
-                const open = () => window.Dropbox.choose({
-                  linkType: "direct", extensions: [".json"], multiselect: false,
-                  success: async (files) => {
-                    try {
-                      const resp = await fetch(files[0].link);
-                      const text = await resp.text();
-                      const r = importeerProjecten(text);
-                      alert(`✅ Geïmporteerd uit Dropbox: ${r.nieuw} nieuwe, ${r.vervangen} bijgewerkt.`);
-                      setProjecten(laadProjecten());
-                    } catch (err) {
-                      alert(`Importeren uit Dropbox mislukt: ${err.message}`);
-                    }
-                  }
-                });
-                if (!window.Dropbox) {
-                  const s = document.createElement("script");
-                  s.src = "https://www.dropbox.com/static/api/2/dropins.js";
-                  s.id = "dropboxjs"; s.setAttribute("data-app-key", DROPBOX_APP_KEY);
-                  s.onload = open; document.body.appendChild(s);
-                } else open();
-              }} style={{flex:1,minWidth:140,padding:"10px 12px",borderRadius:10,border:`1px solid ${K.border}`,background:K.surface,color:K.text,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"'IBM Plex Sans',sans-serif"}}>
-                ☁️ Laden uit Dropbox
-              </button>
-            </div>
-          </div>
+          <span style={{color:K.muted, fontSize:18}}>›</span>
         </div>
 
         <div style={{fontSize:11,color:K.muted,textAlign:"center",marginTop:16,lineHeight:1.6}}>

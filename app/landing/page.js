@@ -528,6 +528,7 @@ footer p { font-size: 14px; color: var(--muted); }
       <footer>
         <p>© {new Date().getFullYear()} BlauweVisie B.V. · YourWkb is een handelsnaam · yourwkb.nl</p>
         <div className="footer-links">
+          <a href="https://www.linkedin.com/company/yourwkb" target="_blank" rel="noopener" aria-label="YourWkb op LinkedIn">in&#8288; LinkedIn</a>
           <a href="/avg">Privacy &amp; AVG</a>
           <a href="mailto:info@yourwkb.nl">info@yourwkb.nl</a>
         </div>
