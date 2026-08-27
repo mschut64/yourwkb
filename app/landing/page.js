@@ -181,12 +181,13 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(26px, 3
 
 .cta-bottom { margin: 0 5vw 80px; background: linear-gradient(135deg, rgba(245,197,24,0.10), rgba(245,197,24,0.03)); border: 1px solid rgba(245,197,24,0.25); border-radius: 24px; padding: 64px 5vw; text-align: center; }
 .cta-bottom p { color: var(--text-soft); font-size: 18px; margin-bottom: 36px; }
-.email-input { width: 100%; min-height: 56px; padding: 0 18px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; font-size: 17px; outline: none; margin-bottom: 12px; }
-.email-input::placeholder { color: var(--muted); }
 
-footer { padding: 32px 5vw; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+footer { padding: 32px 5vw 40px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+@media (max-width: 640px) { footer { flex-direction: column; align-items: flex-start; gap: 14px; } }
 footer p { font-size: 14px; color: var(--muted); }
-.footer-links { display: flex; gap: 20px; }
+.footer-links { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.footer-links .footer-in { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-soft); }
+.footer-links .footer-in:hover { color: var(--yellow); border-color: var(--yellow); }
 .footer-links a { font-size: 14px; color: var(--text-soft); text-decoration: none; }
 .footer-links a:hover { color: var(--white); }
 
@@ -516,7 +517,6 @@ footer p { font-size: 14px; color: var(--muted); }
         <p>De app is gratis te gebruiken. Tijdens de testfase zijn ook rapporten gratis.<br />
         <span style={{ fontSize:14 }}>Daarna €7,50 per rapport of 10 voor €55 — je wordt van tevoren op de hoogte gesteld.</span></p>
         <div style={{ maxWidth: 400, margin: '0 auto' }}>
-          <input type="email" className="email-input" placeholder="jouw@emailadres.nl" />
           <a href="/app" className="btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', marginBottom: 12 }}>
             Gratis beginnen →
           </a>
@@ -528,10 +528,12 @@ footer p { font-size: 14px; color: var(--muted); }
       <footer>
         <p>© {new Date().getFullYear()} BlauweVisie B.V. · YourWkb is een handelsnaam · yourwkb.nl</p>
         <div className="footer-links">
-          <a href="https://www.linkedin.com/company/yourwkb" target="_blank" rel="noopener" aria-label="YourWkb op LinkedIn">in&#8288; LinkedIn</a>
           <a href="/blog">Blog</a>
           <a href="/avg">Privacy &amp; AVG</a>
           <a href="mailto:info@yourwkb.nl">info@yourwkb.nl</a>
+          <a href="https://www.linkedin.com/company/yourwkb" target="_blank" rel="noopener" aria-label="YourWkb op LinkedIn" className="footer-in">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.86 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>
+          </a>
         </div>
       </footer>
     </>
