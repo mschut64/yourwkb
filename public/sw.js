@@ -3,7 +3,7 @@
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v6";
+const CACHE = "yourwkb-v7";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
@@ -86,7 +86,12 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
-  // Navigaties (app openen / pagina laden): network-first, offline uit cache
+  // Navigaties: alléén de app zelf wordt offline bediend. Landing, blog en
+  // andere pagina's gaan rechtstreeks naar het netwerk — anders overschrijft
+  // elk paginabezoek het offline-anker en kan /blog de homepage tonen.
+  if (req.mode === "navigate" && !url.pathname.startsWith("/app")) return;
+
+  // App-navigaties: network-first, offline uit cache
   if (req.mode === "navigate") {
     // Trage/zwakke netwerkrespons ná de deadline cachet alsnog op de achtergrond:
     const achtergrond = fetch(req.clone()).then((res) => {
