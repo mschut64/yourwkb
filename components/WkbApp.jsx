@@ -1883,13 +1883,13 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                         <div key={k}>
                           <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+                            <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",flex:1,
                               background:val?(ok?K.greenDim:K.redDim):K.card,
                               border:`1px solid ${val?(ok?K.green:K.red):K.border}`}}
                               type="text" inputMode="decimal" placeholder="0,5"
                               value={val} onChange={e=>updIsoGroep(g.id,k,e.target.value)}
                               onFocus={e=>e.target.select()}/>
-                            <span style={{fontSize:12,fontWeight:700,color:K.muted,whiteSpace:"nowrap"}}>MΩ</span>
+                            <span style={{...S.eenheid,fontSize:15,marginLeft:0}}>MΩ</span>
                           </div>
                         </div>
                       );
@@ -2006,7 +2006,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
                   <label style={S.label}>ΔT ms — norm ≤300ms (EN 61008)<LeerIcoon onderwerp="delta_t_i"/></label>
-                  <input style={{...S.input,fontSize:15,fontWeight:700,
+                  <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",
                     background:gv(cagRcd.id,"dt")?(dtOk(gv(cagRcd.id,"dt"))?K.greenDim:K.redDim):K.surface,
                     border:`1px solid ${gv(cagRcd.id,"dt")?(dtOk(gv(cagRcd.id,"dt"))?K.green:K.red):K.border}`}}
                     type="text" inputMode="decimal" placeholder="180" value={gv(cagRcd.id,"dt")} onChange={e=>sg(cagRcd.id,"dt",e.target.value)}
@@ -2021,7 +2021,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
                   return (
                     <div>
                       <label style={S.label}>ΔI mA type-{cagRcd.rcdType} — {diLabel}</label>
-                      <input style={{...S.input,fontSize:15,fontWeight:700,
+                      <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",
                         background:diVal?(diOk?K.greenDim:K.redDim):K.surface,
                         border:`1px solid ${diVal?(diOk?K.green:K.red):K.border}`}}
                         type="text" inputMode="decimal" placeholder={String(Math.round(mA*0.8))}
@@ -4717,11 +4717,11 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+          <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",flex:1,
             background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
             border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
             type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
-          {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
+          {unit&&<span style={{...S.eenheid,fontSize:15,marginLeft:0}}>{unit}</span>}
           {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
@@ -4739,10 +4739,10 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Verwarmingscircuit</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-            <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur" unit="°C" chk={tempOk}   ph="bijv. 45"/>
-            <MeetVeld k="retourTemp"  l="Retourtemperatuur"  unit="°C" chk={tempOk}   ph="bijv. 38"/>
-            <MeetVeld k="werkdruk"    l="Werkdruk"           unit="bar" chk={werkdrOk} ph="bijv. 1.8"/>
-            <MeetVeld k="spanning"    l="Spanning"           unit="V"   chk={spanOk2}  ph="bijv. 230"/>
+            <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur" unit="°C" chk={tempOk}   ph="45"/>
+            <MeetVeld k="retourTemp"  l="Retourtemperatuur"  unit="°C" chk={tempOk}   ph="38"/>
+            <MeetVeld k="werkdruk"    l="Werkdruk"           unit="bar" chk={werkdrOk} ph="1.8"/>
+            <MeetVeld k="spanning"    l="Spanning"           unit="V"   chk={spanOk2}  ph="230"/>
           </div>
           {meet.aanvoerTemp&&meet.retourTemp&&(()=>{
             const dt = Math.abs(toNum(meet.aanvoerTemp)-toNum(meet.retourTemp));
@@ -4760,13 +4760,13 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Bron {data.wpType==="Bodem/water (grond)"?"(bodem)":data.wpType==="Lucht/lucht (split)"?"(lucht)":"(buitenlucht)"}</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <MeetVeld k="bronTempIn"  l="Brontemperatuur in"  unit="°C" chk={()=>true} ph="bijv. 8"/>
-            <MeetVeld k="bronTempUit" l="Brontemperatuur uit" unit="°C" chk={()=>true} ph="bijv. 5"/>
+            <MeetVeld k="bronTempIn"  l="Brontemperatuur in"  unit="°C" chk={()=>true} ph="8"/>
+            <MeetVeld k="bronTempUit" l="Brontemperatuur uit" unit="°C" chk={()=>true} ph="5"/>
             {data.wpType==="Bodem/water (grond)" && (
-              <MeetVeld k="glycol" l="Glycolconcentratie" unit="%" chk={()=>true} ph="bijv. 25"/>
+              <MeetVeld k="glycol" l="Glycolconcentratie" unit="%" chk={()=>true} ph="25"/>
             )}
             {data.wpType!=="Bodem/water (grond)" && (
-              <MeetVeld k="luchtdebiet" l="Luchtdebiet" unit="m³/h" chk={()=>true} ph="bijv. 1800"/>
+              <MeetVeld k="luchtdebiet" l="Luchtdebiet" unit="m³/h" chk={()=>true} ph="1800"/>
             )}
           </div>
         </div>
@@ -4774,10 +4774,10 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Elektrisch &amp; geluid</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <MeetVeld k="stroomopname"   l="Stroomopname (opstart)" unit="A"     chk={()=>true}  ph="bijv. 12"/>
-            <MeetVeld k="vermogenOpgenomen" l="Elektrisch opgenomen vermogen" unit="kW" chk={()=>true} ph="bijv. 2.1"/>
-            <MeetVeld k="geluidGemeten"  l="Geluidsniveau gemeten"  unit="dB(A)" chk={geluidOk} ph="bijv. 44"/>
-            <MeetVeld k="expansieVoordr" l="Expansievat voordruk"   unit="bar"   chk={()=>true}  ph="bijv. 1.5"/>
+            <MeetVeld k="stroomopname"   l="Stroomopname (opstart)" unit="A"     chk={()=>true}  ph="12"/>
+            <MeetVeld k="vermogenOpgenomen" l="Elektrisch opgenomen vermogen" unit="kW" chk={()=>true} ph="2.1"/>
+            <MeetVeld k="geluidGemeten"  l="Geluidsniveau gemeten"  unit="dB(A)" chk={geluidOk} ph="44"/>
+            <MeetVeld k="expansieVoordr" l="Expansievat voordruk"   unit="bar"   chk={()=>true}  ph="1.5"/>
           </div>
         </div>
 
@@ -4813,11 +4813,11 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
       <div>
         <label style={S.label}>{l}</label>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <input style={{...S.input,fontSize:15,fontWeight:700,flex:1,
+          <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",flex:1,
             background:ingevuld?(ok?K.greenDim:K.redDim):K.surface,
             border:`1px solid ${ingevuld?(ok?K.green:K.red):K.border}`}}
             type="text" inputMode="decimal" placeholder={ph} value={val} onChange={e=>sm(k,e.target.value)} onFocus={e=>e.target.select()}/>
-          {unit&&<span style={{fontSize:11,color:K.muted,whiteSpace:"nowrap"}}>{unit}</span>}
+          {unit&&<span style={{...S.eenheid,fontSize:15,marginLeft:0}}>{unit}</span>}
           {ingevuld&&<StatusTag level={ok?"ok":"red"}/>}
         </div>
       </div>
@@ -4838,8 +4838,8 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
             <div style={{fontSize:12,color:K.orange,fontWeight:600}}>⚠️ Meet CO vóór én ná werkzaamheden — wettelijk verplicht (Gasketelwet)</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <MeetVeld k="coVoor" l="CO vóór (ppm)" unit="ppm" chk={coOmgOk} ph="bijv. 2"/>
-            <MeetVeld k="coNa"   l="CO ná (ppm)"   unit="ppm" chk={coOmgOk} ph="bijv. 3"/>
+            <MeetVeld k="coVoor" l="CO vóór (ppm)" unit="ppm" chk={coOmgOk} ph="2"/>
+            <MeetVeld k="coNa"   l="CO ná (ppm)"   unit="ppm" chk={coOmgOk} ph="3"/>
           </div>
           {meet.coVoor&&meet.coNa&&(
             <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
@@ -4857,11 +4857,11 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Rookgasanalyse</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-            <MeetVeld k="coRookgas"   l="CO rookgas"         unit="ppm" chk={coRookOk} ph="bijv. 80"/>
-            <MeetVeld k="co2"         l="CO2"                unit="%"   chk={co2Ok}    ph="bijv. 9.5"/>
-            <MeetVeld k="o2"          l="O2"                 unit="%"   chk={o2Ok}     ph="bijv. 4.2"/>
-            <MeetVeld k="rookgasTemp" l="Rookgastemperatuur" unit="°C"  chk={tempOk}   ph="bijv. 65"/>
-            <MeetVeld k="rendement"   l="Rendement"          unit="%"   chk={rendOk}   ph="bijv. 98"/>
+            <MeetVeld k="coRookgas"   l="CO rookgas"         unit="ppm" chk={coRookOk} ph="80"/>
+            <MeetVeld k="co2"         l="CO2"                unit="%"   chk={co2Ok}    ph="9.5"/>
+            <MeetVeld k="o2"          l="O2"                 unit="%"   chk={o2Ok}     ph="4.2"/>
+            <MeetVeld k="rookgasTemp" l="Rookgastemperatuur" unit="°C"  chk={tempOk}   ph="65"/>
+            <MeetVeld k="rendement"   l="Rendement"          unit="%"   chk={rendOk}   ph="98"/>
           </div>
           <label style={S.label}>Lekdichtheid gasleiding</label>
           <div style={{display:"flex",gap:8}}>
@@ -4880,10 +4880,10 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Drukken & temperaturen</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <MeetVeld k="waterdruk"   l="Waterdruk"           unit="bar"  chk={waterOk} ph="bijv. 1.8"/>
-            <MeetVeld k="gasdruk"     l="Gasdruk"             unit="mbar" chk={gasOk}   ph="bijv. 22"/>
-            <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur"  unit="°C"   chk={tempOk}  ph="bijv. 70"/>
-            <MeetVeld k="retourTemp"  l="Retourtemperatuur"   unit="°C"   chk={tempOk}  ph="bijv. 50"/>
+            <MeetVeld k="waterdruk"   l="Waterdruk"           unit="bar"  chk={waterOk} ph="1.8"/>
+            <MeetVeld k="gasdruk"     l="Gasdruk"             unit="mbar" chk={gasOk}   ph="22"/>
+            <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur"  unit="°C"   chk={tempOk}  ph="70"/>
+            <MeetVeld k="retourTemp"  l="Retourtemperatuur"   unit="°C"   chk={tempOk}  ph="50"/>
           </div>
           {meet.aanvoerTemp&&meet.retourTemp&&(
             <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
@@ -5253,8 +5253,7 @@ function LP_StapMeten({ data, onChange, onNext, onBack }) {
   const MeetVeld = ({k,l,unit,ph,chk}) => (
     <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
       <div style={{flex:1, fontSize:13}}>{l}</div>
-      <input style={{...S.input, width:90}} placeholder={ph} inputMode="decimal" value={meet[k]||""} onChange={e=>zm(k,e.target.value)}/>
-      <span style={{fontSize:12, color:K.muted, width:26}}>{unit}</span>
+      <MiniInput value={meet[k]} onChange={v=>zm(k,v)} unit={unit} width={90} placeholder={ph}/>
       {meet[k] && chk && <StatusTag level={chk(toNum(meet[k]))?"ok":"red"}/>}
     </div>
   );
@@ -5282,8 +5281,7 @@ function LP_StapMeten({ data, onChange, onNext, onBack }) {
         )}
         <div style={{display:"flex", alignItems:"center", gap:8, marginTop:10}}>
           <div style={{flex:1, fontSize:13}}>Aardlektest (testknop + uitschakeltijd)</div>
-          <input style={{...S.input, width:90}} placeholder="bijv. 22" inputMode="decimal" value={meet.aardlekMs||""} onChange={e=>zm("aardlekMs",e.target.value)}/>
-          <span style={{fontSize:12, color:K.muted, width:26}}>ms</span>
+          <MiniInput value={meet.aardlekMs} onChange={v=>zm("aardlekMs",v)} unit="ms" width={90} placeholder="22"/>
           {meet.aardlekMs && <StatusTag level={toNum(meet.aardlekMs)<=300?"ok":"red"}/>}
         </div>
       </div>
@@ -5291,8 +5289,8 @@ function LP_StapMeten({ data, onChange, onNext, onBack }) {
       <div style={{...S.card, marginTop:12}}>
         <div style={S.sTitle}>Elektrische metingen laadgroep</div>
         <MeetVeld k="iso"  l="Isolatieweerstand (naar aarde)" unit="MΩ" ph="≥0,23" chk={(x)=>x>=0.23}/>
-        <MeetVeld k="zln"  l="Z L-N bij laadpunt"             unit="Ω"  ph="bijv. 0,8"/>
-        <MeetVeld k="zlpe" l="Z L-PE bij laadpunt"            unit="Ω"  ph="bijv. 0,9"/>
+        <MeetVeld k="zln"  l="Z L-N bij laadpunt"             unit="Ω"  ph="0,8"/>
+        <MeetVeld k="zlpe" l="Z L-PE bij laadpunt"            unit="Ω"  ph="0,9"/>
         <MeetVeld k="spanningsverlies" l="Spanningsverlies bij vollast" unit="%" ph="≤5" chk={(x)=>x<=5}/>
         {data.lpFasen==="3" && (
           <div style={{display:"flex", alignItems:"center", gap:8, marginTop:4}}>
@@ -5444,14 +5442,12 @@ function BAT_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Elektrisch (batterijgroep)</div>
         <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
           <div style={{flex:1, fontSize:13}}>Isolatieweerstand (naar aarde)</div>
-          <input style={{...S.input, width:90}} placeholder="≥0,23" inputMode="decimal" value={meet.iso||""} onChange={e=>zm("iso",e.target.value)}/>
-          <span style={{fontSize:12, color:K.muted, width:26}}>MΩ</span>
+          <MiniInput value={meet.iso} onChange={v=>zm("iso",v)} unit="MΩ" width={90} placeholder="≥0,23"/>
           {meet.iso && <StatusTag level={toNum(meet.iso)>=0.23?"ok":"red"}/>}
         </div>
         <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:8}}>
           <div style={{flex:1, fontSize:13}}>Aardlektest batterijgroep</div>
-          <input style={{...S.input, width:90}} placeholder="ms" inputMode="decimal" value={meet.aardlekMs||""} onChange={e=>zm("aardlekMs",e.target.value)}/>
-          <span style={{fontSize:12, color:K.muted, width:26}}>ms</span>
+          <MiniInput value={meet.aardlekMs} onChange={v=>zm("aardlekMs",v)} unit="ms" width={90} placeholder="22"/>
           {meet.aardlekMs && <StatusTag level={toNum(meet.aardlekMs)<=300?"ok":"red"}/>}
         </div>
         {data.batEiland==="ja" && <JaNee k="eilandtest" l="Omschakeltest eilandbedrijf/back-up geslaagd"/>}
