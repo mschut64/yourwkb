@@ -24,9 +24,11 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [ ] Stapteller "Stap i van n" in `S.hdr` + voortgangsbalk (`S.bar`/`S.barFill`)
 - [ ] `fontVariantNumeric:"tabular-nums"` op meetwaarden in lijstweergaven
 
-### Startscherm
-- [ ] Projectrij van `S.card` naar `S.rij` (56 px, status rechts uitgelijnd)
-- [ ] Disciplinetegel: 28 px kleurvlak boven, label + norm eronder
+### Startscherm — ✅ S3
+- [x] Projectrij naar `S.rij`: klantnaam 13 → 16 px, discipline/stap 11 → 13 px, verwijderknop ~24 → 36 px met `aria-label`
+- [x] Disciplinetegel: icoon in een 28 px kleurvlak, label 13 → 15 px, norm 10 → 12 px, tegel min. 92 px — mét behoud van het icoon
+- [x] Toevoegingsveld op stap 1 hersteld (placeholder viel weg door de 16 px-invoer uit fase 1)
+- [ ] ~~Status rechts uitgelijnd als pil~~ — **bewust niet gedaan**, zie hieronder
 
 ### Paspoort-stap — ⚠️ geblokkeerd, wacht op Martin
 - [ ] ~~Risicoscore in statuskleur, cijfer 56 px~~ — **bestaat niet in de app.** Geen enkele treffer op `risico`/`score` behalve `dubbeleBalancerRisico`. Vermoedelijk door de ontwerper afgeleid uit een screenshot van een ander scherm, of nooit gebouwd.
@@ -58,6 +60,7 @@ De spec is geschreven tegen een mentaal model van "één meting per scherm". De 
 2. **Normvlak.** Eén vlak per meetblok (A-impedantie, B-isolatie, C-spanning) in plaats van per veld. De statuspil per veld blijft, dus je ziet nog steeds wélke waarde afwijkt.
 3. **Stapteller.** `StepBar` ([WkbApp.jsx:830](../components/WkbApp.jsx:830)) blijft. De spec vervangt hem door een display-only regel, wat het terugspringen naar een afgeronde stap zou weghalen — functieverlies. Alleen "Stap i van n" + schermtitel 20 px toevoegen.
 4. **Disciplinetegel.** Kleurvlak toevoegen mét behoud van de emoji-iconen; de spec-variant haalt icoon en per-discipline kleur weg.
+5. **Statuspil in de projectenlijst — geschrapt in S3.** Op 375 px is de middenkolom van een projectrij 203 px; een pil "✓ Opgeleverd" is alleen al 112 px. Drie varianten geprobeerd (gestapeld rechts, naast de verwijderknop, naast het projectnummer); alle drie kostten óf de klantnaam ("Bouwb…") óf het projectnummer. Dat nummer is `postcode-huisnummer` (bv. `2691JJ-72a`) en is wat de installateur aan een klant doorgeeft, dus dat mag niet afbreken. De status staat bovendien al twee keer op het scherm: de kopjes "Concepten (n)" / "Opgeleverd (n)" en het groene ✅-icoonvlak. Terugdraaien kan als Martin de pil alsnog wil.
 
 **Aandachtspunt uit spec §7:** `S.input` (±40 → 52 px) en `S.btn` (±48 → 56 px) maken lange formulieren ~25% langer. Als de paspoort- of materiaalstap daardoor een extra scroll krijgt, dichtheid uit de spacing halen — niet uit de tapmaat. Ter beoordeling van Martin in het veld.
 
