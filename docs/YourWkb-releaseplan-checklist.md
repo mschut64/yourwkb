@@ -18,8 +18,10 @@ Zie `CLAUDE.md` §4 voor de inhoud van beide.
 Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via de tokens meekomt). Secties 2a, 2b en 3 van de spec (de `K`/`S`-tokens en het landing-CSS-blok) zijn in een eerdere ronde al doorgevoerd; de tokens `S.rij`, `S.eenheid`, `S.inputMeting` en `S.btnGhost` bestaan dus wél maar worden nog nergens gebruikt.
 
 ### Meetscherm
-- [ ] Meetwaardevelden van `S.input` naar `S.inputMeting` (32 px / 700, tabular-nums)
-- [ ] Eenheid uit het label naar `<span style={S.eenheid}>` naast het veld
+- [x] **S5a** — meetwaarden in `MiniInput` van 13 → 20 px, tabular-nums, `inputMode="decimal"`, veldbreedtes mee omhoog (65/70/80 → 84/88/96). Raakt groepenkast (meten + veldmeting) en PV.
+- [x] **S5b** — cv, warmtepomp, laadpaal en batterij op dezelfde maat. Laadpaal/batterij via `MiniInput`; cv/warmtepomp houden hun eigen `MeetVeld` (dat kleurt achtergrond én rand bij toetsing — beter dan `MiniInput`), alleen de typografie gelijkgetrokken. 25 placeholders `bijv. 45` → `45`.
+- [x] Eenheid via `S.eenheid` (op 15 px; het token staat op 17 voor naast een veld van 32 px)
+- [ ] ~~Meetvelden naar `S.inputMeting` (32 px, volle breedte)~~ — **niet gedaan**: zes velden naast elkaar in flexWrap-rijen, volle breedte maakt er een scrollmarathon van. 20 px is de grootste maat die de rasters heel laat. Zie afwijking 1.
 - [ ] Normvlak onder het meetveld: statuskleur, ✓/✗-teken, uitspraak + grenswaarde
 - [ ] Stapteller "Stap i van n" in `S.hdr` + voortgangsbalk (`S.bar`/`S.barFill`)
 - [ ] `fontVariantNumeric:"tabular-nums"` op meetwaarden in lijstweergaven
