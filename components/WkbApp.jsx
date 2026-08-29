@@ -765,15 +765,28 @@ const TesterIcoon = ({ info }) => {
   );
 };
 
-const MiniInput = ({ value, onChange, placeholder, unit, width=80 }) => (
-  <div style={{ display:"flex", alignItems:"center", gap:4 }}>
-    <input style={{ ...S.input, width, padding:"8px 10px", fontSize:13 }}
+// MiniInput draagt vrijwel elke meetwaarde in de app. De waarde stond op 13px —
+// even groot als het label ernaast — in een vak dat sinds de design-fundamentlaag
+// 52px hoog is: een klein cijfer in veel lege ruimte. Nu 20px/700 met
+// tabular-nums, zodat je in één blik terugleest wat je hebt ingetikt en cijfers
+// in een kolom onder elkaar uitlijnen (een afwijkende waarde valt dan op).
+//
+// Bewust NIET S.inputMeting (32px, volle breedte) zoals design-spec §4 voorstelt:
+// deze velden staan met zes tegelijk naast elkaar in flexWrap-rijen — Z L-N t/m
+// Z L3-PE — en op volle breedte wordt één meetscherm een scrollmarathon. Dat
+// botst met de flow-regel. 20px is de grootste maat die de rasters heel laat.
+const MiniInput = ({ value, onChange, placeholder, unit, width=96 }) => (
+  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+    <input style={{ ...S.input, width, padding:"0 10px", fontSize:20, fontWeight:700,
+                    letterSpacing:"-0.01em", fontVariantNumeric:"tabular-nums" }}
       value={value||""} onChange={e=>onChange(e.target.value)}
       onFocus={e=>e.target.select()}
+      inputMode="decimal"
       placeholder={placeholder||"—"}/>
-    {unit && <span style={{ fontSize:11, color:K.muted, whiteSpace:"nowrap" }}>{unit}</span>}
+    {/* S.eenheid op 15px i.p.v. 17: dat token is bedoeld naast een meetveld van
+        32px, hier staat het naast 20px en moet de rij compact blijven. */}
+    {unit && <span style={{ ...S.eenheid, fontSize:15, marginLeft:0 }}>{unit}</span>}
   </div>
-
 );
 
 const MiniSelect = ({ value, onChange, options, width=90 }) => (
@@ -1717,7 +1730,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
             <div>
               <label style={S.label}>Hoofdzekering</label>
-              <MiniInput value={inst.hoofdzekering} onChange={v=>si("hoofdzekering",v)} unit="A" width={80} placeholder="bijv. 40"/>
+              <MiniInput value={inst.hoofdzekering} onChange={v=>si("hoofdzekering",v)} unit="A" width={96} placeholder="40"/>
             </div>
             <div>
               <label style={S.label}>Hoofdschakelaar</label>
@@ -1734,7 +1747,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8}}>
             <div>
               <label style={S.label}>Voorzekering (klasse 1) / Hoogst afgaande groep (klasse 2)</label>
-              <MiniInput value={hoogstAmpere} onChange={v=>si("hoogstAmpere",v)} unit="A" width={70}/>
+              <MiniInput value={hoogstAmpere} onChange={v=>si("hoogstAmpere",v)} unit="A" width={88}/>
             </div>
             <div>
               <label style={S.label}>Karakteristiek voorzekering</label>
@@ -1784,7 +1797,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               return (
                 <div key={k}><label style={S.label}>{l}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-                    <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="Ω" width={70}/>
+                    <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="Ω" width={88}/>
                     {inst[k] && toetsbaar && <StatusTag level={okFn(inst[k])?"ok":"red"}/>}
                     {inst[k] && (
                       <span style={{fontSize:10,color:K.muted,whiteSpace:"nowrap"}}>
@@ -1816,7 +1829,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               <div key={k}>
                 <div style={{fontSize:10,color:K.muted,marginBottom:3}}>{l}</div>
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                  <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="MΩ" width={80}/>
+                  <MiniInput value={inst[k]} onChange={v=>si(k,v)} unit="MΩ" width={96}/>
                   {inst[k] && <StatusTag level={toNum(inst[k])>=0.23?"ok":"red"}/>}
                 </div>
               </div>
@@ -1904,7 +1917,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           {(["L1/N","L1/PE"].concat((inst.toon3fase ?? heeft3faseGroep) ? ["L2/N","L2/PE","L3/N","L3/PE"] : [])).map(f=>(
             <div key={f}><label style={S.label}>{f}</label>
               <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
+                <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={84}/>
                 {inst[`span_${f}`]&&<StatusTag level={spanOk(inst[`span_${f}`])?"ok":"red"}/>}
               </div>
             </div>
@@ -1917,7 +1930,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {["L1/L2","L2/L3","L1/L3"].map(f=>(
                 <div key={f}><label style={S.label}>{f}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                    <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={65}/>
+                    <MiniInput value={inst[`span_${f}`]} onChange={v=>si(`span_${f}`,v)} unit="V" width={84}/>
                     {inst[`span_${f}`]&&<StatusTag level={toNum(inst[`span_${f}`])>=360&&toNum(inst[`span_${f}`])<=440?"ok":"red"}/>}
                   </div>
                 </div>
@@ -1929,7 +1942,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
           <div><label style={S.label}>Frequentie</label>
             <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              <MiniInput value={inst.frequentie} onChange={v=>si("frequentie",v)} unit="Hz" width={65} placeholder="50"/>
+              <MiniInput value={inst.frequentie} onChange={v=>si("frequentie",v)} unit="Hz" width={84} placeholder="50"/>
               {inst.frequentie&&<StatusTag level={toNum(inst.frequentie)>=45&&toNum(inst.frequentie)<=55?"ok":"red"}/>}
             </div>
           </div>
@@ -2192,7 +2205,7 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                     <div>
                       <label style={S.label}>Z L-N (verste WCD)</label>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={80} placeholder="bijv. 1.2"/>
+                        <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={96} placeholder="1.2"/>
                         {gv(ag.id,"zln") && zMaxVeld && (
                           <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld && !veldLagerDanKast(ag.id,"zln") ?"ok":"red"}/>
                         )}
@@ -2207,7 +2220,7 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                     <div>
                       <label style={S.label}>Z L-PE (verste WCD)</label>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={80} placeholder="bijv. 1.3"/>
+                        <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={96} placeholder="1.3"/>
                         {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
                           <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe")) && !veldLagerDanKast(ag.id,"zlpe") ?"ok":"red"}/>
                         )}
@@ -2415,7 +2428,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
               <div key={k} style={{flex:1,minWidth:80}}>
                 <label style={S.label}>{l}</label>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-                  <MiniInput value={instMet[k]} onChange={v=>sm(k,v)} unit={u} width={65}/>
+                  <MiniInput value={instMet[k]} onChange={v=>sm(k,v)} unit={u} width={84}/>
                   {instMet[k]&&<StatusTag level={chk(instMet[k])?"ok":"red"}/>}
                 </div>
               </div>
