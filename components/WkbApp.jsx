@@ -1,5 +1,8 @@
 'use client'
-// YourWkb WkbApp.jsx — versie 2026-08-16-A (design-spec fundamentlaag)
+// YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-08-29-A (R1/S1): versienummer als constante + zichtbaar in de kop van het
+//               beginscherm. De kopregel stond twee releases achter (2026-08-16-A
+//               terwijl 08-27-A en 08-27-B al live waren) — vandaar één bron.
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.
@@ -26,6 +29,14 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { trackEvent } from "./analytics";
+
+// Versie van de app — ENIGE bron van waarheid. De kopregel bovenaan dit bestand
+// verwijst hiernaar; werk bij een release deze constante bij, niet de kopregel.
+// Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
+// de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
+// zeggen welke versie hij in handen heeft.
+const APP_VERSIE = "2026-08-29-A";
+
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
 //   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
 //   bouwjaar, EAN met GS1-check + eancodeboek.nl-knop, load balancing incl.
@@ -4235,7 +4246,12 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
     <div>
       <div style={S.hdr}>
         <div style={{width:34,height:34,borderRadius:9,background:K.yellow,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="#000000" aria-hidden="true"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 l1-8 z"/></svg></div>
-        <div><div style={{fontWeight:700,fontSize:16}}>YourWkb</div><div style={{fontSize:11,color:K.muted}}>Installatie opleverrapporten</div></div>
+        <div><div style={{fontWeight:700,fontSize:16}}>YourWkb</div><div style={{fontSize:12,color:K.muted}}>Installatie opleverrapporten</div></div>
+        {/* Versie rechts in de kop — bij een melding uit het veld weet je meteen
+            welke versie de installateur draait. Alleen weergave, geen knop. */}
+        <div style={{marginLeft:"auto",fontSize:12,color:K.muted,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
+          v{APP_VERSIE}
+        </div>
       </div>
       <div style={S.body}>
 
