@@ -22,7 +22,8 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [x] **S5b** — cv, warmtepomp, laadpaal en batterij op dezelfde maat. Laadpaal/batterij via `MiniInput`; cv/warmtepomp houden hun eigen `MeetVeld` (dat kleurt achtergrond én rand bij toetsing — beter dan `MiniInput`), alleen de typografie gelijkgetrokken. 25 placeholders `bijv. 45` → `45`.
 - [x] Eenheid via `S.eenheid` (op 15 px; het token staat op 17 voor naast een veld van 32 px)
 - [ ] ~~Meetvelden naar `S.inputMeting` (32 px, volle breedte)~~ — **niet gedaan**: zes velden naast elkaar in flexWrap-rijen, volle breedte maakt er een scrollmarathon van. 20 px is de grootste maat die de rasters heel laat. Zie afwijking 1.
-- [ ] Normvlak onder het meetveld: statuskleur, ✓/✗-teken, uitspraak + grenswaarde
+- [x] **S5c** — normvlak per meetblok: impedantie, isolatieweerstand, spanning+frequentie en aardlekschakelaar (groepenkast) + AC-blok (PV). Helpers `blokOordeel` en `normTitel`. Per blok en niet per veld — zie afwijking 2.
+- [x] **Aardlekblok rechtgezet** (gemeld door Martin tijdens S5c): labels stonden vol met de norm en wrapten ongelijk, waardoor de ΔT- en ΔI-velden uit elkaar zakten. Labels ingekort, norm naar het vlak, `alignItems:"end"`.
 - [ ] Stapteller "Stap i van n" in `S.hdr` + voortgangsbalk (`S.bar`/`S.barFill`)
 - [ ] `fontVariantNumeric:"tabular-nums"` op meetwaarden in lijstweergaven
 
