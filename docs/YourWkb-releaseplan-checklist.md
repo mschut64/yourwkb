@@ -28,9 +28,11 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [ ] Projectrij van `S.card` naar `S.rij` (56 px, status rechts uitgelijnd)
 - [ ] Disciplinetegel: 28 px kleurvlak boven, label + norm eronder
 
-### Paspoort-stap
-- [ ] Risicoscore in statuskleur (groen/oranje/rood) i.p.v. `K.yellow`, cijfer 56 px
-- [ ] Inspectiepunt van `S.card` naar `S.rij` met 24 px statusvierkant + reden in `S.hint`
+### Paspoort-stap — ⚠️ geblokkeerd, wacht op Martin
+- [ ] ~~Risicoscore in statuskleur, cijfer 56 px~~ — **bestaat niet in de app.** Geen enkele treffer op `risico`/`score` behalve `dubbeleBalancerRisico`. Vermoedelijk door de ontwerper afgeleid uit een screenshot van een ander scherm, of nooit gebouwd.
+- [ ] ~~Inspectiepunt naar `S.rij` met statusvierkant + reden~~ — **bestaat niet als UI.** Alleen `// Visuele inspectiepunten` in de rekenlogica ([WkbApp.jsx:466](../components/WkbApp.jsx:466)).
+
+Beide punten uit spec §4 zijn niet uitvoerbaar zoals geschreven. Uit R1 gehaald tot Martin aanwijst waar ze op slaan.
 
 ### Back-up & delen
 - [ ] Knophiërarchie: delen blijft `S.btn` (geel), back-up wordt `S.btnGhost`
@@ -38,14 +40,24 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [ ] Waarschuwing lokale opslag van `K.red` naar `S.hint`
 
 ### Meegebundeld in R1
-- [ ] Zichtbaar versienummer in de app (doorlopend spoor uit de roadmap)
-- [ ] Landing "binnenkort" opschonen: laadpaal, thuisbatterij en QR-meterkastpaspoort zijn live → naar beschikbaar; belastingcheck en eigen logo blijven "binnenkort"
+- [x] **S0 — `@babel/core` en `@babel/preset-react` als devDependency, gepind op 7.** Stonden nergens in `package.json`, waardoor `extract-logica.js` op een verse checkout faalde. Babel 8 breekt de extractor (`parse` wil een callback), dus de pin op 7 is noodzakelijk, geen luiheid.
+- [x] **S1 — zichtbaar versienummer.** Constante `APP_VERSIE`, rechts in de header van het beginscherm. De kopregel liep twee releases achter en is nu afgeleid van de constante.
+- [x] **Landing "binnenkort" opschonen — was al gebeurd.** Het blok op [app/landing/page.js:458](../app/landing/page.js:458) bevat nog precies belastingcheck + eigen logo, exact de twee die moesten blijven. Laadpaal, thuisbatterij en QR-paspoort staan al als beschikbaar (regel 247, 435 en de paspoort-sectie). Vermoedelijk meegegaan in v2026-08-16-B.
 
 ### Oplevering
 - [ ] `node tests/extract-logica.js components/WkbApp.jsx` + `node tests/test.js` → 80/80
 - [ ] `npx next build` → compiled successfully
 - [ ] Versieletter opgehoogd in de kopregel van `WkbApp.jsx`
 - [ ] Flow-regel getoetst: geen scherm, stap of bevestiging toegevoegd
+
+### Afwijkingen van spec §4 — voorgelegd aan Martin 29-08-2026, nog geen akkoord
+
+De spec is geschreven tegen een mentaal model van "één meting per scherm". De app heeft dichte meetrasters. Letterlijk doorvoeren verlengt de flow en botst dus met de flow-regel. Vier voorstellen:
+
+1. **Meetvelden.** Niet `S.input` → `S.inputMeting`, maar `MiniInput` zelf opwaarderen (13 → 20 px/700, tabular-nums, eenheid via `S.eenheid`). De meetwaarden zitten in `MiniInput` ([WkbApp.jsx:732](../components/WkbApp.jsx:732)), 70–80 px breed en naast elkaar in `flexWrap`-rijen — zes Z-waarden op een rij. Volle breedte à 64 px maakt daar een scrollmarathon van.
+2. **Normvlak.** Eén vlak per meetblok (A-impedantie, B-isolatie, C-spanning) in plaats van per veld. De statuspil per veld blijft, dus je ziet nog steeds wélke waarde afwijkt.
+3. **Stapteller.** `StepBar` ([WkbApp.jsx:830](../components/WkbApp.jsx:830)) blijft. De spec vervangt hem door een display-only regel, wat het terugspringen naar een afgeronde stap zou weghalen — functieverlies. Alleen "Stap i van n" + schermtitel 20 px toevoegen.
+4. **Disciplinetegel.** Kleurvlak toevoegen mét behoud van de emoji-iconen; de spec-variant haalt icoon en per-discipline kleur weg.
 
 **Aandachtspunt uit spec §7:** `S.input` (±40 → 52 px) en `S.btn` (±48 → 56 px) maken lange formulieren ~25% langer. Als de paspoort- of materiaalstap daardoor een extra scroll krijgt, dichtheid uit de spacing halen — niet uit de tapmaat. Ter beoordeling van Martin in het veld.
 
