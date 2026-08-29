@@ -546,6 +546,31 @@ const StatusTag = ({ level }) => {
   return <span style={{ ...S.tag, background:c.bg, color:c.color, borderColor:c.line }}>{c.label}</span>;
 };
 
+// Statusvlak (design-spec §4) — de grote broer van StatusTag: een vlak met een
+// teken, een uitspraak in woorden en een tweede regel voor de onderbouwing.
+// StatusTag zegt dát iets afwijkt, dit vlak zegt wat en waarom, zonder dat je
+// terug hoeft te scrollen naar de instructietekst.
+// Kleur én teken én rand, zodat de melding ook zonder kleurwaarneming leest.
+const StatusVlak = ({ level="ok", titel, sub, style }) => {
+  const cfg = {
+    ok:   { bg:K.greenDim,  kleur:K.green,  line:"rgba(39,174,96,0.45)",  teken:"✓" },
+    warn: { bg:K.orangeDim, kleur:K.orange, line:"rgba(245,158,11,0.45)", teken:"⚠" },
+    fail: { bg:K.redDim,    kleur:K.red,    line:"rgba(255,90,82,0.50)",  teken:"✗" },
+  };
+  const c = cfg[level] || cfg.ok;
+  return (
+    <div style={{ minHeight:52, borderRadius:K.radiusSm, padding:"12px 14px", display:"flex",
+      alignItems:"center", gap:12, background:c.bg, border:`1px solid ${c.line}`, ...style }}>
+      <span style={{ width:26, height:26, borderRadius:7, flexShrink:0, background:c.kleur, color:"#fff",
+        fontSize:15, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>{c.teken}</span>
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:15, fontWeight:600, color:c.kleur, lineHeight:1.3 }}>{titel}</div>
+        {sub && <div style={{ ...S.hint, color:K.textSoft, fontSize:13, marginTop:2 }}>{sub}</div>}
+      </div>
+    </div>
+  );
+};
+
 // ─── LEERVIDEO'S ──────────────────────────────────────────────────────────────
 // Centrale plek voor alle uitlegvideo's. Vul hier de echte links in zodra ze
 // beschikbaar zijn — de rest van de app hoeft dan niet aangepast te worden.
@@ -992,21 +1017,36 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
             </div>
           </div>
 
-          {/* Postcode status */}
+          {/* Postcode status. Bij een treffer tonen we het gevonden adres vóluit
+              op de volle breedte, niet alleen "Adres gevonden": dít is de regel
+              waarop je controleert of de postcode het juiste pand opleverde.
+              De velden Straatnaam en Plaats staan naast elkaar en kappen lange
+              namen af ('s-Gravenzande, Nieuwerkerk aan den IJssel); die kun je
+              niet breed genoeg maken zonder het scherm te verlengen. Deze regel
+              lost dat op zonder één pixel extra hoogte. */}
           <div style={{ marginBottom:12, minHeight:20 }}>
-            {pcStatus==="loading" && <div style={{ fontSize:11, color:K.muted }}>🔍 Adres opzoeken…</div>}
-            {pcStatus==="found"   && <div style={{ fontSize:11, color:K.green }}>✓ Adres gevonden</div>}
-            {pcStatus==="error"   && <div style={{ fontSize:11, color:K.orange }}>⚠ Adres niet gevonden — vul handmatig in</div>}
+            {pcStatus==="loading" && <div style={{ fontSize:13, color:K.muted }}>🔍 Adres opzoeken…</div>}
+            {pcStatus==="found"   && (
+              <div style={{ fontSize:13, color:K.green, lineHeight:1.4 }}>
+                ✓ {[data.straat, [data.huisnummer,data.toevoeging].filter(Boolean).join("")].filter(Boolean).join(" ")}
+                {data.plaats ? `, ${data.plaats}` : ""}
+              </div>
+            )}
+            {pcStatus==="error"   && <div style={{ fontSize:13, color:K.orange }}>⚠ Adres niet gevonden — vul handmatig in</div>}
           </div>
 
-          {/* Straat + plaats — automatisch ingevuld of handmatig */}
+          {/* Straat + plaats — automatisch ingevuld of handmatig.
+              Gelijk verdeeld (was 2:1). Deze twee velden vul je zelden zelf in;
+              je leest ze om te controleren of de postcode het juiste adres
+              opleverde. Op 1/3 van de breedte werd 's-Gravenzande afgekapt tot
+              's-Graven… — dan kun je die controle niet doen. */}
           <div style={{ display:"flex", gap:10, marginBottom:12 }}>
-            <div style={{ flex:2 }}>
+            <div style={{ flex:1, minWidth:0 }}>
               <label style={S.label}>Straatnaam</label>
               <input style={{ ...S.input, color: pcStatus==="found" ? K.green : K.text }}
                 placeholder="Kerkstraat" value={data.straat||""} onChange={e=>onChange("straat",e.target.value)}/>
             </div>
-            <div style={{ flex:1 }}>
+            <div style={{ flex:1, minWidth:0 }}>
               <label style={S.label}>Plaats</label>
               <input style={{ ...S.input, color: pcStatus==="found" ? K.green : K.text }}
                 placeholder="Utrecht" value={data.plaats||""} onChange={e=>onChange("plaats",e.target.value)}/>
@@ -4163,7 +4203,12 @@ function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
             <br/><span style={{color:K.muted}}>Staat YourWkb er (nog) niet tussen? Werk de app-installatie bij (verwijder het icoon en zet de app opnieuw op je beginscherm) — of gebruik "Kies bestand…" hieronder.</span>
           </div>
           <input ref={fileRef} type="file" accept=".json,.txt,application/json,text/plain" style={{display:"none"}} onChange={kiesBestand}/>
-          <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000"}} onClick={()=>fileRef.current?.click()}>
+          {/* Ghost i.p.v. geel: op dit scherm stonden twee even luide gele
+              knoppen onder elkaar, waardoor je moest lezen voordat je kon
+              tikken. Back-up maken is de handeling waarvoor je hier komt;
+              terugzetten doe je bij een nieuw toestel of een bestand van een
+              collega. Geel blijft daarmee 'hier tikken' betekenen. */}
+          <button style={S.btnGhost} onClick={()=>fileRef.current?.click()}>
             📂 Kies bestand…
           </button>
           {importLijst && (
@@ -4185,7 +4230,17 @@ function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
           )}
         </div>
 
-        {melding && <div style={{...S.card, fontSize:12, borderLeft:`4px solid ${melding.startsWith("⚠")?K.orange:K.green}`}}>{melding}</div>}
+        {/* Melding als statusvlak i.p.v. een kaart met een gekleurd streepje
+            links: het teken en de kleur zitten nu in het vlak zelf, en de tekst
+            staat op 15px in plaats van 12. Het ⚠/✅-teken zat al in de
+            meldingstekst en wordt hier weggehaald — het vlak toont het zelf. */}
+        {melding && (
+          <StatusVlak
+            level={melding.startsWith("⚠") ? "warn" : "ok"}
+            titel={melding.replace(/^([⚠✅✓]️?\s*)/,"")}
+            style={{marginTop:4}}
+          />
+        )}
       </div>
     </div>
   );
