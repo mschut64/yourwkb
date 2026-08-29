@@ -36,10 +36,15 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 
 Beide punten uit spec §4 zijn niet uitvoerbaar zoals geschreven. Uit R1 gehaald tot Martin aanwijst waar ze op slaan.
 
-### Back-up & delen
-- [ ] Knophiërarchie: delen blijft `S.btn` (geel), back-up wordt `S.btnGhost`
-- [ ] Compleetheidsmelding als statusvlak (hergebruik uit meetscherm), `level="ok"`
-- [ ] Waarschuwing lokale opslag van `K.red` naar `S.hint`
+### Back-up & delen — ✅ S4
+- [x] Knophiërarchie: één gele knop per scherm. De spec sprak van "delen vs back-up", maar op dit scherm zijn de twee gelijke gele knoppen *Download back-up* en *Kies bestand*; delen is de groene WhatsApp-knop per project. Back-up blijft geel, *Kies bestand* wordt `S.btnGhost`.
+- [x] `StatusVlak`-component gebouwd en toegepast op de meldingen (waren 12 px met een streepje links). Bewust hier gebouwd zodat S5 hem kan hergebruiken onder de meetblokken.
+- [x] ~~Waarschuwing lokale opslag van `K.red` naar `S.hint`~~ — **bestond niet**: de tekst op het beginscherm stond al op `K.muted`, en op het back-upscherm staat geen rode waarschuwing.
+
+### Klantstap (meegenomen in S3/S4)
+- [x] Toevoegingsveld leesbaar (S3)
+- [x] Toevoeging telt mee in het projectnummer; paspoort-import zette `projectId` nooit → rapport toonde "—"
+- [x] Straatnaam/Plaats gelijk verdeeld + bevestigingsregel toont het gevonden adres vóluit
 
 ### Meegebundeld in R1
 - [x] **S0 — `@babel/core` en `@babel/preset-react` als devDependency, gepind op 7.** Stonden nergens in `package.json`, waardoor `extract-logica.js` op een verse checkout faalde. Babel 8 breekt de extractor (`parse` wil een callback), dus de pin op 7 is noodzakelijk, geen luiheid.
