@@ -447,7 +447,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
   const l3 = toNum(instMet["span_L3/N"]);
   if (!isNaN(l1) && !isNaN(l2) && !isNaN(l3)) {
     const diff = Math.max(l1,l2,l3) - Math.min(l1,l2,l3);
-    if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting` });
+    if (diff > 6) warnings.push({ level:"orange", msg:`Fasespanning asymmetrie ${diff.toFixed(1).replace(".",",")}V — controleer netaansluiting` });
   }
 
   // A) IMPEDANTIE — Z L-N/L-PE check op basis van hoogst afgaande groep (EN 60898/60269)
@@ -482,12 +482,12 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
           warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven 166Ω (aanraakspanningsnorm achter aardlekschakelaar)` });
       } else if (zMax) {
         if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax)
-          warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten` });
+          warnings.push({ level:"orange", msg:`Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2).replace(".",",")}Ω) — bij uitbreiding opnieuw meten` });
         if (!isNaN(zlpe) && zlpe > zMax)
-          warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+          warnings.push({ level:"red", msg:`Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2).replace(".",",")}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
       }
       if (zMax && !isNaN(zln) && zln > zMax)
-        warnings.push({ level:"red", msg:`Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
+        warnings.push({ level:"red", msg:`Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2).replace(".",",")}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging` });
     }
   }
 
@@ -531,8 +531,8 @@ function pvCrossChecks(strings, instMet, materiaal) {
   if (!isNaN(aantalPanelen) && !isNaN(paneelWp) && !isNaN(omvormerKw)) {
     const totaalWp = aantalPanelen * paneelWp;
     const ratio    = totaalWp / (omvormerKw * 1000);
-    if (ratio > 1.35) warnings.push({ level:"orange", msg:`DC/AC ratio ${ratio.toFixed(2)} is hoog (>${1.35}) — controleer omvormer specificaties` });
-    if (ratio < 0.8)  warnings.push({ level:"orange", msg:`DC/AC ratio ${ratio.toFixed(2)} is laag (<0.8) — omvormer mogelijk te groot` });
+    if (ratio > 1.35) warnings.push({ level:"orange", msg:`DC/AC ratio ${ratio.toFixed(2).replace(".",",")} is hoog (>1,35) — controleer omvormer specificaties` });
+    if (ratio < 0.8)  warnings.push({ level:"orange", msg:`DC/AC ratio ${ratio.toFixed(2).replace(".",",")} is laag (<0,8) — omvormer mogelijk te groot` });
   }
   // Aarding check
   if (instMet.aardingOk === "NOK")
@@ -1797,12 +1797,12 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           </div>
 
           <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
-            Maximale afschakeltijd (afgeleid uit stelsel {stelsel} + {isKlasse1?"Klasse 1 — verdeler-niveau":"Klasse 2 — eindgroep-niveau"}): <strong style={{color:K.text}}>{maxAfschakeltijd}s</strong>
+            Maximale afschakeltijd (afgeleid uit stelsel {stelsel} + {isKlasse1?"Klasse 1 — verdeler-niveau":"Klasse 2 — eindgroep-niveau"}): <strong style={{color:K.text}}>{String(maxAfschakeltijd).replace(".",",")}s</strong>
           </div>
 
           {zMaxVoorzek && (
             <div style={{fontSize:11,color:K.muted,padding:"7px 10px",background:K.surface,borderRadius:8,marginBottom:10}}>
-              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(1)}A{hoogstKar==="gG" && ggLookup ? ` (tabel gG bij ${ggLookup.inGebruikt}A, ${maxAfschakeltijd}s)` : ""} → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2)}Ω</strong>
+              {hoogstKar}{hoogstAmpere}A → Icc min = {iccMin?.toFixed(1).replace(".",",")}A{hoogstKar==="gG" && ggLookup ? ` (tabel gG bij ${ggLookup.inGebruikt}A, ${String(maxAfschakeltijd).replace(".",",")}s)` : ""} → Z_max = <strong style={{color:K.text}}>{zMaxVoorzek.toFixed(2).replace(".",",")}Ω</strong>
             </div>
           )}
           {!zMaxVoorzek && (
@@ -1820,7 +1820,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
           <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10,cursor:"pointer",padding:"8px 10px",background:K.surface,borderRadius:8}}>
             <input type="checkbox" checked={rcdAanwezig} onChange={e=>si("rcdAanwezig",e.target.checked)} style={{marginTop:2}}/>
             <span style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
-              <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> achter de hoogst afgaande groep. Voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan de norm <strong style={{color:K.text}}>≤166Ω</strong> (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVoorzek?` (Z_max ≤${zMaxVoorzek.toFixed(2)}Ω)`:" (Z_max obv karakteristiek)"} geldt.
+              <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> achter de hoogst afgaande groep. Voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan de norm <strong style={{color:K.text}}>≤166Ω</strong> (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVoorzek?` (Z_max ≤${zMaxVoorzek.toFixed(2).replace(".",",")}Ω)`:" (Z_max obv karakteristiek)"} geldt.
             </span>
           </label>
 
@@ -1830,7 +1830,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               const pe = isPeKey(k);
               const okFn = pe ? zPeOk : zOk;
               const toetsbaar = pe ? zPeToetsbaar : !!zMaxVoorzek;
-              const normTxt = pe ? (rcdAanwezig ? "norm ≤166Ω" : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2)}Ω`:"")) : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2)}Ω`:"");
+              const normTxt = pe ? (rcdAanwezig ? "norm ≤166Ω" : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2).replace(".",",")}Ω`:"")) : (zMaxVoorzek?`norm ≤${zMaxVoorzek.toFixed(2).replace(".",",")}Ω`:"");
               return (
                 <div key={k}><label style={S.label}>{l}</label>
                   <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -1868,9 +1868,9 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             }));
             if (!o) return null;
             const grenzen = [
-              zMaxVoorzek ? `Z L-N \u2264 ${zMaxVoorzek.toFixed(2)}\u03a9` : null,
+              zMaxVoorzek ? `Z L-N \u2264 ${zMaxVoorzek.toFixed(2).replace(".",",")}\u03a9` : null,
               rcdAanwezig ? "Z L-PE \u2264 166\u03a9 (achter aardlek)"
-                          : (zMaxVoorzek ? `Z L-PE \u2264 ${zMaxVoorzek.toFixed(2)}\u03a9` : null),
+                          : (zMaxVoorzek ? `Z L-PE \u2264 ${zMaxVoorzek.toFixed(2).replace(".",",")}\u03a9` : null),
             ].filter(Boolean).join(" \u00b7 ");
             return <StatusVlak level={o.level} titel={normTitel(o,"Impedantie")} sub={grenzen} style={{marginTop:10}}/>;
           })()}
@@ -2321,7 +2321,7 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                   <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:12,cursor:"pointer",padding:"8px 10px",background:K.surface,borderRadius:8}}>
                     <input type="checkbox" checked={rcdVeld} onChange={e=>sv(ag.id,"rcd",e.target.checked ? true : "0")} style={{marginTop:2}}/>
                     <span style={{fontSize:11,color:K.muted,lineHeight:1.5}}>
-                      <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> — voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan ≤166Ω (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVeld?` (Z_max ≤${zMaxVeld.toFixed(2)}Ω)`:" (Z_max obv sectie A)"} geldt.
+                      <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> — voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan ≤166Ω (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVeld?` (Z_max ≤${zMaxVeld.toFixed(2).replace(".",",")}Ω)`:" (Z_max obv sectie A)"} geldt.
                     </span>
                   </label>
 
@@ -2329,7 +2329,7 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                     <div>
                       <label style={S.label}>Z L-N (verste WCD)</label>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={96} placeholder="1.2"/>
+                        <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={96} placeholder="1,2"/>
                         {gv(ag.id,"zln") && zMaxVeld && (
                           <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld && !veldLagerDanKast(ag.id,"zln") ?"ok":"red"}/>
                         )}
@@ -2338,13 +2338,13 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                         )}
                       </div>
                       {lengteZln && (
-                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZln.toFixed(1)}m kabel</div>
+                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZln.toFixed(1).replace(".",",")}m kabel</div>
                       )}
                     </div>
                     <div>
                       <label style={S.label}>Z L-PE (verste WCD)</label>
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                        <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={96} placeholder="1.3"/>
+                        <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={96} placeholder="1,3"/>
                         {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
                           <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe")) && !veldLagerDanKast(ag.id,"zlpe") ?"ok":"red"}/>
                         )}
@@ -2353,15 +2353,15 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                         )}
                       </div>
                       {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
-                        <div style={{fontSize:10,color:K.muted,marginTop:3}}>{rcdVeld?"norm ≤166Ω (achter aardlek)":`norm ≤${zMaxVeld.toFixed(2)}Ω`}</div>
+                        <div style={{fontSize:10,color:K.muted,marginTop:3}}>{rcdVeld?"norm ≤166Ω (achter aardlek)":`norm ≤${zMaxVeld.toFixed(2).replace(".",",")}Ω`}</div>
                       )}
                       {lengteZlpe && (
-                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZlpe.toFixed(1)}m kabel</div>
+                        <div style={{fontSize:11,color:K.green,marginTop:4,fontWeight:600}}>≈ {lengteZlpe.toFixed(1).replace(".",",")}m kabel</div>
                       )}
                     </div>
                   </div>
                   {zMaxVeld && (
-                    <div style={{fontSize:10,color:K.muted,marginBottom:8}}>Norm Z L-N: ≤ {zMaxVeld.toFixed(2)}Ω (obv {hoogstKar}{hoogstAmpere}A, {maxAfschakeltijd}s — zelfde als sectie A){rcdVeld?" · Z L-PE ≤166Ω achter aardlek":""}</div>
+                    <div style={{fontSize:10,color:K.muted,marginBottom:8}}>Norm Z L-N: ≤ {zMaxVeld.toFixed(2).replace(".",",")}Ω (obv {hoogstKar}{hoogstAmpere}A, {String(maxAfschakeltijd).replace(".",",")}s — zelfde als sectie A){rcdVeld?" · Z L-PE ≤166Ω achter aardlek":""}</div>
                   )}
                   {!zMaxVeld && (
                     <div style={{fontSize:10,color:K.orange,marginBottom:8}}>⚠ Vul ampère + karakteristiek in bij sectie A (stap 7) om Z L-N{rcdVeld?"":" en Z L-PE"} automatisch te toetsen.</div>
@@ -2412,7 +2412,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
           </div>
           {totaalWp > 0 && (
             <div style={{marginTop:12,padding:"8px 12px",borderRadius:8,background:K.yellowDim,border:`1px solid ${K.yellow}44`}}>
-              <span style={{fontSize:13,color:K.yellow,fontWeight:700}}>Totaalvermogen: {(totaalWp/1000).toFixed(2)} kWp</span>
+              <span style={{fontSize:13,color:K.yellow,fontWeight:700}}>Totaalvermogen: {(totaalWp/1000).toFixed(2).replace(".",",")} kWp</span>
             </div>
           )}
         </div>
@@ -2427,7 +2427,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
           </select>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:2}}><label style={S.label}>Type / serie</label><input style={S.input} placeholder="bijv. SMA Sunny Boy 5.0" value={data.omvormerType||""} onChange={e=>onChange("omvormerType",e.target.value)}/></div>
-            <div style={{flex:1}}><label style={S.label}>Vermogen kW</label><input style={S.input} type="text" inputMode="decimal" placeholder="5.0" value={data.omvormerKw||""} onChange={e=>onChange("omvormerKw",e.target.value)}/></div>
+            <div style={{flex:1}}><label style={S.label}>Vermogen kW</label><input style={S.input} type="text" inputMode="decimal" placeholder="5,0" value={data.omvormerKw||""} onChange={e=>onChange("omvormerKw",e.target.value)}/></div>
           </div>
           {/* DC/AC ratio check */}
           {data.aantalPanelen && data.paneelWp && data.omvormerKw && (() => {
@@ -2436,7 +2436,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
             return (
               <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:ok?K.greenDim:K.orangeDim,border:`1px solid ${ok?K.green:K.orange}44`}}>
                 <span style={{fontSize:12,color:ok?K.green:K.orange,fontWeight:700}}>
-                  DC/AC ratio: {ratio.toFixed(2)} {ok ? "✓ OK" : "⚠️ Controleer"}
+                  DC/AC ratio: {ratio.toFixed(2).replace(".",",")} {ok ? "✓ OK" : "⚠️ Controleer"}
                 </span>
               </div>
             );
@@ -3395,7 +3395,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       const rcdAanwezigRap = instMet.rcdAanwezig ?? true;
       const zPeMaxRap = rcdAanwezigRap ? 166 : zMaxVoorzekRap;
       const zPeChkRap = v => rcdAanwezigRap ? toNum(v)<=166 : (zPeMaxRap ? toNum(v)<=zPeMaxRap : true);
-      const zPeNormTxtRap = rcdAanwezigRap ? "≤166Ω (achter aardlek)" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
+      const zPeNormTxtRap = rcdAanwezigRap ? "≤166Ω (achter aardlek)" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2).replace(".",",")}Ω`:"—");
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${esc(data.projectId)}-groepenkast</title>
         <style>${css(accentGK)}</style></head><body>
@@ -3428,7 +3428,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <td><strong>Hoofdschakelaar</strong></td><td>${instMet.hoofdschakelaar||"—"}</td>
           </tr>
           <tr>
-            <td><strong>Max. afschakeltijd</strong></td><td>${maxAfschakeltijdRap}s (${isKlasse1Rap?"Klasse 1, verdeler-niveau":"Klasse 2, eindgroep-niveau"})</td>
+            <td><strong>Max. afschakeltijd</strong></td><td>${String(maxAfschakeltijdRap).replace(".",",")}s (${isKlasse1Rap?"Klasse 1, verdeler-niveau":"Klasse 2, eindgroep-niveau"})</td>
             <td></td><td></td>
           </tr>
           <tr>
@@ -3509,13 +3509,13 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             const dikte = toNum(veld[`${ag.id}_dikte`]) || 2.5;
             const zlnV = veld[`${ag.id}_zln`];
             const zlpeV = veld[`${ag.id}_zlpe`];
-            const lenZln = toNum(zlnV) > 0 ? ((toNum(zlnV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
-            const lenZlpe = toNum(zlpeV) > 0 ? ((toNum(zlpeV)*dikte)/(2*RHO_RAP)).toFixed(1) : "—";
+            const lenZln = toNum(zlnV) > 0 ? ((toNum(zlnV)*dikte)/(2*RHO_RAP)).toFixed(1).replace(".",",") : "—";
+            const lenZlpe = toNum(zlpeV) > 0 ? ((toNum(zlpeV)*dikte)/(2*RHO_RAP)).toFixed(1).replace(".",",") : "—";
             // Z L-PE-norm per groep: achter aardlek ≤166Ω, anders foutstroom-norm (Z_max).
             const rcdRaw = veld[`${ag.id}_rcd`];
             const rcdVeldRap = rcdRaw === undefined ? (ag.rcdType !== "geen") : (rcdRaw === true || rcdRaw === "1");
             const zlpeChkRap = v => rcdVeldRap ? toNum(v)<=166 : (zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true);
-            const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2)}Ω`:"—");
+            const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2).replace(".",",")}Ω`:"—");
             return `<tr>
               <td><strong>${esc(ag.naam)}</strong></td>
               <td>${dikte} mm²</td>
@@ -3528,7 +3528,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           return `
           <h2>Veldmeting — verste/buitengroep</h2>
           <p style="font-size:8px;color:#666;margin-bottom:4px">
-            Z L-N gemeten op de verste wandcontactdoos, getoetst aan de norm van sectie A (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2)+"Ω":"—"} obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A). Z L-PE: achter een aardlekschakelaar geldt ≤166Ω (aanraakspanning), anders de foutstroom-norm. Indicatieve kabellengte via L = Z × A ÷ (2 × ρ), ρ = 0,023 Ω·mm²/m — een indicatie, geen exacte meting.
+            Z L-N gemeten op de verste wandcontactdoos, getoetst aan de norm van sectie A (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2).replace(".",",")+"Ω":"—"} obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A). Z L-PE: achter een aardlekschakelaar geldt ≤166Ω (aanraakspanning), anders de foutstroom-norm. Indicatieve kabellengte via L = Z × A ÷ (2 × ρ), ρ = 0,023 Ω·mm²/m — een indicatie, geen exacte meting.
           </p>
           <table>
             <tr>
@@ -3717,7 +3717,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <tr><th>Meetwaarde</th><th>Gemeten</th><th>Norm</th><th>Status</th></tr>
           <tr><td>Aanvoertemperatuur</td><td>${wpMeet.aanvoerTemp||"—"} °C</td><td>—</td><td>—</td></tr>
           <tr><td>Retourtemperatuur</td><td>${wpMeet.retourTemp||"—"} °C</td><td>—</td><td>—</td></tr>
-          <tr><td>ΔT verwarmingscircuit</td><td>${dtWp!==null?dtWp.toFixed(1):"—"} K</td><td>5–10K</td>
+          <tr><td>ΔT verwarmingscircuit</td><td>${dtWp!==null?dtWp.toFixed(1).replace(".",","):"—"} K</td><td>5–10K</td>
               <td ${dtWp!==null?(dtWp>=5&&dtWp<=10?'class="ok"':'class="nok"'):''}>${dtWp!==null?(dtWp>=5&&dtWp<=10?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
           <tr><td>Werkdruk</td><td>${wpMeet.werkdruk||"—"} bar</td><td>1,5–2,0 bar</td>
               <td ${statusWP(wpMeet.werkdruk,v=>toNum(v)>=1.5&&toNum(v)<=2.5)}>${wpMeet.werkdruk&&wpMeet.werkdruk!=="—"?(toNum(wpMeet.werkdruk)>=1.5&&toNum(wpMeet.werkdruk)<=2.5?"✓ OK":"✗ Afwijking"):"—"}</td></tr>
@@ -3813,7 +3813,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     } else {
       const accentPV = "#EA580C";
       const statusPV = (v, chk) => v&&v!=="—" ? (chk(v) ? `class="ok"` : `class="nok"`) : "";
-      const totaalKwp = ((parseInt(data.aantalPanelen)||0)*(parseInt(data.paneelWp)||0)/1000).toFixed(2);
+      const totaalKwp = ((parseInt(data.aantalPanelen)||0)*(parseInt(data.paneelWp)||0)/1000).toFixed(2).replace(".",",");
       html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>${esc(data.projectId)}-zonnepanelen</title>
         <style>${css(accentPV)}</style></head><body>
@@ -4043,7 +4043,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             {discipline==="pv" && <>
               <div><div style={{fontSize:20,fontWeight:800}}>{data.aantalPanelen||"—"}</div><div style={{fontSize:11,color:K.muted}}>Panelen</div></div>
               <div><div style={{fontSize:20,fontWeight:800}}>{strings.length}</div><div style={{fontSize:11,color:K.muted}}>Strings</div></div>
-              <div><div style={{fontSize:20,fontWeight:800}}>{((parseInt(data.aantalPanelen)||0)*(parseInt(data.paneelWp)||0)/1000).toFixed(1)}</div><div style={{fontSize:11,color:K.muted}}>kWp</div></div>
+              <div><div style={{fontSize:20,fontWeight:800}}>{((parseInt(data.aantalPanelen)||0)*(parseInt(data.paneelWp)||0)/1000).toFixed(1).replace(".",",")}</div><div style={{fontSize:11,color:K.muted}}>kWp</div></div>
             </>}
             <div>
               <div style={{fontSize:20,fontWeight:800,color:redWarnings.length?K.red:allWarnings.length?K.orange:K.green}}>
@@ -4673,12 +4673,12 @@ function CV_StapMateriaal({ data, onChange, onNext, onBack }) {
               <input style={S.input} type="text" inputMode="decimal" placeholder="8" value={data.expansieL||""} onChange={e=>onChange("expansieL",e.target.value)}/>
             </div>
             <div style={{flex:1}}><label style={S.label}>Voordruk (bar)</label>
-              <input style={S.input} type="text" inputMode="decimal" placeholder="0.75" value={data.expansieBar||""} onChange={e=>onChange("expansieBar",e.target.value)}/>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="0,75" value={data.expansieBar||""} onChange={e=>onChange("expansieBar",e.target.value)}/>
             </div>
           </div>
           <div style={{display:"flex",gap:10}}>
             <div style={{flex:1}}><label style={S.label}>Veiligheidsventiel (bar)</label>
-              <input style={S.input} type="text" inputMode="decimal" placeholder="3.0" value={data.veilBar||""} onChange={e=>onChange("veilBar",e.target.value)}/>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="3,0" value={data.veilBar||""} onChange={e=>onChange("veilBar",e.target.value)}/>
             </div>
             <div style={{flex:1}}><label style={S.label}>Gasleiding materiaal</label>
               <select style={S.select} value={data.gasMateriaal||""} onChange={e=>onChange("gasMateriaal",e.target.value)}>
@@ -4730,8 +4730,8 @@ function wpCrossChecks(meet, materiaal) {
 
   if (!isNaN(aanvoer) && !isNaN(retour)) {
     const dt = aanvoer - retour;
-    if (dt < 5) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1)}K is laag (norm 5-10K) — controleer circulatiedebiet` });
-    if (dt > 10) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1)}K is hoog (norm 5-10K) — debiet mogelijk te laag` });
+    if (dt < 5) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1).replace(".",",")}K is laag (norm 5-10K) — controleer circulatiedebiet` });
+    if (dt > 10) warnings.push({ level:"orange", msg:`ΔT verwarmingscircuit ${dt.toFixed(1).replace(".",",")}K is hoog (norm 5-10K) — debiet mogelijk te laag` });
   }
   if (!isNaN(werkdruk)) {
     if (werkdruk < 1.0) warnings.push({ level:"red", msg:`Werkdruk ${werkdruk} bar te laag — installatie bijvullen vóór ingebruikname` });
@@ -4795,7 +4795,7 @@ function WP_StapMateriaal({ data, onChange, onNext, onBack }) {
               </select>
             </div>
             <div style={{flex:1}}><label style={S.label}>Hoeveelheid (kg)</label>
-              <input style={S.input} type="text" inputMode="decimal" placeholder="1.8" value={data.koudemiddelKg||""} onChange={e=>onChange("koudemiddelKg",e.target.value)}/>
+              <input style={S.input} type="text" inputMode="decimal" placeholder="1,8" value={data.koudemiddelKg||""} onChange={e=>onChange("koudemiddelKg",e.target.value)}/>
             </div>
           </div>
         </div>
@@ -4883,7 +4883,7 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
             <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur" unit="°C" chk={tempOk}   ph="45"/>
             <MeetVeld k="retourTemp"  l="Retourtemperatuur"  unit="°C" chk={tempOk}   ph="38"/>
-            <MeetVeld k="werkdruk"    l="Werkdruk"           unit="bar" chk={werkdrOk} ph="1.8"/>
+            <MeetVeld k="werkdruk"    l="Werkdruk"           unit="bar" chk={werkdrOk} ph="1,8"/>
             <MeetVeld k="spanning"    l="Spanning"           unit="V"   chk={spanOk2}  ph="230"/>
           </div>
           {meet.aanvoerTemp&&meet.retourTemp&&(()=>{
@@ -4892,7 +4892,7 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
             return (
               <div style={{padding:"8px 12px",borderRadius:8,background:ok?K.greenDim:K.orangeDim}}>
                 <span style={{fontSize:12,fontWeight:700,color:ok?K.green:K.orange}}>
-                  ΔT = {dt.toFixed(1)}K {ok?"✓ OK (norm 5-10K)":"⚠ buiten norm 5-10K"}
+                  ΔT = {dt.toFixed(1).replace(".",",")}K {ok?"✓ OK (norm 5-10K)":"⚠ buiten norm 5-10K"}
                 </span>
               </div>
             );
@@ -4917,9 +4917,9 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <MeetVeld k="stroomopname"   l="Stroomopname (opstart)" unit="A"     chk={()=>true}  ph="12"/>
-            <MeetVeld k="vermogenOpgenomen" l="Elektrisch opgenomen vermogen" unit="kW" chk={()=>true} ph="2.1"/>
+            <MeetVeld k="vermogenOpgenomen" l="Elektrisch opgenomen vermogen" unit="kW" chk={()=>true} ph="2,1"/>
             <MeetVeld k="geluidGemeten"  l="Geluidsniveau gemeten"  unit="dB(A)" chk={geluidOk} ph="44"/>
-            <MeetVeld k="expansieVoordr" l="Expansievat voordruk"   unit="bar"   chk={()=>true}  ph="1.5"/>
+            <MeetVeld k="expansieVoordr" l="Expansievat voordruk"   unit="bar"   chk={()=>true}  ph="1,5"/>
           </div>
         </div>
 
@@ -5000,8 +5000,8 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
             <MeetVeld k="coRookgas"   l="CO rookgas"         unit="ppm" chk={coRookOk} ph="80"/>
-            <MeetVeld k="co2"         l="CO2"                unit="%"   chk={co2Ok}    ph="9.5"/>
-            <MeetVeld k="o2"          l="O2"                 unit="%"   chk={o2Ok}     ph="4.2"/>
+            <MeetVeld k="co2"         l="CO2"                unit="%"   chk={co2Ok}    ph="9,5"/>
+            <MeetVeld k="o2"          l="O2"                 unit="%"   chk={o2Ok}     ph="4,2"/>
             <MeetVeld k="rookgasTemp" l="Rookgastemperatuur" unit="°C"  chk={tempOk}   ph="65"/>
             <MeetVeld k="rendement"   l="Rendement"          unit="%"   chk={rendOk}   ph="98"/>
           </div>
@@ -5022,7 +5022,7 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.sTitle}>Drukken & temperaturen</div>
         <div style={S.card}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <MeetVeld k="waterdruk"   l="Waterdruk"           unit="bar"  chk={waterOk} ph="1.8"/>
+            <MeetVeld k="waterdruk"   l="Waterdruk"           unit="bar"  chk={waterOk} ph="1,8"/>
             <MeetVeld k="gasdruk"     l="Gasdruk"             unit="mbar" chk={gasOk}   ph="22"/>
             <MeetVeld k="aanvoerTemp" l="Aanvoertemperatuur"  unit="°C"   chk={tempOk}  ph="70"/>
             <MeetVeld k="retourTemp"  l="Retourtemperatuur"   unit="°C"   chk={tempOk}  ph="50"/>

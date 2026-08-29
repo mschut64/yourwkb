@@ -202,7 +202,7 @@ bevat(pvCrossChecks([{ iso:"0,8" }], {}, {}), "ONDER NORM", "11.1 string ISO 0,8
 eq(niveauVan(pvCrossChecks([{ iso:"1,2" }], {}, {}), "net boven minimum"), "orange", "11.2 string ISO 1,2 → oranje 'net boven minimum'");
 aantalWarnings(pvCrossChecks([{ iso:"2,0" }], {}, {}), 0, "11.3 string ISO 2,0 → geen waarschuwing");
 bevat(pvCrossChecks([{ spanning:"400" },{ spanning:"360" }], {}, {}), "Stringspanning verschil 40", "11.4 stringspanning 400/360 (40V) → oranje");
-bevat(pvCrossChecks([], {}, { aantalPanelen:"20", paneelWp:"400", omvormerKw:"5" }), "DC/AC ratio 1.60 is hoog", "11.5 8000Wp/5kW = 1,6 → oranje hoge ratio");
+bevat(pvCrossChecks([], {}, { aantalPanelen:"20", paneelWp:"400", omvormerKw:"5" }), "DC/AC ratio 1,60 is hoog", "11.5 8000Wp/5kW = 1,6 → oranje hoge ratio");
 bevat(pvCrossChecks([], { aardingOk:"NOK" }, {}), "Aarding draagconstructie NOK", "11.6 aarding NOK → rood");
 aantalWarnings(pvCrossChecks([{ spanning:"400", iso:"5,0" },{ spanning:"398", iso:"4,8" }], { aardingOk:"OK" }, { aantalPanelen:"20", paneelWp:"400", omvormerKw:"6" }), 0,
   "11.7 nette PV-installatie → geen waarschuwing");
