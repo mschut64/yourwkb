@@ -546,6 +546,26 @@ const StatusTag = ({ level }) => {
   return <span style={{ ...S.tag, background:c.bg, color:c.color, borderColor:c.line }}>{c.label}</span>;
 };
 
+// Vat een meetblok samen tot één oordeel: hoeveel waarden zijn ingevuld en
+// toetsbaar, en hoeveel daarvan wijken af. Geeft null zolang er niets
+// toetsbaars staat — dan hoort er ook geen normvlak te verschijnen.
+const blokOordeel = (metingen) => {
+  const getoetst = metingen.filter(m =>
+    m.waarde !== undefined && m.waarde !== null && String(m.waarde).trim() !== "" && m.toetsbaar !== false);
+  if (!getoetst.length) return null;
+  const fout = getoetst.filter(m => !m.ok).length;
+  return { level: fout ? "fail" : "ok", fout, totaal: getoetst.length };
+};
+
+// Standaardteksten voor het normvlak, zodat elk meetblok dezelfde formulering
+// gebruikt. Bij afkeur noemen we hoeveel waarden afwijken — met zes velden in
+// een blok is "er wijkt iets af" te vaag om op te handelen.
+const normTitel = (o, onderwerp, werkwoord = "voldoet") => o.level === "ok"
+  ? `${onderwerp} ${werkwoord} aan NEN 1010`
+  : o.totaal === 1
+    ? "Waarde wijkt af — vastleggen in rapport"
+    : `${o.fout} van ${o.totaal} waarden ${o.fout === 1 ? "wijkt" : "wijken"} af — vastleggen in rapport`;
+
 // Statusvlak (design-spec §4) — de grote broer van StatusTag: een vlak met een
 // teken, een uitspraak in woorden en een tweede regel voor de onderbouwing.
 // StatusTag zegt dát iets afwijkt, dit vlak zegt wat en waarom, zonder dat je
@@ -1815,6 +1835,28 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               );
             })}
           </div>
+
+          {/* Normvlak voor het hele impedantieblok. Bewust per blok en niet per
+              veld zoals design-spec §4 voorstelt: bij 3-fase staan hier zes
+              Z-waarden, en zes vlakken van 52px eronder maken van dit scherm een
+              scrollmarathon. De statuspil per veld blijft staan, dus je ziet nog
+              steeds wélke waarde afwijkt; dit vlak zegt of je verder kunt en
+              tegen welke grens er getoetst is — zonder terug te scrollen naar de
+              instructietekst. */}
+          {(() => {
+            const zKeys = ["zln","zlpe"].concat((inst.zDrieFase ?? heeft3faseGroep) ? ["zl2n","zl2pe","zl3n","zl3pe"] : []);
+            const o = blokOordeel(zKeys.map(k => {
+              const pe = isPeKey(k);
+              return { waarde: inst[k], ok: (pe ? zPeOk : zOk)(inst[k]), toetsbaar: pe ? zPeToetsbaar : !!zMaxVoorzek };
+            }));
+            if (!o) return null;
+            const grenzen = [
+              zMaxVoorzek ? `Z L-N \u2264 ${zMaxVoorzek.toFixed(2)}\u03a9` : null,
+              rcdAanwezig ? "Z L-PE \u2264 166\u03a9 (achter aardlek)"
+                          : (zMaxVoorzek ? `Z L-PE \u2264 ${zMaxVoorzek.toFixed(2)}\u03a9` : null),
+            ].filter(Boolean).join(" \u00b7 ");
+            return <StatusVlak level={o.level} titel={normTitel(o,"Impedantie")} sub={grenzen} style={{marginTop:10}}/>;
+          })()}
         </div>
 
         {/* B) ISOLATIEWEERSTAND */}
@@ -1904,6 +1946,22 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               + Extra groep
             </button>
           </div>
+
+          {/* Normvlak isolatieweerstand — ISO totaal én alle per-groep-waarden
+              samen, want ze worden aan dezelfde grens getoetst. */}
+          {(() => {
+            const waarden = [
+              { waarde: inst.isoTotFA, ok: isoOk(inst.isoTotFA) },
+              { waarde: inst.isoTotNA, ok: isoOk(inst.isoTotNA) },
+            ];
+            isoGroepen.forEach(g => ["fa","na","l1a","l2a","l3a"].forEach(veld =>
+              waarden.push({ waarde: g[veld], ok: isoOk(g[veld]) })));
+            const o = blokOordeel(waarden);
+            if (!o) return null;
+            return <StatusVlak level={o.level} titel={normTitel(o,"Isolatieweerstand")}
+              sub={`Norm \u2265 ${String(isoTotNorm).replace(".",",")} M\u03a9 naar aarde, ongeacht spanning of faseconfiguratie`}
+              style={{marginTop:10}}/>;
+          })()}
         </div>
 
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:8,marginTop:8}}>
@@ -1947,6 +2005,26 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             </div>
           </div>
         </div>
+
+        {/* Normvlak spanning + frequentie. Deze twee horen bij elkaar: het zijn
+            beide registraties van wat het net op het meetmoment levert. */}
+        {(() => {
+          const fasen = ["L1/N","L1/PE"].concat((inst.toon3fase ?? heeft3faseGroep) ? ["L2/N","L2/PE","L3/N","L3/PE"] : []);
+          const waarden = fasen.map(f => ({ waarde: inst[`span_${f}`], ok: spanOk(inst[`span_${f}`]) }));
+          if (inst.toon3fase ?? heeft3faseGroep) {
+            ["L1/L2","L2/L3","L1/L3"].forEach(f => waarden.push({
+              waarde: inst[`span_${f}`],
+              ok: toNum(inst[`span_${f}`]) >= 360 && toNum(inst[`span_${f}`]) <= 440,
+            }));
+          }
+          waarden.push({ waarde: inst.frequentie, ok: toNum(inst.frequentie) >= 45 && toNum(inst.frequentie) <= 55 });
+          const o = blokOordeel(waarden);
+          if (!o) return null;
+          const grenzen = ["Fase\u2192nul/aarde 207\u2013253 V"]
+            .concat((inst.toon3fase ?? heeft3faseGroep) ? ["fase\u2192fase 360\u2013440 V"] : [])
+            .concat(["frequentie 45\u201355 Hz"]).join(" \u00b7 ");
+          return <StatusVlak level={o.level} titel={normTitel(o,"Spanning en frequentie","voldoen")} sub={grenzen} style={{marginBottom:16}}/>;
+        })()}
 
         {/* Visuele inspectie & overige controles — conform NEN1010/NEN3140/BRL6000 opleverchecklist */}
         <div style={S.sTitle}>Visuele inspectie &amp; overige controles</div>
@@ -2002,42 +2080,71 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             )}
 
-            {cagRcd.rcdType!=="geen" ? (
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <div>
-                  <label style={S.label}>ΔT ms — norm ≤300ms (EN 61008)<LeerIcoon onderwerp="delta_t_i"/></label>
-                  <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",
-                    background:gv(cagRcd.id,"dt")?(dtOk(gv(cagRcd.id,"dt"))?K.greenDim:K.redDim):K.surface,
-                    border:`1px solid ${gv(cagRcd.id,"dt")?(dtOk(gv(cagRcd.id,"dt"))?K.green:K.red):K.border}`}}
-                    type="text" inputMode="decimal" placeholder="180" value={gv(cagRcd.id,"dt")} onChange={e=>sg(cagRcd.id,"dt",e.target.value)}
-                    onFocus={e=>e.target.select()}/>
-                </div>
-                {(() => {
-                  const mA = toNum(cagRcd.rcdMa);
-                  const diMax = cagRcd.rcdType==="B" ? mA*2 : cagRcd.rcdType==="AC" ? mA*1 : mA*1.4;
-                  const diLabel = cagRcd.rcdType==="B" ? `≤ 2× In (≤${diMax.toFixed(0)}mA)` : cagRcd.rcdType==="AC" ? `≤ 1× In (≤${diMax.toFixed(0)}mA)` : `≤ 1,4× In (≤${diMax.toFixed(0)}mA)`;
-                  const diVal = gv(cagRcd.id,"di");
-                  const diOk = diVal && toNum(diVal) <= diMax;
-                  return (
-                    <div>
-                      <label style={S.label}>ΔI mA type-{cagRcd.rcdType} — {diLabel}</label>
-                      <input style={{...S.input,fontSize:20,fontWeight:700,fontVariantNumeric:"tabular-nums",
-                        background:diVal?(diOk?K.greenDim:K.redDim):K.surface,
-                        border:`1px solid ${diVal?(diOk?K.green:K.red):K.border}`}}
-                        type="text" inputMode="decimal" placeholder={String(Math.round(mA*0.8))}
-                        value={diVal} onChange={e=>sg(cagRcd.id,"di",e.target.value)}
-                        onFocus={e=>e.target.select()}/>
+            {cagRcd.rcdType!=="geen" ? (() => {
+              const mA = toNum(cagRcd.rcdMa);
+              const diMax = cagRcd.rcdType==="B" ? mA*2 : cagRcd.rcdType==="AC" ? mA*1 : mA*1.4;
+              const diFactor = cagRcd.rcdType==="B" ? "2×" : cagRcd.rcdType==="AC" ? "1×" : "1,4×";
+              const dtVal = gv(cagRcd.id,"dt");
+              const diVal = gv(cagRcd.id,"di");
+              const diOk  = diVal && toNum(diVal) <= diMax;
+              const tk    = gv(cagRcd.id,"testknop");
+              const meetVak = (waarde, goed) => ({
+                ...S.input, flex:1, minWidth:0, fontSize:20, fontWeight:700, fontVariantNumeric:"tabular-nums",
+                background: waarde ? (goed ? K.greenDim : K.redDim) : K.surface,
+                border: `1px solid ${waarde ? (goed ? K.green : K.red) : K.border}`,
+              });
+              return (
+              <>
+                {/* De labels stonden vol met de norm ("ΔT ms — norm ≤300ms (EN
+                    61008)") en wrapten naar twee of drie regels — bij ΔT viel het
+                    ⓘ-icoon zelfs op een eigen regel. Daardoor zakten de twee
+                    invoervelden uit elkaar en stond het blok scheef. De norm staat
+                    nu in het vlak eronder, de labels zijn kort, de eenheid staat
+                    naast het veld, en alignItems:end houdt de velden op één lijn
+                    ook als een label toch een keer wrapt. */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,alignItems:"end"}}>
+                  <div>
+                    <label style={S.label}>ΔT<LeerIcoon onderwerp="delta_t_i"/></label>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <input style={meetVak(dtVal, dtOk(dtVal))}
+                        type="text" inputMode="decimal" placeholder="180" value={dtVal}
+                        onChange={e=>sg(cagRcd.id,"dt",e.target.value)} onFocus={e=>e.target.select()}/>
+                      <span style={{...S.eenheid,fontSize:15,marginLeft:0}}>ms</span>
                     </div>
-                  );
-                })()}
-                <div>
-                  <label style={S.label}>Testknop RCD</label>
-                  <div style={{display:"flex",gap:8,marginTop:2}}>
-                    {["OK","NOK"].map(v=><Pill key={v} small active={gv(cagRcd.id,"testknop")===v} onClick={()=>sg(cagRcd.id,"testknop",v)}>{v}</Pill>)}
+                  </div>
+                  <div>
+                    <label style={S.label}>ΔI type-{cagRcd.rcdType}</label>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <input style={meetVak(diVal, diOk)}
+                        type="text" inputMode="decimal" placeholder={String(Math.round(mA*0.8))} value={diVal}
+                        onChange={e=>sg(cagRcd.id,"di",e.target.value)} onFocus={e=>e.target.select()}/>
+                      <span style={{...S.eenheid,fontSize:15,marginLeft:0}}>mA</span>
+                    </div>
+                  </div>
+                  <div style={{gridColumn:"1 / -1"}}>
+                    <label style={S.label}>Testknop RCD</label>
+                    <div style={{display:"flex",gap:8,marginTop:2}}>
+                      {["OK","NOK"].map(v=><Pill key={v} small active={tk===v} onClick={()=>sg(cagRcd.id,"testknop",v)}>{v}</Pill>)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
+
+                {/* Normvlak RCD. De testknop telt mee: NOK is een directe
+                    afkeuring, ook als ΔT en ΔI binnen de grenzen vallen. */}
+                {(() => {
+                  const o = blokOordeel([
+                    { waarde: dtVal, ok: dtOk(dtVal) },
+                    { waarde: diVal, ok: !!diOk },
+                    { waarde: tk,    ok: tk === "OK" },
+                  ]);
+                  if (!o) return null;
+                  return <StatusVlak level={o.level} titel={normTitel(o,"Aardlekschakelaar")}
+                    sub={`ΔT ≤ 300 ms (EN 61008) · ΔI ≤ ${diFactor} In (≤${diMax.toFixed(0)} mA) · testknop moet OK zijn`}
+                    style={{marginTop:12}}/>;
+                })()}
+              </>
+              );
+            })() : (
               <div style={{fontSize:11,color:K.muted}}>Geen RCD op deze groep — geen ΔT/ΔI-test van toepassing.</div>
             )}
 
@@ -2434,6 +2541,24 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
               </div>
             ))}
           </div>
+
+          {/* Normvlak AC-blok. De grenswaarden staan hier expliciet omdat ze in
+              de labels nergens genoemd worden — bij afkeur moest je tot nu toe
+              raden waartegen getoetst was. Let op: de Z L-PE-grens van 0,5 Ω is
+              een vaste waarde, geen afgeleide van de automaatkarakteristiek;
+              roadmap 1.1 wil die herzien. Hier alleen zichtbaar gemaakt, niet
+              gewijzigd — dat is een normbeslissing. */}
+          {(() => {
+            const o = blokOordeel([
+              { waarde: instMet.spanAC, ok: toNum(instMet.spanAC) >= 207 && toNum(instMet.spanAC) <= 253 },
+              { waarde: instMet.zlpe,   ok: toNum(instMet.zlpe) < 0.5 },
+              { waarde: instMet.isoAC,  ok: toNum(instMet.isoAC) > 1 },
+            ]);
+            if (!o) return null;
+            return <StatusVlak level={o.level} titel={normTitel(o,"AC-installatie")}
+              sub={"Spanning 207\u2013253 V \u00b7 Z L-PE < 0,5 \u03a9 \u00b7 ISO totaal > 1 M\u03a9"}
+              style={{marginTop:10}}/>;
+          })()}
         </div>
 
         {/* Per string */}
