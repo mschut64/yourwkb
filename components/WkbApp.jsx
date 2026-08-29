@@ -953,18 +953,24 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
         )}
         <div style={S.card}>
           {/* Postcode + huisnummer */}
+          {/* Verhouding 3:2 en krappere binnenmarges op de twee nummervelden.
+              Met de 16px-invoer uit de design-fundamentlaag at de padding van
+              S.input (2×14px) het toevoegingsveld op: van de placeholder "toev."
+              bleef zichtbaar "t" over. Postcode had ruimte over, dus die staat
+              hier af. Placeholder "a" i.p.v. "toev." — een toevoeging is in de
+              praktijk een letter, en die past nu wél in zijn eigen vakje. */}
           <div style={{ display:"flex", gap:10, marginBottom:4 }}>
-            <div style={{ flex:2 }}>
+            <div style={{ flex:3 }}>
               <label style={S.label}>Postcode</label>
               <input style={{ ...S.input, textTransform:"uppercase" }} placeholder="1234 AB"
                 value={data.postcode||""} onChange={e=>handlePc(e.target.value)} maxLength={7}/>
             </div>
-            <div style={{ flex:1 }}>
+            <div style={{ flex:2 }}>
               <label style={S.label}>Huisnr.</label>
               <div style={{display:"flex",gap:6}}>
-                <input style={{...S.input,flex:2,minWidth:0}} placeholder="12" value={data.huisnummer||""}
+                <input style={{...S.input,flex:3,minWidth:0,padding:"0 10px"}} placeholder="12" value={data.huisnummer||""}
                   onChange={e=>handleNr(e.target.value)}/>
-                <input style={{...S.input,flex:1,minWidth:0}} placeholder="toev." value={data.toevoeging||""}
+                <input style={{...S.input,flex:2,minWidth:0,padding:"0 8px"}} placeholder="a" value={data.toevoeging||""}
                   onChange={e=>onChange("toevoeging",e.target.value)}/>
               </div>
             </div>
@@ -4224,20 +4230,30 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
   const ProjectRow = ({ p }) => {
     const disc = DISCIPLINES.find(d=>d.id===p.discipline);
     const isDone = p.status === "opgeleverd";
+    // Bewust GEEN statuspil in deze rij, in afwijking van design-spec paragraaf 4.
+    // Drie varianten zijn geprobeerd (pil rechts gestapeld, pil rechts naast de
+    // knop, pil naast het projectnummer). Alle drie kostten wat ze moesten
+    // opleveren: op 375px is de middenkolom 203px en een pil "✓ Opgeleverd" is
+    // alleen al 112px, waardoor óf de klantnaam tot "Bouwb…" kromp óf het
+    // projectnummer afbrak — en dat nummer is wat je aan een klant doorgeeft.
+    // De status staat bovendien al twee keer op het scherm: de lijst is gesplitst
+    // in de kopjes "Concepten (n)" en "Opgeleverd (n)", en het icoonvlak is groen
+    // met ✅ bij opgeleverd en geel bij concept. Een pil herhaalt dat alleen.
+    // Wat de rij wél leesbaarder maakt, zit er nu in: klantnaam van 13 naar 16px,
+    // discipline/stap van 11 naar 13px, en een verwijderknop van 24 naar 36px.
     return (
-      <div style={{...S.card,display:"flex",alignItems:"center",gap:12,cursor:"pointer"}} onClick={()=>onDoorgaan(p)}>
+      <div style={{...S.rij,minHeight:76,padding:"12px 14px",cursor:"pointer"}} onClick={()=>onDoorgaan(p)}>
         <div style={{width:44,height:44,borderRadius:10,flexShrink:0,background:isDone?K.greenDim:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
           {isDone?"✅":disc?.icon||"📄"}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:800,fontSize:13,color:K.yellow,letterSpacing:0.3}}>{p.job?.projectId||"Nieuw project"}</div>
-          <div style={{fontWeight:500,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.job?.naam||"—"}</div>
-          <div style={{fontSize:11,color:K.muted}}>{disc?.label}{!isDone?` · stap ${(p.step||0)+1}`:""}</div>
+          <div style={{fontWeight:800,fontSize:13,color:K.yellow,letterSpacing:0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.job?.projectId||"Nieuw project"}</div>
+          <div style={{fontWeight:500,fontSize:16,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.job?.naam||"—"}</div>
+          <div style={{fontSize:13,color:K.muted}}>{disc?.label}{!isDone?` · stap ${(p.step||0)+1}`:""}</div>
         </div>
-        <div style={{textAlign:"right",flexShrink:0}}>
-          <div style={{fontSize:11,color:isDone?K.green:K.yellow,fontWeight:600,marginBottom:6}}>{isDone?"Opgeleverd":"Concept"}</div>
-          <button onClick={e=>verwijder(p.id,e)} style={{background:"transparent",border:`1px solid ${K.border}`,borderRadius:6,color:K.muted,cursor:"pointer",fontSize:11,padding:"3px 8px"}}>✕</button>
-        </div>
+        <button onClick={e=>verwijder(p.id,e)}
+          aria-label="Project verwijderen"
+          style={{width:36,height:36,flex:"0 0 36px",background:"transparent",border:`1px solid ${K.border}`,borderRadius:10,color:K.muted,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",WebkitTapHighlightColor:"transparent"}}>✕</button>
       </div>
     );
   };
@@ -4258,11 +4274,17 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
         {/* Snelkeuze disciplines — dé ingang voor een nieuwe klus */}
         <div style={{fontSize:13,color:K.yellow,fontWeight:700,marginBottom:8}}>+ NIEUWE REGISTRATIE</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {/* Het icoon zit in een gekleurd vlak van 28px, zodat de zes tegels
+              op vorm én kleur te onderscheiden zijn zonder te lezen. De spec
+              stelde een leeg kleurvlak zónder icoon voor; het icoon is juist
+              het snelste herkenpunt, dus die blijft — in het vlak. */}
           {DISCIPLINES.map(d=>(
-            <div key={d.id} style={{...S.card,padding:14,cursor:"pointer",border:`1px solid ${d.colorDim}`}} onClick={()=>onNew(d.id)}>
-              <div style={{fontSize:24,marginBottom:6}}>{d.icon}</div>
-              <div style={{fontWeight:700,fontSize:13}}>{d.label}</div>
-              <div style={{fontSize:10,color:d.color,fontWeight:600,marginTop:2}}>{d.norm}</div>
+            <div key={d.id} style={{...S.card,padding:14,minHeight:92,marginBottom:0,cursor:"pointer",border:`1px solid ${d.colorDim}`,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:10}} onClick={()=>onNew(d.id)}>
+              <div style={{width:28,height:28,borderRadius:8,background:`${d.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{d.icon}</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:15}}>{d.label}</div>
+                <div style={{fontSize:12,color:d.color,fontWeight:600,marginTop:2}}>{d.norm}</div>
+              </div>
             </div>
           ))}
         </div>
