@@ -822,7 +822,7 @@ function AIAnalyseBox({ aiData, discipline, analyse, onAnalyse }) {
         <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`,marginBottom:0}}>
           <div style={{fontSize:12,color:K.red,marginBottom:4,fontWeight:600}}>⚠️ Analyse mislukt</div>
           {errMsg && <div style={{fontSize:11,color:K.red,marginBottom:8,opacity:0.85,fontFamily:"monospace"}}>{errMsg}</div>}
-          <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginBottom:0}} onClick={analyseer}>Opnieuw proberen</button>
+          <button style={{...S.btnGhost,marginBottom:0}} onClick={analyseer}>Opnieuw proberen</button>
         </div>
       )}
       {status==="done" && analyse && (
@@ -1825,7 +1825,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             })}
 
             <button onClick={addIsoGroep}
-              style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginTop:2,marginBottom:0}}>
+              style={{...S.btnGhost,marginTop:2,marginBottom:0}}>
               + Extra groep
             </button>
           </div>
@@ -1967,7 +1967,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             )}
 
             {aardlekgroepen.findIndex(a=>a.id===cagRcd.id)<aardlekgroepen.length-1 &&
-              <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginTop:14,marginBottom:0}}
+              <button style={{...S.btnGhost,marginTop:14,marginBottom:0}}
                 onClick={()=>{const idx=aardlekgroepen.findIndex(a=>a.id===cagRcd.id);setActiveAG(aardlekgroepen[idx+1].id);}}>
                 Volgende aardlekgroep →
               </button>}
@@ -2412,7 +2412,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
                 </div>
               </div>
               {si < strings.length-1 &&
-                <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginTop:14,marginBottom:0}}
+                <button style={{...S.btnGhost,marginTop:14,marginBottom:0}}
                   onClick={()=>setActiveStr(strings[si+1].id)}>
                   Volgende string →
                 </button>}
@@ -2577,7 +2577,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
         <button style={{...S.btn, background:K.yellow, color:"#000", fontSize:14, padding:"14px"}} onClick={onNieuw}>
           Nieuw project met deze gegevens →
         </button>
-        <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text, fontSize:13}} onClick={onSluit}>
+        <button style={S.btnGhost} onClick={onSluit}>
           Alleen inzien — sluiten
         </button>
       </div>
@@ -2739,7 +2739,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           placeholder="87…" inputMode="numeric" value={m.ean||""} onChange={e=>zet("ean",e.target.value)}/>
         {eanStatus==="fout" && <div style={{fontSize:11, color:K.red, marginTop:4}}>Geen geldige EAN (18 cijfers, begint met 87, controlecijfer klopt niet).</div>}
         {eanStatus==="ok"   && <div style={{fontSize:11, color:K.green, marginTop:4}}>✓ Geldige EAN-code</div>}
-        <button style={{...S.btn, marginTop:8, fontSize:12, padding:"8px 12px", background:K.card, border:`1px solid ${K.border}`, color:K.text}}
+        <button style={{...S.btnGhost, marginTop:8}}
           onClick={()=>{
             // iOS: window.open en kopiëren moeten SYNCHROON in de tik-actie gebeuren —
             // na een await ziet Safari het niet meer als gebruikersactie en blokkeert beide.
@@ -2815,7 +2815,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           </div>
         );})}
         {isStartModus && (
-          <button style={{...S.btn, fontSize:12, padding:"8px 12px", marginTop:8, background:K.card, border:`1px solid ${K.border}`, color:K.text}}
+          <button style={{...S.btnGhost, marginTop:8}}
             onClick={()=>zet("extraGrp",[...extraGrp,{}])}>+ Zichtbare verbruiker toevoegen</button>
         )}
         {!isStartModus && grpLive.length===0 && <div style={{fontSize:12, color:K.orange}}>Nog geen groepen — vul eerst stap 6 (Groepen) in.</div>}
@@ -2885,7 +2885,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
       {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red}66`, marginBottom:12, fontSize:12}}>{fout}</div>}
 
       <div style={{display:"flex", gap:10}}>
-        <button style={{...S.btn, background:K.card, border:`1px solid ${K.border}`, color:K.text}} onClick={onBack}>← Terug</button>
+        <button style={S.btnGhost} onClick={onBack}>← Terug</button>
         <button style={{...S.btn, flex:1, background:K.yellow, color:"#000"}} disabled={bezig} onClick={volgende}>
           {bezig ? "QR genereren…" : "Paspoort-QR maken & verder →"}
         </button>
@@ -3887,7 +3887,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
 
             {/* Bijlage met groepenschema + uitknipbare labels (alleen GK) */}
             {bijlageHtml && (
-              <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`}} onClick={() => {
+              <button style={S.btnGhost} onClick={() => {
                 const win = window.open("", "_blank");
                 win.document.write(`
                   <!DOCTYPE html><html><head>
@@ -3927,7 +3927,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
               <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
                 <div style={{fontSize:12,color:K.red,fontWeight:600,marginBottom:4}}>⚠️ Versturen mislukt</div>
                 {mailError && <div style={{fontSize:11,color:K.red,opacity:0.85,fontFamily:"monospace",marginBottom:8}}>{mailError}</div>}
-                <button style={{...S.btn,background:K.surface,color:K.text,border:`1px solid ${K.border}`,marginBottom:0}} onClick={verstuurEmail}>Opnieuw proberen</button>
+                <button style={{...S.btnGhost,marginBottom:0}} onClick={verstuurEmail}>Opnieuw proberen</button>
               </div>
             )}
 
@@ -3936,7 +3936,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             </button>
           </>
         )}
-        <button style={{...S.btn,background:"transparent",color:K.muted,border:`1px solid ${K.border}`}} onClick={onBack}>Terug</button>
+        <button style={S.btnGhost} onClick={onBack}>Terug</button>
       </div>
     </div>
   );
