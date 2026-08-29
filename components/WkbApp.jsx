@@ -1007,8 +1007,8 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
         <div style={{ flex:1 }}>
-          <div style={{ fontWeight:700, fontSize:15 }}>Nieuw project — gegevens klant</div>
-          <div style={{ fontSize:11, color:K.muted }}>Stap 1 van {disc?.label} · geen account nodig</div>
+          <div style={{ fontWeight:700, fontSize:20, lineHeight:1.15 }}>Nieuw project — gegevens klant</div>
+          <div style={{ fontSize:12, color:K.muted }}>{disc?.label} · geen account nodig</div>
         </div>
         <div style={{ fontSize:22 }}>{disc?.icon}</div>
       </div>
@@ -1279,7 +1279,7 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Groepenkast</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Materiaal</div><div style={{fontSize:12,color:K.muted}}>Groepenkast</div></div>
       </div>
       <div style={S.body}>
 
@@ -1390,7 +1390,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>Aardlekgroepen ({aardlekgroepen.length})</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · gemeten per RCD-cluster</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Aardlekgroepen ({aardlekgroepen.length})</div><div style={{fontSize:12,color:K.muted}}>gemeten per RCD-cluster</div></div>
         <button onClick={addAG} style={{padding:"7px 12px",borderRadius:8,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Aardlek</button>
       </div>
       <div style={S.body}>
@@ -1587,7 +1587,7 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
         onChange={e=>{verwerkFoto(e.target.files[0]); e.target.value="";}}/>
 
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Foto's</div><div style={{fontSize:11,color:K.muted}}>{done}/{checkpoints.length} gemaakt</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Foto's</div><div style={{fontSize:12,color:K.muted}}>{done}/{checkpoints.length} gemaakt</div></div>
       </div>
       <div style={S.body}>
         {checkpoints.map(cp=>(
@@ -1738,7 +1738,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden NEN1010</div><div style={{fontSize:11,color:K.muted}}>Stap 7 · {stelsel}-stelsel · 250V</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Meetwaarden NEN1010</div><div style={{fontSize:12,color:K.muted}}>{stelsel}-stelsel · 250V</div></div>
       </div>
       <div style={S.body}>
         {/* A) IMPEDANTIE */}
@@ -2265,8 +2265,8 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
         <div style={{flex:1}}>
-          <div style={{fontWeight:700,fontSize:15}}>Veldmeting</div>
-          <div style={{fontSize:11,color:K.muted}}>Stap 7B · verste/buitengroep-metingen</div>
+          <div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Veldmeting</div>
+          <div style={{fontSize:11,color:K.muted}}>verste/buitengroep-metingen</div>
         </div>
       </div>
       <div style={S.body}>
@@ -2375,7 +2375,7 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal PV</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Zonnepanelen</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Materiaal PV</div><div style={{fontSize:12,color:K.muted}}>Zonnepanelen</div></div>
       </div>
       <div style={S.body}>
         {/* Panelen */}
@@ -2505,7 +2505,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden PV</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN1010:712</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Meetwaarden PV</div><div style={{fontSize:12,color:K.muted}}>NEN1010:712</div></div>
       </div>
       <div style={S.body}>
 
@@ -3997,7 +3997,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   return (
     <div>
       <div style={S.hdr}><button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Rapport genereren</div><div style={{fontSize:11,color:K.muted}}>Stap 8 · {disc?.label}</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Rapport genereren</div><div style={{fontSize:12,color:K.muted}}>{disc?.label}</div></div>
       </div>
       <div style={S.body}>
         {/* ProjectId */}
@@ -4291,7 +4291,7 @@ function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Back-up & delen</div><div style={{fontSize:11,color:K.muted}}>Projecten veiligstellen of overdragen</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Back-up & delen</div><div style={{fontSize:12,color:K.muted}}>Projecten veiligstellen of overdragen</div></div>
       </div>
       <div style={S.body}>
 
@@ -4389,7 +4389,7 @@ function DisciplineKiezer({ onKies, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Kies discipline</div><div style={{fontSize:11,color:K.muted}}>Wat ga je registreren?</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Kies discipline</div><div style={{fontSize:12,color:K.muted}}>Wat ga je registreren?</div></div>
       </div>
       <div style={S.body}>
         <div style={{fontSize:12,color:K.muted,marginBottom:16}}>Kies de discipline voor deze registratie. Elke discipline heeft eigen velden, normen en rapport.</div>
@@ -4597,7 +4597,7 @@ function CV_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal CV</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Combiketel</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Materiaal CV</div><div style={{fontSize:12,color:K.muted}}>Combiketel</div></div>
       </div>
       <div style={S.body}>
         <div style={S.sTitle}>Ketel</div>
@@ -4733,7 +4733,7 @@ function WP_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Materiaal warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Warmtepomp</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Materiaal warmtepomp</div><div style={{fontSize:12,color:K.muted}}>Warmtepomp</div></div>
       </div>
       <div style={S.body}>
         <div style={S.sTitle}>Type systeem</div>
@@ -4857,7 +4857,7 @@ function WP_StapMeten({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden warmtepomp</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · {data.wpType==="Bodem/water (grond)" ? "BRL 6000-21 (bodemenergie)" : "F-gassen · BRL 100/200"}</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Meetwaarden warmtepomp</div><div style={{fontSize:12,color:K.muted}}>{data.wpType==="Bodem/water (grond)" ? "BRL 6000-21 (bodemenergie)" : "F-gassen · BRL 100/200"}</div></div>
       </div>
       <div style={S.body}>
 
@@ -4953,7 +4953,7 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Meetwaarden CV</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · BRL6000-25</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Meetwaarden CV</div><div style={{fontSize:12,color:K.muted}}>BRL6000-25</div></div>
       </div>
       <div style={S.body}>
 
@@ -5337,7 +5337,7 @@ function LP_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
         <button style={S.backBtn} onClick={onBack}>‹</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Laadpunt & aansluiting</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Laadpaal</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Laadpunt & aansluiting</div><div style={{fontSize:12,color:K.muted}}>Laadpaal</div></div>
       </div>
       <div style={{...S.card, marginTop:12}}>
         <label style={S.label}>Merk & type laadpunt</label>
@@ -5386,7 +5386,7 @@ function LP_StapMeten({ data, onChange, onNext, onBack }) {
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
         <button style={S.backBtn} onClick={onBack}>‹</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Metingen & controles laadpunt</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN 1010:2020 (EV-laadvoorzieningen)</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Metingen & controles laadpunt</div><div style={{fontSize:12,color:K.muted}}>NEN 1010:2020 (EV-laadvoorzieningen)</div></div>
       </div>
 
       <div style={{...S.card, marginTop:12}}>
@@ -5506,7 +5506,7 @@ function BAT_StapMateriaal({ data, onChange, onNext, onBack }) {
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
         <button style={S.backBtn} onClick={onBack}>‹</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Batterij & aansluiting</div><div style={{fontSize:11,color:K.muted}}>Stap 5 · Thuisbatterij</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Batterij & aansluiting</div><div style={{fontSize:12,color:K.muted}}>Thuisbatterij</div></div>
       </div>
       <div style={{...S.card, marginTop:12}}>
         <label style={S.label}>Merk & type</label>
@@ -5555,7 +5555,7 @@ function BAT_StapMeten({ data, onChange, onNext, onBack }) {
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
         <button style={S.backBtn} onClick={onBack}>‹</button>
-        <div><div style={{fontWeight:700,fontSize:15}}>Plaatsing, metingen & meldingen</div><div style={{fontSize:11,color:K.muted}}>Stap 6 · NEN 1010:2020 · thuisbatterij</div></div>
+        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Plaatsing, metingen & meldingen</div><div style={{fontSize:12,color:K.muted}}>NEN 1010:2020 · thuisbatterij</div></div>
       </div>
 
       <div style={{...S.card, marginTop:12}}>
@@ -5913,6 +5913,20 @@ export default function App() {
               setStep(i);
               persist(job, discipline, i);
             }}/>
+            {/* Stapteller en voortgangsbalk (design-spec §4). Hier en niet in de
+                kop van elk scherm, omdat alleen op deze plek bekend is hoeveel
+                stappen de gekozen discipline heeft. De schermen hadden het
+                stapnummer hardgecodeerd in hun ondertitel, en dat ging mis zodra
+                een scherm door meerdere disciplines wordt gebruikt: de
+                paspoortstap zei "Stap 8" terwijl dat in de groepenkastflow stap
+                10 is. Alleen weergave — de bolletjes erboven blijven de
+                klikbare navigatie. */}
+            <div style={{background:K.surface, padding:"8px 18px 10px", borderBottom:`1px solid ${K.border}`}}>
+              <div style={{...S.sTitle, marginBottom:6}}>
+                Stap {step+1} van {stepLabels.length} · {stepLabels[step]}
+              </div>
+              <div style={S.bar}><div style={{...S.barFill, width:`${((step+1)/stepLabels.length)*100}%`}}/></div>
+            </div>
             {screens[step]}
           </div>
         )}
