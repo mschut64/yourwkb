@@ -31,7 +31,7 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [x] Projectrij naar `S.rij`: klantnaam 13 → 16 px, discipline/stap 11 → 13 px, verwijderknop ~24 → 36 px met `aria-label`
 - [x] Disciplinetegel: icoon in een 28 px kleurvlak, label 13 → 15 px, norm 10 → 12 px, tegel min. 92 px — mét behoud van het icoon
 - [x] Toevoegingsveld op stap 1 hersteld (placeholder viel weg door de 16 px-invoer uit fase 1)
-- [ ] ~~Status rechts uitgelijnd als pil~~ — **bewust niet gedaan**, zie hieronder
+- [x] ~~Status rechts uitgelijnd als pil~~ — **afgesloten** (Martin, 29-08-2026: "statuspil is al gedaan"). De status staat al in de kopjes "Concepten (n)"/"Opgeleverd (n)" en in het groene ✅-icoonvlak; zie afwijking 5 voor waarom een extra pil niet in de rij past.
 
 ### Paspoort-stap — ⚠️ geblokkeerd, wacht op Martin
 - [ ] ~~Risicoscore in statuskleur, cijfer 56 px~~ — **bestaat niet in de app.** Geen enkele treffer op `risico`/`score` behalve `dubbeleBalancerRisico`. Vermoedelijk door de ontwerper afgeleid uit een screenshot van een ander scherm, of nooit gebouwd.
@@ -59,7 +59,8 @@ Beide punten uit spec §4 zijn niet uitvoerbaar zoals geschreven. Uit R1 gehaald
 - [x] `npx next build` → compiled successfully, 14/14 pagina's
 - [x] Versie `2026-08-29-A` — heel R1 in één release gebundeld, conform de regel "kleine fixes bundelen, niet voor elke bugfix een nieuwe letter"
 - [x] **Flow-regel getoetst: geen scherm, stap of bevestiging toegevoegd.** Alles wat erbij kwam is weergave van gegevens die de app al berekende. Drie dingen halen juist werk weg: de norm staat nu ónder het meetblok (geen terugscrollen naar de instructie), het adres staat vóluit op de bevestigingsregel (geen twee krappe velden lezen), en `inputMode="decimal"` opent meteen het cijfertoetsenbord.
-- [ ] **Veldtest door Maurits/Herman** — de praktijkthermometer uit de roadmap: duurt een klus langer dan vóór de update, dan is er iets fout ontworpen. Nog niet gedaan.
+- [x] **Veldtest gedaan** (Martin, 29-08-2026)
+- [x] **Punt/komma-afspraak nagelopen.** Invoer was al waterdicht (alles via `toNum`); de wéérgave is rechtgetrokken — 31 berekende decimalen, 4 afschakeltijden, 12 placeholders en de DC/AC-grenswaarden staan nu op de Nederlandse komma, in de app én in het rapport. Regressietest 11.5 ving de tekstwijziging op en is meegewijzigd.
 - [ ] **Nog niet gepusht naar `main`** (= deploy naar Vercel). Wacht op akkoord van Martin.
 
 ### Afwijkingen van spec §4 — voorgelegd aan Martin 29-08-2026, nog geen akkoord
