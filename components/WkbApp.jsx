@@ -872,15 +872,23 @@ function StepBar({ step, steps, onJump }) {
 
 // ─── GEDEELDE STAPPEN ─────────────────────────────────────────────────────────
 
+// Projectnummer = postcode-huisnummer, inclusief de toevoeging en zonder
+// scheidingsteken ertussen: 2691 JJ + 72 + a wordt 2691JJ-72a. De toevoeging
+// hoorde er altijd al bij (zo heten de opleverrapporten in de praktijk), maar
+// zat niet in de opbouw — een project op nummer 72a kreeg 2691JJ-72, waardoor
+// twee woningen in hetzelfde pand hetzelfde projectnummer konden krijgen.
+// Staat op moduleniveau omdat zowel de klantstap als de paspoort-import hem
+// nodig heeft; twee kopieën zouden vroeg of laat uit elkaar lopen.
+const buildId = (pc,nr,tv) => {
+  const c=(pc||"").replace(/\s/g,"").toUpperCase();
+  const n=(nr||"").trim();
+  const t=(tv||"").trim().replace(/\s/g,"");
+  return c&&n ? `${c}-${n}${t}` : "";
+};
+
 function StapKlant({ data, onChange, onNext, onBack, discipline }) {
   const disc = DISCIPLINES.find(d => d.id === discipline);
   const [pcStatus, setPcStatus] = useState(""); // "" | "loading" | "found" | "error"
-
-  const buildId = (pc,nr) => {
-    const c=(pc||"").replace(/\s/g,"").toUpperCase();
-    const n=(nr||"").trim();
-    return c&&n ? `${c}-${n}` : "";
-  };
 
   // Postcode lookup via PDOK Locatieserver (gratis overheids-open-data, geen API key nodig)
   const lookupPostcode = async (pc, nr) => {
@@ -908,17 +916,25 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
 
   const handlePc = (v) => {
     onChange("postcode", v);
-    onChange("projectId", buildId(v, data.huisnummer));
+    onChange("projectId", buildId(v, data.huisnummer, data.toevoeging));
     if (v.replace(/\s/g,"").length === 6 && data.huisnummer) lookupPostcode(v, data.huisnummer);
   };
 
   const handleNr = (v) => {
     onChange("huisnummer", v);
-    onChange("projectId", buildId(data.postcode, v));
+    onChange("projectId", buildId(data.postcode, v, data.toevoeging));
     if (data.postcode?.replace(/\s/g,"").length === 6 && v) lookupPostcode(data.postcode, v);
   };
 
-  const pid = data.projectId || buildId(data.postcode, data.huisnummer);
+  // De toevoeging telt mee in het projectnummer, dus moet hij het nummer net zo
+  // bijwerken als postcode en huisnummer dat doen. Geen postcode-lookup hier:
+  // PDOK zoekt op postcode + huisnummer, de toevoeging voegt daar niets toe.
+  const handleToevoeging = (v) => {
+    onChange("toevoeging", v);
+    onChange("projectId", buildId(data.postcode, data.huisnummer, v));
+  };
+
+  const pid = data.projectId || buildId(data.postcode, data.huisnummer, data.toevoeging);
   const ok  = data.naam && data.postcode && data.huisnummer && data.email;
 
   const typeWerkOpties = {
@@ -971,7 +987,7 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
                 <input style={{...S.input,flex:3,minWidth:0,padding:"0 10px"}} placeholder="12" value={data.huisnummer||""}
                   onChange={e=>handleNr(e.target.value)}/>
                 <input style={{...S.input,flex:2,minWidth:0,padding:"0 8px"}} placeholder="a" value={data.toevoeging||""}
-                  onChange={e=>onChange("toevoeging",e.target.value)}/>
+                  onChange={e=>handleToevoeging(e.target.value)}/>
               </div>
             </div>
           </div>
@@ -5489,6 +5505,11 @@ export default function App() {
     try { localStorage.setItem(ACTIEF_KEY, nieuwId); } catch {}
     setJob({
       postcode: p.pc || "", huisnummer: p.nr || "",
+      // Projectnummer meteen afleiden. Zonder dit blijft projectId leeg bij een
+      // project dat uit een gescand paspoort start — de klantstap toont dan wél
+      // een nummer, maar het rapport drukt "—" af, omdat alleen het wijzigen van
+      // postcode/huisnummer/toevoeging het nummer zette.
+      projectId: buildId(p.pc, p.nr),
       mkpImport: p,
       mkp: {
         bj: p.bj || "", ean: p.ean || "", ean2: p.ean2 || "",
