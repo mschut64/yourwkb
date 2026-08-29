@@ -1,8 +1,25 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
-// 2026-08-29-A (R1/S1): versienummer als constante + zichtbaar in de kop van het
-//               beginscherm. De kopregel stond twee releases achter (2026-08-16-A
-//               terwijl 08-27-A en 08-27-B al live waren) — vandaar één bron.
+// 2026-08-29-A (R1 — design fase 2, design-spec §4). In één release gebundeld:
+//   • Versienummer als constante APP_VERSIE + zichtbaar in de kop van het
+//     beginscherm. De kopregel stond twee releases achter (2026-08-16-A terwijl
+//     08-27-A en 08-27-B al live waren) — vandaar één bron van waarheid.
+//   • Meetwaarden overal op 20px/700 met tabular-nums en de eenheid als token,
+//     in alle zes disciplines. NIET op de 32px uit de spec: met zes Z-waarden
+//     naast elkaar zou dat de flow-regel breken.
+//   • Normvlak per meetblok (StatusVlak): uitspraak in woorden + de grenswaarde,
+//     zodat je bij afkeur niet terug hoeft te scrollen naar de instructie.
+//   • Stapteller "Stap i van n" + voortgangsbalk, centraal boven het scherm.
+//     Vervangt 15 hardgecodeerde stapnummers die fout waren zodra een scherm
+//     door meerdere disciplines wordt gebruikt (paspoortstap zei "Stap 8",
+//     is in de groepenkastflow stap 10). Schermtitels 15 → 20px.
+//   • Startscherm: projectrij op S.rij, disciplinetegels met kleurvlak.
+//   • Knophiërarchie: één gele knop per scherm, elf handgemaakte grijze knoppen
+//     vervangen door het token S.btnGhost.
+//   • Projectnummer bevat nu de toevoeging (2691JJ-72a i.p.v. 2691JJ-72), en de
+//     paspoort-import zet projectId — die liet het rapport "—" afdrukken.
+//   • Klantstap: toevoegingsveld leesbaar, bevestigingsregel toont het gevonden
+//     adres vóluit.
 // 2026-08-01-A: ISO per groep naar aarde altijd ≥0,23 MΩ (ook 3-fase; 0,40 gold
 //               t.o.v. 400V fase-fase, niet voor metingen naar aarde). Labels,
 //               help-tekst, rapport, cross-check en AI-prompt meegewijzigd.

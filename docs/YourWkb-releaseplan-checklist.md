@@ -13,7 +13,7 @@ Zie `CLAUDE.md` §4 voor de inhoud van beide.
 
 ---
 
-## R1 — Design fase 2 🔄
+## R1 — Design fase 2 ✅ (op de veldtest en de push na)
 
 Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via de tokens meekomt). Secties 2a, 2b en 3 van de spec (de `K`/`S`-tokens en het landing-CSS-blok) zijn in een eerdere ronde al doorgevoerd; de tokens `S.rij`, `S.eenheid`, `S.inputMeting` en `S.btnGhost` bestaan dus wél maar worden nog nergens gebruikt.
 
@@ -24,8 +24,8 @@ Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via d
 - [ ] ~~Meetvelden naar `S.inputMeting` (32 px, volle breedte)~~ — **niet gedaan**: zes velden naast elkaar in flexWrap-rijen, volle breedte maakt er een scrollmarathon van. 20 px is de grootste maat die de rasters heel laat. Zie afwijking 1.
 - [x] **S5c** — normvlak per meetblok: impedantie, isolatieweerstand, spanning+frequentie en aardlekschakelaar (groepenkast) + AC-blok (PV). Helpers `blokOordeel` en `normTitel`. Per blok en niet per veld — zie afwijking 2.
 - [x] **Aardlekblok rechtgezet** (gemeld door Martin tijdens S5c): labels stonden vol met de norm en wrapten ongelijk, waardoor de ΔT- en ΔI-velden uit elkaar zakten. Labels ingekort, norm naar het vlak, `alignItems:"end"`.
-- [ ] Stapteller "Stap i van n" in `S.hdr` + voortgangsbalk (`S.bar`/`S.barFill`)
-- [ ] `fontVariantNumeric:"tabular-nums"` op meetwaarden in lijstweergaven
+- [x] **S6** — stapteller "Stap i van n · <label>" + voortgangsbalk, centraal boven het scherm i.p.v. in elke schermkop (alleen dáár is bekend hoeveel stappen de discipline heeft). 15 hardgecodeerde stapnummers verwijderd; die waren fout zodra een scherm door meerdere disciplines wordt gebruikt — de paspoortstap zei "Stap 8" terwijl dat in de groepenkastflow stap 10 is. 18 schermtitels 15 → 20 px, ondertitels 11 → 12 px.
+- [x] `fontVariantNumeric:"tabular-nums"` op meetwaarden (zit in `MiniInput` en in de `MeetVeld`-varianten van cv/wp)
 
 ### Startscherm — ✅ S3
 - [x] Projectrij naar `S.rij`: klantnaam 13 → 16 px, discipline/stap 11 → 13 px, verwijderknop ~24 → 36 px met `aria-label`
@@ -55,10 +55,12 @@ Beide punten uit spec §4 zijn niet uitvoerbaar zoals geschreven. Uit R1 gehaald
 - [x] **Landing "binnenkort" opschonen — was al gebeurd.** Het blok op [app/landing/page.js:458](../app/landing/page.js:458) bevat nog precies belastingcheck + eigen logo, exact de twee die moesten blijven. Laadpaal, thuisbatterij en QR-paspoort staan al als beschikbaar (regel 247, 435 en de paspoort-sectie). Vermoedelijk meegegaan in v2026-08-16-B.
 
 ### Oplevering
-- [ ] `node tests/extract-logica.js components/WkbApp.jsx` + `node tests/test.js` → 80/80
-- [ ] `npx next build` → compiled successfully
-- [ ] Versieletter opgehoogd in de kopregel van `WkbApp.jsx`
-- [ ] Flow-regel getoetst: geen scherm, stap of bevestiging toegevoegd
+- [x] `node tests/extract-logica.js components/WkbApp.jsx` + `node tests/test.js` → **80/80** bij elke deelstap
+- [x] `npx next build` → compiled successfully, 14/14 pagina's
+- [x] Versie `2026-08-29-A` — heel R1 in één release gebundeld, conform de regel "kleine fixes bundelen, niet voor elke bugfix een nieuwe letter"
+- [x] **Flow-regel getoetst: geen scherm, stap of bevestiging toegevoegd.** Alles wat erbij kwam is weergave van gegevens die de app al berekende. Drie dingen halen juist werk weg: de norm staat nu ónder het meetblok (geen terugscrollen naar de instructie), het adres staat vóluit op de bevestigingsregel (geen twee krappe velden lezen), en `inputMode="decimal"` opent meteen het cijfertoetsenbord.
+- [ ] **Veldtest door Maurits/Herman** — de praktijkthermometer uit de roadmap: duurt een klus langer dan vóór de update, dan is er iets fout ontworpen. Nog niet gedaan.
+- [ ] **Nog niet gepusht naar `main`** (= deploy naar Vercel). Wacht op akkoord van Martin.
 
 ### Afwijkingen van spec §4 — voorgelegd aan Martin 29-08-2026, nog geen akkoord
 
