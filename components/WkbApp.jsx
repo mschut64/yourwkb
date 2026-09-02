@@ -1,5 +1,19 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-03-A (roadmap 2.1 — belastingcheck wordt berekend):
+//   • De gelijktijdigheidsfactor 0,6 over de grote verbruikers (laadpaal,
+//     warmtepomp, kookgroep, thuisbatterij) uit NEN-EN-IEC 61439. Deze app
+//     BESCHREEF die regel al bij de load balancing, maar rekende hem nergens
+//     uit: `p.chk` werd alleen getoond uit een gescand paspoort en overal stond
+//     "(volgt)". Rekenkern overgenomen uit Kastscan, waar hij is gebouwd en met
+//     tests vastgelegd; hier draait hij nu door de extract-logica-suite mee.
+//   • `p.chk` wordt berekend in plaats van met de hand ingevuld, en de uitkomst
+//     staat onder de load balancing-kaart — anders rekent de app iets uit dat
+//     alleen in de QR belandt.
+//   • Mét gezamenlijke sturing vervalt de korting: load balancing is een
+//     software-instelling en geen veiligheidsmaatregel, dus de installatie moet
+//     ook bij falende sturing kloppen.
+//
 // 2026-08-29-A (R1 — design fase 2, design-spec §4). In één release gebundeld:
 //   • Versienummer als constante APP_VERSIE + zichtbaar in de kop van het
 //     beginscherm. De kopregel stond twee releases achter (2026-08-16-A terwijl
@@ -52,7 +66,7 @@ import { trackEvent } from "./analytics";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-08-29-A";
+const APP_VERSIE = "2026-09-03-A";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
 //   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
@@ -232,6 +246,80 @@ async function mkpDecode(frag) {
   return obj;
 }
 
+// ─── BELASTINGCHECK (roadmap 2.1) ─────────────────────────────────────────────
+//
+// Overgenomen uit Kastscan, 03-09-2026. Daar is de rekenkern gebouwd en met
+// tests vastgelegd; hier stond hij al beschreven maar nog niet berekend — overal
+// "(volgt)", en `p.chk` werd alleen GETOOND uit een gescand paspoort.
+//
+// De regel is die van dit bestand zelf: "Zonder gezamenlijke sturing rekent de
+// belastingcheck conservatief met gelijktijdigheidsfactor 0,6 over de grote
+// verbruikers (richtlijn NEN-EN-IEC 61439)." De factor gaat dus OP die
+// verbruikers en niet eromheen.
+//
+// EEN VERSCHIL MET KASTSCAN, en dat is de data en niet de keuze. Kastscan kent
+// per groep een fase (L1/L2/L3) en rekent daarom PER FASE. Hier dragen groepen
+// alleen `f: 1|3` — welke fase een eenfasegroep pakt, staat nergens. Deze check
+// toetst dus de TOTALE belasting tegen de hele aansluiting. Per fase rekenen
+// hoort bij R3b (Fasecheck), en dát is ook precies waar het verschil zit:
+// fasecompensatie is boekhouding, stroom is fysiek.
+const GROTE_VERBRUIKERS_MKP = ["lp", "wp", "kook", "bat"];
+const GELIJKTIJDIGHEID = 0.6;
+
+// Terugval als het vermogen niet is ingevuld. Alleen voor de vier grote
+// verbruikers: bij een lichtgroep zou een aangenomen waarde de uitkomst sturen
+// zonder dat iemand het ziet, en die groepen tellen hier toch al licht.
+const GROOT_STANDAARD_KW = { lp: 7.4, wp: 6.9, kook: 7.4, bat: 5.0 };
+
+function isGroteVerbruikerMkp(t) {
+  return GROTE_VERBRUIKERS_MKP.includes(String(t || "").trim().toLowerCase());
+}
+
+// Het vermogen van één paspoortgroep in kW, of NaN als het onbekend is.
+function groepVermogenKw(g) {
+  const kw = toNum(g && g.kw);
+  if (kw > 0) return kw;
+  return isGroteVerbruikerMkp(g && g.t) ? GROOT_STANDAARD_KW[String(g.t).toLowerCase()] : NaN;
+}
+
+// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
+// in chkKleur: "groen", "oranje" of "rood".
+function belastingcheck(grp, ha, lbAan, datum) {
+  const lijst = Array.isArray(grp) ? grp : [];
+  const fasen = toNum(ha && ha.f) === 3 ? 3 : 1;
+  const ampere = toNum(ha && ha.a);
+  if (!(ampere > 0)) return null;
+
+  // Alleen AFNEMENDE groepen. Een PV-omvormer of een ontladende batterij
+  // verlaagt de piek door de hoofdzekering niet: het slechtste geval is geen
+  // zon en een lege accu. PV als negatieve belasting hoort bij de Fasecheck
+  // (R3b), waar het over saldering per fase gaat en niet over deze toets.
+  const afnemers = lijst.filter((g) => (g && g.rol) !== "voed");
+  let groot = 0;
+  let gewoon = 0;
+  let bekend = 0;
+  for (const g of afnemers) {
+    const kw = groepVermogenKw(g);
+    if (isNaN(kw) || kw <= 0) continue;
+    bekend += 1;
+    if (isGroteVerbruikerMkp(g.t)) groot += kw; else gewoon += kw;
+  }
+  // Geen enkele bekende belasting: dan valt er niets te toetsen, en "groen"
+  // zou hier een uitspraak zijn die nergens op steunt.
+  if (!bekend) return null;
+
+  // Mét gezamenlijke sturing vervalt de korting. Load balancing is een
+  // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
+  // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
+  const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
+  const belasting = gewoon + groot * factor;
+  const capaciteit = (fasen * ampere * 230) / 1000;
+  const bezet = capaciteit > 0 ? belasting / capaciteit : 0;
+
+  const r = bezet > 1 ? "rood" : bezet > 0.7 ? "oranje" : "groen";
+  return { r, d: String(datum || "") };
+}
+
 // Bouwt het paspoort-object uit de app-data conform spec v0.1.
 // Onbekende/lege velden worden weggelaten om de QR compact te houden.
 function mkpBouw(data, discipline) {
@@ -304,6 +392,12 @@ function mkpBouw(data, discipline) {
       if (m.lbReg) p.lb.reg = String(m.lbReg).slice(0,40);
     }
   }
+  // De belastingcheck wordt nu BEREKEND in plaats van met de hand ingevuld
+  // (roadmap 2.1). Alleen meesturen als er iets te toetsen viel: zonder
+  // hoofdaansluiting of zonder een enkele bekende belasting zou "groen" een
+  // uitspraak zijn die nergens op steunt.
+  const chkUitkomst = belastingcheck(grp, p.ha, m.lbAan, p.d);
+  if (chkUitkomst) p.chk = chkUitkomst;
   // Logboek: nieuwe regel bovenaan, geïmporteerde historie eronder, max 8 regels.
   const nieuweRegel = {
     d: p.d,
@@ -3083,8 +3177,36 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           </div>
         </>)}
         {m.lbAan===false && (
-          <div style={{fontSize:11, color:K.muted}}>Zonder gezamenlijke sturing rekent de belastingcheck (volgt) conservatief met gelijktijdigheidsfactor 0,6 over de grote verbruikers (richtlijn NEN-EN-IEC 61439).</div>
+          <div style={{fontSize:11, color:K.muted}}>Zonder gezamenlijke sturing rekent de belastingcheck conservatief met gelijktijdigheidsfactor 0,6 over de grote verbruikers — laadpaal, warmtepomp, kookgroep en thuisbatterij (richtlijn NEN-EN-IEC 61439).</div>
         )}
+        {m.lbAan===true && (
+          <div style={{fontSize:11, color:K.muted}}>Mét sturing rekent de belastingcheck met het VOLLE vermogen: load balancing is een software-instelling en geen veiligheidsmaatregel, dus de installatie moet ook bij falende sturing kloppen.</div>
+        )}
+
+        {/* DE UITKOMST HOORT HIER TE STAAN. Zonder deze regel rekent de app iets
+            uit dat alleen in de QR belandt, en dan ziet de installateur nooit
+            waar zijn kW-invoer hierboven toe leidt. */}
+        {(() => {
+          const voorbeeld = mkpBouw(data, discipline);
+          const uit = belastingcheck(voorbeeld.grp, voorbeeld.ha, m.lbAan, "");
+          if (!uit) return (
+            <div style={{fontSize:11, color:K.muted, marginTop:8}}>
+              Belastingcheck: nog niets te toetsen. Vul de hoofdaansluiting in en het vermogen van
+              minstens één groep hierboven.
+            </div>
+          );
+          const kleur = uit.r==="groen" ? K.green : uit.r==="rood" ? K.red : K.orange;
+          return (
+            <div style={{marginTop:10, paddingTop:8, borderTop:`1px solid ${K.border}`}}>
+              <div style={{fontWeight:700, fontSize:13}}>
+                Belastingcheck: <span style={{color:kleur, textTransform:"uppercase"}}>{uit.r}</span>
+              </div>
+              <div style={{fontSize:11, color:K.muted, marginTop:2}}>
+                Indicatie op basis van de ingevulde vermogens; gaat mee in het meterkastpaspoort.
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div style={{...S.card, marginBottom:16}}>

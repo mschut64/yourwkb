@@ -16,7 +16,9 @@
 // Voer uit met:  node test.js
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks } = require("./logica");
+const { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
+        isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
+        GELIJKTIJDIGHEID, GROOT_STANDAARD_KW } = require("./logica");
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -248,6 +250,77 @@ bevat(sKapot, "Testknop RCD geeft NOK",        "12.2d defect: testknop NOK");
 bevat(sKapot, "Z L-N 2.5Ω boven Z_max",        "12.2e defect: Z L-N te hoog");
 bevat(sKapot, "Z L-PE 200Ω boven 166Ω",        "12.2f defect: Z L-PE boven aanraakspanningsnorm");
 bevat(sKapot, "potentiaalvereffening",         "12.2g defect: potentiaalvereffening NOK");
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 13 · BELASTINGCHECK — gelijktijdigheidsfactor 0,6 (roadmap 2.1)
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Overgenomen uit Kastscan, 03-09-2026. De regel staat in deze app zelf:
+// "Zonder gezamenlijke sturing rekent de belastingcheck conservatief met
+// gelijktijdigheidsfactor 0,6 over de grote verbruikers (NEN-EN-IEC 61439)."
+// De factor gaat OP die verbruikers en niet eromheen.
+
+eq(GELIJKTIJDIGHEID, 0.6, "13.1 de factor is 0,6");
+["lp", "wp", "kook", "bat"].forEach(t =>
+  eq(isGroteVerbruikerMkp(t), true, `13.2 ${t} is een grote verbruiker`));
+["alg", "ov", "pv", "", null].forEach(t =>
+  eq(isGroteVerbruikerMkp(t), false, `13.3 ${t || "(leeg)"} is dat niet`));
+
+// Een ingevuld vermogen wint van de terugvalwaarde.
+eq(groepVermogenKw({ t: "lp", kw: 11 }), 11, "13.4a ingevuld vermogen telt");
+eq(groepVermogenKw({ t: "lp" }), GROOT_STANDAARD_KW.lp, "13.4b terugval bij een grote verbruiker");
+eq(isNaN(groepVermogenKw({ t: "alg" })), true, "13.4c geen terugval bij een gewone groep");
+
+const ha3 = { f: 3, a: 25 };   // 3 × 25 A = 17,25 kW
+
+// De factor raakt alleen de grote verbruikers.
+{
+  // 2 kW gewoon + 11 kW laadpaal. Zonder sturing: 2 + 11 × 0,6 = 8,6 van 17,25.
+  const grp = [{ t: "alg", rol: "af", kw: 2 }, { t: "lp", rol: "af", kw: 11 }];
+  eq(belastingcheck(grp, ha3, false, "2026-09-03").r, "groen", "13.5a onder 70% is groen");
+  // Mét sturing vervalt de korting: 2 + 11 = 13 van 17,25 = 75%.
+  eq(belastingcheck(grp, ha3, true, "2026-09-03").r, "oranje", "13.5b met sturing vervalt de korting");
+}
+{
+  // Twee laadpalen en een warmtepomp: 11 + 11 + 12 = 34 kW aansluitwaarde.
+  // Zonder sturing 20,4 van 17,25 — nog altijd boven de capaciteit.
+  const grp = [{ t: "lp", rol: "af", kw: 11 }, { t: "lp", rol: "af", kw: 11 }, { t: "wp", rol: "af", kw: 12 }];
+  eq(belastingcheck(grp, ha3, false, "2026-09-03").r, "rood", "13.6 boven de capaciteit is rood");
+}
+
+// Voedende groepen tellen niet mee: het slechtste geval is geen zon en een lege
+// accu. PV als negatieve belasting hoort bij de Fasecheck (R3b), niet hier.
+{
+  const grp = [{ t: "lp", rol: "af", kw: 11 }, { t: "pv", rol: "voed", kw: 8 }];
+  const zonderPv = belastingcheck([{ t: "lp", rol: "af", kw: 11 }], ha3, false, "2026-09-03");
+  eq(belastingcheck(grp, ha3, false, "2026-09-03").r, zonderPv.r, "13.7 PV verlaagt de uitkomst niet");
+}
+
+// Geen uitspraak doen waar niets te toetsen valt — "groen" zou dan nergens op
+// steunen.
+eq(belastingcheck([{ t: "lp", rol: "af", kw: 11 }], { f: 3 }, false, "d"), null,
+   "13.8a zonder hoofdzekering geen check");
+eq(belastingcheck([], ha3, false, "d"), null, "13.8b zonder groepen geen check");
+eq(belastingcheck([{ t: "alg", rol: "af" }], ha3, false, "d"), null,
+   "13.8c zonder een enkel bekend vermogen geen check");
+eq(belastingcheck([{ t: "pv", rol: "voed", kw: 8 }], ha3, false, "d"), null,
+   "13.8d alleen voedende groepen geven geen check");
+
+// De woorden volgen chkKleur in WkbApp.jsx: die leest op "groen" en "rood" en
+// valt voor al het overige terug op oranje. Een eigen woordkeus zou daar stil
+// oranje opleveren in plaats van een fout.
+{
+  const uit = belastingcheck([{ t: "lp", rol: "af", kw: 11 }], ha3, false, "2026-09-03");
+  eq(["groen", "oranje", "rood"].includes(uit.r), true, "13.9a alleen de drie bekende woorden");
+  eq(uit.d, "2026-09-03", "13.9b met de datum erbij");
+}
+
+// Een enkelfasige aansluiting heeft een derde van de capaciteit.
+eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }], { f: 1, a: 25 }, false, "d").r, "oranje",
+   "13.10a 1 x 25 A: kookgroep met factor is 4,44 van 5,75 = 77% — oranje");
+eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }, { t: "wp", rol: "af", kw: 6.9 }],
+   { f: 1, a: 25 }, false, "d").r, "rood",
+   "13.10b met de warmtepomp erbij 8,58 van 5,75 — rood");
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log("\n═══════════════════════════════════════════════");

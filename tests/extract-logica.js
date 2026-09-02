@@ -20,6 +20,9 @@ const src = fs.readFileSync(bron, "utf8");
 const NODIG = new Set([
   "toNum", "GG_TABEL", "GG_IN_WAARDEN", "ggIaVoorTijd",
   "gkCrossChecks", "pvCrossChecks",
+  // Belastingcheck (roadmap 2.1) — overgenomen uit Kastscan, 03-09-2026.
+  "GROTE_VERBRUIKERS_MKP", "GELIJKTIJDIGHEID", "GROOT_STANDAARD_KW",
+  "isGroteVerbruikerMkp", "groepVermogenKw", "belastingcheck",
 ]);
 
 const ast = babel.parse(src, {

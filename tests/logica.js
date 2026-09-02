@@ -1,10 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YourWkb — Pure logica module (AUTO-GEGENEREERD — NIET HANDMATIG BEWERKEN)
 // Gegenereerd uit: WkbApp.jsx
-// Op: 2026-08-01 09:10:56
+// Op: 2026-09-02 09:28:58
 // Draai 'node extract-logica.js <WkbApp.jsx>' opnieuw na elke wijziging aan de
 // norm-validatie in de app. De regressietest (test.js) draait hier direct op.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
+//   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
+//   bouwjaar, EAN met GS1-check + eancodeboek.nl-knop, load balancing incl.
+//   dubbele-balancer-waarschuwing, groepenlijst, logboek), QR-generatie
+//   (JSON→deflate-raw→base64url in URL-fragment), uitknipbare stickerpagina in
+//   rapport-PDF, inlezen gescand paspoort via #fragment bij app-start,
+//   norm-editie- en scope-voetnoot in conformverklaring (NORM_EDITIE_VOETNOOT).
+//   Vereist dependency "qrcode" in package.json.
 
 // Robuuste numerieke parser — accepteert zowel komma als punt als decimaalteken.
 // Zonder deze fix leest parseFloat("1,9") als 1 (stopt bij de komma) — dat veroorzaakte
@@ -108,9 +117,104 @@ function ggIaVoorTijd(ampere, tijd) {
   };
 }
 
-// Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
-// Laadgroep/thuisbatterij ook relevant wanneer die via de hoofdgroepenkast gevoed worden
-// i.p.v. als losse discipline.
+// ─── MKP: OPEN METERKASTPASPOORT (spec v0.1 — meterkastpaspoort.nl) ──────────
+// Het paspoort is een JSON-object conform de open specificatie, gecomprimeerd
+// (deflate-raw) en base64url-gecodeerd in het URL-fragment achter /p#.
+// Fragmenten gaan nooit naar een server: privacy door architectuur.
+
+// ─── BELASTINGCHECK (roadmap 2.1) ─────────────────────────────────────────────
+//
+// Overgenomen uit Kastscan, 03-09-2026. Daar is de rekenkern gebouwd en met
+// tests vastgelegd; hier stond hij al beschreven maar nog niet berekend — overal
+// "(volgt)", en `p.chk` werd alleen GETOOND uit een gescand paspoort.
+//
+// De regel is die van dit bestand zelf: "Zonder gezamenlijke sturing rekent de
+// belastingcheck conservatief met gelijktijdigheidsfactor 0,6 over de grote
+// verbruikers (richtlijn NEN-EN-IEC 61439)." De factor gaat dus OP die
+// verbruikers en niet eromheen.
+//
+// EEN VERSCHIL MET KASTSCAN, en dat is de data en niet de keuze. Kastscan kent
+// per groep een fase (L1/L2/L3) en rekent daarom PER FASE. Hier dragen groepen
+// alleen `f: 1|3` — welke fase een eenfasegroep pakt, staat nergens. Deze check
+// toetst dus de TOTALE belasting tegen de hele aansluiting. Per fase rekenen
+// hoort bij R3b (Fasecheck), en dát is ook precies waar het verschil zit:
+// fasecompensatie is boekhouding, stroom is fysiek.
+const GROTE_VERBRUIKERS_MKP = ["lp", "wp", "kook", "bat"];
+
+const GELIJKTIJDIGHEID = 0.6;
+
+// Terugval als het vermogen niet is ingevuld. Alleen voor de vier grote
+// verbruikers: bij een lichtgroep zou een aangenomen waarde de uitkomst sturen
+// zonder dat iemand het ziet, en die groepen tellen hier toch al licht.
+
+// Terugval als het vermogen niet is ingevuld. Alleen voor de vier grote
+// verbruikers: bij een lichtgroep zou een aangenomen waarde de uitkomst sturen
+// zonder dat iemand het ziet, en die groepen tellen hier toch al licht.
+const GROOT_STANDAARD_KW = {
+  lp: 7.4,
+  wp: 6.9,
+  kook: 7.4,
+  bat: 5.0
+};
+
+function isGroteVerbruikerMkp(t) {
+  return GROTE_VERBRUIKERS_MKP.includes(String(t || "").trim().toLowerCase());
+}
+
+// Het vermogen van één paspoortgroep in kW, of NaN als het onbekend is.
+
+// Het vermogen van één paspoortgroep in kW, of NaN als het onbekend is.
+function groepVermogenKw(g) {
+  const kw = toNum(g && g.kw);
+  if (kw > 0) return kw;
+  return isGroteVerbruikerMkp(g && g.t) ? GROOT_STANDAARD_KW[String(g.t).toLowerCase()] : NaN;
+}
+
+// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
+// in chkKleur: "groen", "oranje" of "rood".
+
+// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
+// in chkKleur: "groen", "oranje" of "rood".
+function belastingcheck(grp, ha, lbAan, datum) {
+  const lijst = Array.isArray(grp) ? grp : [];
+  const fasen = toNum(ha && ha.f) === 3 ? 3 : 1;
+  const ampere = toNum(ha && ha.a);
+  if (!(ampere > 0)) return null;
+
+  // Alleen AFNEMENDE groepen. Een PV-omvormer of een ontladende batterij
+  // verlaagt de piek door de hoofdzekering niet: het slechtste geval is geen
+  // zon en een lege accu. PV als negatieve belasting hoort bij de Fasecheck
+  // (R3b), waar het over saldering per fase gaat en niet over deze toets.
+  const afnemers = lijst.filter(g => (g && g.rol) !== "voed");
+  let groot = 0;
+  let gewoon = 0;
+  let bekend = 0;
+  for (const g of afnemers) {
+    const kw = groepVermogenKw(g);
+    if (isNaN(kw) || kw <= 0) continue;
+    bekend += 1;
+    if (isGroteVerbruikerMkp(g.t)) groot += kw;else gewoon += kw;
+  }
+  // Geen enkele bekende belasting: dan valt er niets te toetsen, en "groen"
+  // zou hier een uitspraak zijn die nergens op steunt.
+  if (!bekend) return null;
+
+  // Mét gezamenlijke sturing vervalt de korting. Load balancing is een
+  // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
+  // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
+  const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
+  const belasting = gewoon + groot * factor;
+  const capaciteit = fasen * ampere * 230 / 1000;
+  const bezet = capaciteit > 0 ? belasting / capaciteit : 0;
+  const r = bezet > 1 ? "rood" : bezet > 0.7 ? "oranje" : "groen";
+  return {
+    r,
+    d: String(datum || "")
+  };
+}
+
+// Bouwt het paspoort-object uit de app-data conform spec v0.1.
+// Onbekende/lege velden worden weggelaten om de QR compact te houden.
 
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
@@ -191,7 +295,7 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
     const diff = Math.max(l1, l2, l3) - Math.min(l1, l2, l3);
     if (diff > 6) warnings.push({
       level: "orange",
-      msg: `Fasespanning asymmetrie ${diff.toFixed(1)}V — controleer netaansluiting`
+      msg: `Fasespanning asymmetrie ${diff.toFixed(1).replace(".", ",")}V — controleer netaansluiting`
     });
   }
 
@@ -232,16 +336,16 @@ function gkCrossChecks(aardlekgroepen, grpMeet, instMet) {
       } else if (zMax) {
         if (!isNaN(zlpe) && zlpe > zMax * 0.9 && zlpe <= zMax) warnings.push({
           level: "orange",
-          msg: `Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2)}Ω) — bij uitbreiding opnieuw meten`
+          msg: `Z L-PE ${zlpe}Ω nadert maximum voor ${vKar}${vA}A (Z_max=${zMax.toFixed(2).replace(".", ",")}Ω) — bij uitbreiding opnieuw meten`
         });
         if (!isNaN(zlpe) && zlpe > zMax) warnings.push({
           level: "red",
-          msg: `Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging`
+          msg: `Z L-PE ${zlpe}Ω boven Z_max (${zMax.toFixed(2).replace(".", ",")}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging`
         });
       }
       if (zMax && !isNaN(zln) && zln > zMax) warnings.push({
         level: "red",
-        msg: `Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2)}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging`
+        msg: `Z L-N ${zln}Ω boven Z_max (${zMax.toFixed(2).replace(".", ",")}Ω voor ${vKar}${vA}A) — Icc te laag voor kortsluitbeveiliging`
       });
     }
   }
@@ -298,11 +402,11 @@ function pvCrossChecks(strings, instMet, materiaal) {
     const ratio = totaalWp / (omvormerKw * 1000);
     if (ratio > 1.35) warnings.push({
       level: "orange",
-      msg: `DC/AC ratio ${ratio.toFixed(2)} is hoog (>${1.35}) — controleer omvormer specificaties`
+      msg: `DC/AC ratio ${ratio.toFixed(2).replace(".", ",")} is hoog (>1,35) — controleer omvormer specificaties`
     });
     if (ratio < 0.8) warnings.push({
       level: "orange",
-      msg: `DC/AC ratio ${ratio.toFixed(2)} is laag (<0.8) — omvormer mogelijk te groot`
+      msg: `DC/AC ratio ${ratio.toFixed(2).replace(".", ",")} is laag (<0,8) — omvormer mogelijk te groot`
     });
   }
   // Aarding check
@@ -315,4 +419,4 @@ function pvCrossChecks(strings, instMet, materiaal) {
 
 // ─── GEDEELDE HELPERS ─────────────────────────────────────────────────────────
 
-module.exports = { toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks };
+module.exports = { toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, belastingcheck };
