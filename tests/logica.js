@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YourWkb — Pure logica module (AUTO-GEGENEREERD — NIET HANDMATIG BEWERKEN)
 // Gegenereerd uit: WkbApp.jsx
-// Op: 2026-09-02 09:28:58
+// Op: 2026-09-02 09:30:44
 // Draai 'node extract-logica.js <WkbApp.jsx>' opnieuw na elke wijziging aan de
 // norm-validatie in de app. De regressietest (test.js) draait hier direct op.
 // ─────────────────────────────────────────────────────────────────────────────

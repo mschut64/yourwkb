@@ -3187,8 +3187,15 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
             uit dat alleen in de QR belandt, en dan ziet de installateur nooit
             waar zijn kW-invoer hierboven toe leidt. */}
         {(() => {
-          const voorbeeld = mkpBouw(data, discipline);
-          const uit = belastingcheck(voorbeeld.grp, voorbeeld.ha, m.lbAan, "");
+          // In een try, want dit draait tijdens de RENDER. De andere aanroep van
+          // mkpBouw staat in een handler met een eigen try/catch; hier zou een
+          // fout het hele paspoortscherm wit maken, en dan is de installateur
+          // zijn stap kwijt voor een regel die alleen informeert.
+          let uit = null;
+          try {
+            const voorbeeld = mkpBouw(data, discipline);
+            uit = belastingcheck(voorbeeld.grp, voorbeeld.ha, m.lbAan, "");
+          } catch { return null; }
           if (!uit) return (
             <div style={{fontSize:11, color:K.muted, marginTop:8}}>
               Belastingcheck: nog niets te toetsen. Vul de hoofdaansluiting in en het vermogen van
