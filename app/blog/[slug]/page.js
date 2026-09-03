@@ -60,7 +60,7 @@ export default function Artikel({ params }) {
     <BlogShell>
       <ArtikelStats slug={post.slug} />
       <article>
-        {post.source && <p className="b-kicker">Reprint</p>}
+        {post.source && <p className="b-kicker">{post.kicker || "Reprint"}</p>}
         <h1>{post.title}</h1>
         <p className="b-meta">{post.author} · {fmtDatum(post.date)}{post.source ? <> · <span className="b-bron">{post.source}</span></> : null}</p>
         <p style={{ fontWeight: 600, color: "var(--text)" }}>{post.description}</p>
