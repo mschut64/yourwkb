@@ -1,6 +1,6 @@
 # YourWkb — projectinstructies voor Claude Code
 
-*Overdracht van de webapp-ontwikkelchats (claude.ai, aug 2026). Dit bestand is het werkgeheugen: lees het aan het begin van elke sessie en houd het bij. Werk zelfstandig verder volgens `YourWkb-roadmap-2026-08.md` (koers) en `YourWkb-releaseplan-checklist.md` (afvinklijst) — beide staan in de repo-root of in `/docs`.*
+*Overdracht van de webapp-ontwikkelchats (claude.ai, aug 2026). Dit bestand is het werkgeheugen: lees het aan het begin van elke sessie en houd het bij. Lees daarna **`docs/claude_architectuur-en-modules-2026-09-12.md`** — dat zegt wat waar staat, hoe de drie repo's samenwerken en waar de scheuren zitten. Werk zelfstandig verder volgens `YourWkb-roadmap-2026-08.md` (koers) en `YourWkb-releaseplan-checklist.md` (afvinklijst) — beide staan in de repo-root of in `/docs`.*
 
 ---
 
@@ -75,6 +75,7 @@ app/layout.js              ← metadata, PostHog, JSON-LD
 app/sitemap.js, app/robots.js, app/manifest.js
 content/blog/*.md          ← artikelen (frontmatter + markdown)
 docs/                      ← projectgeheugen: roadmap, releaseplan-checklist, design-spec, featurespecs
+  claude_architectuur-en-modules-2026-09-12.md  ← modulekaart + waar je verder kunt
 lib/blog.js                ← frontmatter-parser + mini-markdown-renderer
 public/sw.js               ← service worker (v7)
 tests/test.js              ← 128 regressietests; importeert components/wkb/model.js rechtstreeks
