@@ -792,6 +792,10 @@ const LEERUITLEG = {
     titel: "Aardlekgroep & zwaarst belaste eindgroep",
     tekst: "Een aardlekgroep is een cluster van eindgroepen die allemaal door dezelfde aardlekschakelaar (RCD) worden beveiligd. Binnen zo'n cluster meet je de RCD-test (ΔT/ΔI) niet op elke eindgroep apart — je meet op de zwaarst belaste eindgroep van dát cluster (bijvoorbeeld de 32A-groep in plaats van een 16A-lichtgroep). Let op: dit is een ander begrip dan de 'hoogst afgaande groep van de installatie' die in stap 7 wordt gebruikt voor de Z-toetsing — die gaat over de hele installatie, niet over één aardlekgroep-cluster.",
   },
+  fasekeuze: {
+    titel: "Op welke fase zit deze aardlekgroep?",
+    tekst: "Dit is iets anders dan het fasetype hierboven. Fasetype zegt hoeveel fasen een groep gebruikt (1 of 3); dit veld zegt wélke fase dat is: L1, L2 of L3. Een slimme meter saldeert over drie fasen, maar de hoofdzekering doet dat niet — fasecompensatie is boekhouding, stroom is fysiek. Drie groepen die toevallig allemaal op L2 zitten kunnen die fase overbelasten terwijl de meter netjes binnen de grenzen lijkt te blijven. Met dit veld kan de app bij een uitbreiding zeggen welke fase nog ruimte heeft, én welke groep in aanmerking komt om te verhangen als de verdeling scheef staat. Weet je het niet zeker, laat het dan leeg: een gok is hier schadelijker dan een leeg veld, want het advies bouwt erop voort. Meten kan ook — schakel de aardlek kort uit en kijk welke fase inzakt.",
+  },
   delta_t_i: {
     titel: "ΔT en ΔI van de aardlekschakelaar",
     tekst: "ΔT is de tijd die de aardlekschakelaar nodig heeft om uit te schakelen zodra er een lekstroom optreedt — de norm is altijd ≤300ms (EN 61008), ongeacht het stelsel. ΔI is de lekstroom waarbij de RCD daadwerkelijk afslaat, getoetst aan een percentage van de nominale waarde: bij type AC ≤1× In, type A ≤1,4× In (vanwege de extra marge voor pulserende gelijkstroom), en type B ≤2× In. Beide waarden meet je met de testfunctie van je installatietester.",
@@ -1542,9 +1546,9 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
 function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   const nieuweEindgroep = (naam="Nieuwe eindgroep") => ({ id:Date.now()+Math.random(), naam, kar:"B", ampere:"16A", type:null });
   const [aardlekgroepen,setAG] = useState(data.aardlekgroepen || [
-    { id:1, naam:"Aardlek A", rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null,
+    { id:1, naam:"Aardlek A", rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null,
       eindgroepen:[ nieuweEindgroep("Licht BG"), nieuweEindgroep("Stopcontacten woonkamer") ] },
-    { id:2, naam:"Aardlek B", rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null,
+    { id:2, naam:"Aardlek B", rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null,
       eindgroepen:[ nieuweEindgroep("Keuken") ] },
   ]);
   const [editId,setEditId] = useState(null);
@@ -1552,10 +1556,14 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   const sync = (u) => { setAG(u); onChange("aardlekgroepen",u); };
 
   const addAG = () => {
-    const u=[...aardlekgroepen,{ id:Date.now(), naam:`Aardlek ${String.fromCharCode(65+aardlekgroepen.length)}`, rcdType:"A", rcdMa:"30", fase:"1", hoogstId:null, eindgroepen:[nieuweEindgroep()] }];
+    const u=[...aardlekgroepen,{ id:Date.now(), naam:`Aardlek ${String.fromCharCode(65+aardlekgroepen.length)}`, rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null, eindgroepen:[nieuweEindgroep()] }];
     sync(u); setEditId(u[u.length-1].id);
   };
   const updAG = (id,k,v) => sync(aardlekgroepen.map(a=>a.id===id?{...a,[k]:v}:a));
+  // Meerdere velden tegelijk. Twee keer updAG achter elkaar werkt NIET: beide
+  // aanroepen gaan uit van dezelfde `aardlekgroepen` uit deze render, dus de
+  // tweede gooit de eerste weg.
+  const updAGvelden = (id,obj) => sync(aardlekgroepen.map(a=>a.id===id?{...a,...obj}:a));
   const remAG = (id) => sync(aardlekgroepen.filter(a=>a.id!==id));
 
   const addEind = (agId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:[...a.eindgroepen,nieuweEindgroep()]}:a));
@@ -1612,6 +1620,39 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                   <Pill small active={ag.fase==="3"} onClick={()=>updAG(ag.id,"fase","3")}>⚡⚡⚡ 3-fase 400V</Pill>
                 </div>
 
+                {/* LET OP het verschil tussen twee velden die allebei "fase" heten:
+                    `ag.fase`  is het fasetype — het AANTAL fasen, "1" of "3".
+                    `ag.L`     is de fase zelf — L1, L2 of L3, dezelfde waarden
+                               als de Kastscan gebruikt.
+                    Het eerste veld bestond al en is bewust niet hernoemd: het
+                    zit in opgeslagen projecten op toestellen van installateurs.
+                    Zonder `L` weet de app wél hoe zwaar een fase belast is, maar
+                    niet wélke aardlek daarop zit — en dat is precies wat je nodig
+                    hebt om te kunnen adviseren wat er verhangen moet worden. */}
+                {ag.fase === "3" ? (
+                  <div style={{...S.hint, marginBottom:14}}>
+                    Een 3-fasegroep staat op alle drie de fasen — er valt hier niets te kiezen.
+                  </div>
+                ) : (
+                  <>
+                    <label style={S.label}>Op welke fase<LeerIcoon onderwerp="fasekeuze"/></label>
+                    <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                      {["L1","L2","L3"].map(l=>(
+                        <Pill key={l} small active={ag.L===l}
+                          onClick={()=>updAGvelden(ag.id, ag.L===l ? {L:"",Lbron:""} : {L:l,Lbron:"hand"})}>{l}</Pill>
+                      ))}
+                      {ag.L && <Pill small active={false} onClick={()=>updAGvelden(ag.id,{L:"",Lbron:""})}>wissen</Pill>}
+                    </div>
+                    <div style={{...S.hint, marginBottom:14}}>
+                      {ag.L
+                        ? (ag.Lbron === "meter"
+                            ? "Bevestigd met meter."
+                            : "Handmatig ingevuld. Weet je het niet zeker, laat het dan leeg — een gok is hier schadelijker dan een leeg veld.")
+                        : "Optioneel. Nodig om te kunnen adviseren welke groep naar een andere fase kan; zonder dit veld kan de app alleen zeggen hóe zwaar een fase belast is."}
+                    </div>
+                  </>
+                )}
+
                 <div style={{height:1,background:K.border,margin:"4px 0 12px"}}/>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                   <label style={{...S.label,marginBottom:0}}>Eindgroepen ({ag.eindgroepen.length})</label>
@@ -1660,7 +1701,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                   <div style={{flex:1}}>
                     <div style={{fontWeight:600,fontSize:14}}>{ag.naam}</div>
                     <div style={{fontSize:11,color:K.muted}}>
-                      {ag.rcdType==="geen"?"Geen RCD":`RCD ${ag.rcdMa}mA type-${ag.rcdType}`} · {ag.fase==="3"?"3-fase 400V":"1-fase 230V"} · {ag.eindgroepen.length} eindgroep{ag.eindgroepen.length!==1?"en":""}
+                      {ag.rcdType==="geen"?"Geen RCD":`RCD ${ag.rcdMa}mA type-${ag.rcdType}`} · {ag.fase==="3"?"3-fase 400V":(ag.L?`1-fase ${ag.L}`:"1-fase 230V")} · {ag.eindgroepen.length} eindgroep{ag.eindgroepen.length!==1?"en":""}
                     </div>
                   </div>
                   <button onClick={e=>{e.stopPropagation();remAG(ag.id);}} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
@@ -2361,7 +2402,7 @@ AARDLEKGROEPEN:
 ${aardlekgroepen.map((ag,i)=>{
   const hoogst = ag.eindgroepen?.find(e=>e.id===ag.hoogstId) || ag.eindgroepen?.[0];
   const eindStr = (ag.eindgroepen||[]).map(e=>`${e.naam}(${e.kar}${e.ampere})`).join(", ");
-  return `${i+1}. ${ag.naam} | ${ag.rcdType==="geen"?"geen RCD":`RCD ${ag.rcdMa}mA-${ag.rcdType}`} | ${ag.fase==="3"?"3F 400V":"1F 230V"} | eindgroepen: ${eindStr} | gemeten op: ${hoogst?.naam||"—"} | dT: ${gv(ag.id,"dt")||"—"}ms | dI: ${gv(ag.id,"di")||"—"}mA | Testknop: ${gv(ag.id,"testknop")||"—"}`;
+  return `${i+1}. ${ag.naam} | ${ag.rcdType==="geen"?"geen RCD":`RCD ${ag.rcdMa}mA-${ag.rcdType}`} | ${ag.fase==="3"?"3F 400V":`1F 230V${ag.L?" op "+ag.L:""}`} | eindgroepen: ${eindStr} | gemeten op: ${hoogst?.naam||"—"} | dT: ${gv(ag.id,"dt")||"—"}ms | dI: ${gv(ag.id,"di")||"—"}mA | Testknop: ${gv(ag.id,"testknop")||"—"}`;
 }).join("\n")}
 CROSS-CHECK SIGNALEN: ${warnings.length>0?warnings.map(w=>w.msg).join("; "):"geen"}`}
         />
