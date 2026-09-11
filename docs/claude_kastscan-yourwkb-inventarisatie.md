@@ -81,6 +81,36 @@ Dat is woordelijk dezelfde regel die ik op 11-09 onafhankelijk in de YourWkb-UI 
 
 ---
 
+## 3b · Drie antwoorden op dezelfde normvraag
+
+Uit `Ideeen/YourWkb-voorstel-belastingcheck-QR-paspoort.md` (augustus, ter bespreking met Maurits en Herman) blijkt dat twee grenswaarden nooit zijn dichtgetimmerd — en de twee apps hebben ze inmiddels verschillend ingevuld.
+
+### Telt PV mee als belasting?
+
+| Bron | Antwoord |
+|---|---|
+| Het voorstel | *"PV/batterij: teruglevering geldt óók als belasting van de aansluiting (omvormervermogen telt mee)"* → **positief** |
+| Kastscan | `INDICATIEF_KW["zonnepanelen"] = -3.0` → **negatief** |
+| YourWkb | voedende groepen worden overgeslagen: *"het slechtste geval is geen zon en een lege accu"* → **nul** |
+
+Drie verschillende antwoorden in één project. Fysiek is verdedigbaar dat teruglevering de hoofdzekering wél belast — de stroom loopt er doorheen, richting daargelaten. Het ongunstigste geval is dan óf maximale afname zonder zon (wat YourWkb aanneemt) óf maximale teruglevering zonder verbruik (wat geen van drieën toetst). **Dit is een normvraag voor Martin, niet iets om in code te beslissen.**
+
+### Gelijktijdigheid: welke factor, en per fase of over het totaal?
+
+Vraag 9 uit het voorstel staat er nog onbeantwoord:
+
+> *"Gelijktijdigheidsfactoren zonder load balancer: kloppen 0,8 standaard en 0,6 boven 4,5 kW met wat jullie hanteren, en per fase of over het totaal toegepast?"*
+
+Wat er sindsdien is gebeurd:
+
+- `CLAUDE.md` §6 legt vast: **0,6**, richtlijn NEN-EN-IEC 61439. De 0,8-variant uit het voorstel lijkt daarmee vervallen.
+- Beide apps gebruiken 0,6 over vier benoemde grote verbruikers ✅
+- Maar **"per fase of over het totaal" is nooit beantwoord** — en dáár lopen ze uiteen: Kastscan past hem per fase toe, YourWkb over het totaal.
+
+De drempels zijn wél gelijk in beide: `> 1` rood/afwijking, `> 0,7` oranje/let-op.
+
+---
+
 ## 4 · De knoop: `fase` betekent twee dingen
 
 In Kastscan is `fase` **welke** fase (L1/L2/L3), en wordt *meerpolig* afgeleid uit de beveiliging.
@@ -126,4 +156,5 @@ Niets hoeft weg, maar drie dingen moeten hernoemd voordat er meer op voortbouwt:
 2. **`fase` → `fasetype` hernoemen met migratie?** Zonder dat blijft elke uitwisseling een vertaalslag.
 3. **YourWkb naar MKP-spec v2** en `grp[].fase` meeschrijven? Nu is de standaard asymmetrisch tussen twee eigen producten.
 4. **De twee `belastingcheck`-varianten**: laten we het verschil bestaan (en vastleggen), of gaat YourWkb ook per fase rekenen zodra de fase per groep bekend is? Dat laatste is de natuurlijke uitkomst van R3b.
-5. **Staat er nog meer dat ik zou moeten kennen** — een gedeelde spec, afspraken over welke modules waarheen gaan, of andere repo's naast deze twee?
+5. **Twee open normvragen uit het augustus-voorstel** (zie punt 3b): telt PV mee als belasting — positief, negatief of niet? En geldt de gelijktijdigheidsfactor per fase of over het totaal? Vraag 9 aan Maurits en Herman staat nog open, en de twee apps hebben het inmiddels verschillend opgelost.
+6. **Staat er nog meer dat ik zou moeten kennen** — een gedeelde spec, afspraken over welke modules waarheen gaan, of andere repo's naast deze twee?
