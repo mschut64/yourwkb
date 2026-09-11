@@ -51,11 +51,12 @@ app/api/rapport/route.js   ← AI-analyse, prompt volledig server-side
 app/layout.js              ← metadata, PostHog, JSON-LD
 app/sitemap.js, app/robots.js, app/manifest.js
 content/blog/*.md          ← artikelen (frontmatter + markdown)
+docs/                      ← projectgeheugen: roadmap, releaseplan-checklist, design-spec, featurespecs
 lib/blog.js                ← frontmatter-parser + mini-markdown-renderer
 public/sw.js               ← service worker (v7)
 tests/extract-logica.js    ← Babel-extractie van norm-functies
 tests/logica.js            ← AUTO-GEGENEREERD, nooit handmatig bewerken
-tests/test.js              ← 80 regressietests
+tests/test.js              ← 105 regressietests (groeit mee; 80 t/m R1, +25 met de belastingcheck)
 ```
 
 ---
@@ -65,7 +66,7 @@ tests/test.js              ← 80 regressietests
 ### Regressietests bij élke norm-wijziging
 ```bash
 node tests/extract-logica.js components/WkbApp.jsx   # regenereert tests/logica.js
-node tests/test.js                                    # moet 80/80 groen zijn
+node tests/test.js                                    # moet volledig groen zijn (nu 105/105)
 ```
 `tests/logica.js` wordt automatisch uit `WkbApp.jsx` gegenereerd (Babel haalt de pure normfuncties eruit) — dat voorkomt dat tests en implementatie uit sync lopen. Bewerk het bestand nooit met de hand.
 
@@ -90,11 +91,14 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ---
 
-## 4. Actuele stand (28-08-2026)
+## 4. Actuele stand (11-09-2026)
 
-**Live:** app `v2026-08-27-B` + security-release + landing + blog. Alles veldbevestigd door Martin.
+**Live:** app `v2026-09-03-A` + security-release + landing + blog (2 artikelen). Regressiesuite **105 tests**. Alles veldbevestigd door Martin.
 
 Recent afgerond:
+- **R1 — design fase 2 (`v2026-08-29-A`, 29-08-2026), volledig afgerond en veldbevestigd.** Meetwaarden overal 20px/700 met tabular-nums en de eenheid via `S.eenheid` in alle zes disciplines; normvlak per meetblok via het nieuwe `StatusVlak` (uitspraak in woorden + grenswaarde, zodat je bij afkeur niet terugscrollt); stapteller "Stap i van n" + voortgangsbalk centraal boven het scherm; schermtitels 15 → 20px; startscherm op `S.rij` met disciplinetegels met kleurvlak; één gele knop per scherm (elf handgemaakte grijze knoppen naar `S.btnGhost`); komma-weergave in app én rapport. Vier fouten meegefixt: `@babel/core` ontbrak in `package.json` (extract-logica faalde op een verse checkout), de toevoeging viel uit het projectnummer (`2691JJ-72` i.p.v. `2691JJ-72a`), de paspoort-import zette `projectId` nooit (rapport toonde "—"), en 15 hardgecodeerde stapnummers waren fout zodra een scherm door meerdere disciplines wordt gebruikt. **Afwijkingen van de design-spec staan onderbouwd in de checklist** — met name: géén `S.inputMeting` (32px) op de meetvelden en géén statuspil in de projectenlijst, beide omdat ze op 375px de meetrasters respectievelijk het projectnummer kapotmaken.
+- **Belastingcheck wordt berekend (`v2026-09-03-A`, roadmap 2.1).** Gelijktijdigheidsfactor 0,6 uit NEN-EN-IEC 61439 over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij); bij een gezamenlijke load balancer factor 1. De app *beschreef* die regel al bij de load balancing maar rekende hem nergens uit — `p.chk` in het paspoort werd alleen getoond, nooit berekend. Rekenkern overgenomen uit Kastscan; 25 nieuwe regressietests (80 → 105).
+- **Tweede blogartikel** + `kicker`-veld in de front matter.
 - **🚨 Security-release (audit `claude_security-audit-2026-08-25.md`) — volledig afgevinkt.** Open mailrelay dicht (origin-check, rate limits 6/uur + 60/dag, vaste afzender, onderwerp alleen in strak formaat, HTML-stripping, groottecap); AI-proxy dicht (prompt **volledig server-side**, client stuurt alleen `{discipline, data}`, max_tokens 700, 12/uur); `esc()` om 41 interpolaties in `genereerRapport`; voorbeeld-iframe `sandbox=""`; printen via verborgen sandboxed iframe i.p.v. `window.open`; import-validatie met `saneerProject`/`saneerWaarde` (strings 4000, foto's alleen `data:image/(jpeg|png|webp)`, diepte 7, 500 projecten, 60MB); security headers + CSP in **Report-Only**; Dropbox-inline-script uit layout; generieke foutmeldingen (details naar console/Vercel-logs).
 - **MKP-QR in e-mail als inline-bijlage** (`cid:mkpqr` + Resend `attachments` met `content_id`) — mailclients blokkeren data-URI-afbeeldingen, vandaar.
 - **Blog live** volgens `claude_blog-featurespec.md`: index + artikelpagina's, OG/Twitter-cards met absolute cover, JSON-LD Article, self-canonical, deelknoppen met UTM + `blog_gedeeld`, `blog_artikel_bekeken`/`_gelezen`, sitemap met lastModified. Eerste artikel = reprint "Pak de regie in de meterkast" (Installatie Journaal, 18-08-2026); tweede = "Vergunningsvrij werk? De waarschuwingsplicht geldt nog steeds" (28-08-2026), vervolg over art. 7:754/755, 7:757a en 7:758 lid 4 BW. De kicker boven de titel komt uit het front-matterveld `kicker` (default "Reprint").
@@ -107,16 +111,26 @@ Recent afgerond:
 
 ## 5. Releaseplan — hier ga je mee verder
 
-Volgorde uit `YourWkb-releaseplan-checklist.md`. R0 en R0.5 zijn af.
+Volgorde uit `YourWkb-releaseplan-checklist.md`. **R0, R0.5 en R1 zijn af** (zie §4). R4 is de enige openstaande release die niet op een extern document wacht.
 
 | # | Release | Inhoud |
 |---|---------|--------|
-| **R1** | **Design fase 2** | Spec sectie 4 scherm-voor-scherm: `S.inputMeting` (32px) per meetveld + eenheid, normvlak onder het meetveld, stapteller/voortgangsbalk, paspoort-score in statuskleur, back-up-knophiërarchie, disciplinetegels met kleurvlak. Meebundelen: **zichtbaar versienummer in de app** + **landing "binnenkort" opschonen** (laadpaal, thuisbatterij en QR-meterkastpaspoort zijn live → naar beschikbaar; belastingcheck/eigen logo blijven binnenkort). Design-spec: `design-spec.md`. |
+| **R1** ✅ | **Design fase 2** — afgerond `v2026-08-29-A` | Doorgevoerd; de afwijkingen van de spec staan onderbouwd in de checklist. **Twee punten uit spec §4 blijven open en wachten op Martin:** de paspoort-risicoscore en het inspectiepunt-met-reden verwijzen naar UI die niet in de app bestaat. |
 | **R2** | Controleerbaar vakmanschap + AI-meekijker (= fotocheck **stap 8**) | Erkenningsblok in bedrijfsprofiel: InstallQ-erkenningsnummer, CO-certificaat (BRL 6000-25), F-gassen (BRL 100/200) — elk optioneel, eenmalig, rapport toont per discipline het relevante nummer + controleregel (echteinstallateur.nl / tlokb.nl). AI-meekijker op werkfoto's: optionele knop per checkpoint, foto's gebundeld naar de beveiligde `/api/rapport`-route, bevindingen als signaal (nooit keuring-taal), privacy-melding, offline grijs. **Wacht op de systeemprompt uit de fototest-kalibratie** (aparte chat). Prijsmodel: advies optie A (inbegrepen, ~€0,03/analyse, ~€0,09/rapport, ~2% van omzet). |
-| **R3a** | **Kastscan** (= fotocheck **stap 6**) | Spec: `claude_kastscan-featurespec.md`. Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — **de foto vult in, de installateur bevestigt**. Volle resolutie verplicht (geen terugschaling), HEIC-ondersteuning. Testbasis: `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b. |
-| **R3b** | **Fasecheck v1** | Spec: `claude_fasecheck-featurespec.md`, uitwerking in roadmap §2.1. Absorbeert de oude belastingcheck. Kern: *fasecompensatie is boekhouding, stroom is fysiek* — de slimme meter saldeert over drie fasen, de hoofdzekering niet. Dus **per fase** rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export telt als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies, batterij laden én ontladen met waarschuwing voor netto-totaal-sturing. Optionele stap in bat/lp/wp/pv, **voorgevuld uit het meterkastpaspoort** (`grp`-lijst); zonder paspoort aanvinklijst met standaardvermogens en label "indicatie". Vastleggen in rapport + `fase`-veld in MKP spec v0.2. Rekenkern als **pure functies** zodat de extract-logica-tests hem oppakken. Mockups liggen klaar (`fasecheck-mockup-*.png/html`) — eerst langs Maurits & Herman. |
+| **R3a** | **Kastscan** (= fotocheck **stap 6**) | ⚠️ **Spec `claude_kastscan-featurespec.md` ligt niet in de repo en is op de werkmachine niet gevonden** — zonder dat document kan hier niet gebouwd worden. Er bestaat wél werkende Kastscan-code buiten deze repo: de belastingcheck-rekenkern van `v2026-09-03-A` is daaruit overgenomen. Verder: Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — **de foto vult in, de installateur bevestigt**. Volle resolutie verplicht (geen terugschaling), HEIC-ondersteuning. Testbasis: `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b. |
+| **R3b** | **Fasecheck v1** | ⚠️ **Spec `claude_fasecheck-featurespec.md` ligt niet in de repo.** Wél binnen: `docs/claude_p1-meting-featurespec.md` (P1-meting via de slimme meter — maakt van de geschatte fasebelasting een gemeten waarde; zie hieronder). **Deels al gedaan:** de belastingcheck wordt sinds `v2026-09-03-A` berekend (roadmap §2.1, gelijktijdigheid 0,6). Resterend uit de oorspronkelijke omschrijving: Kern: *fasecompensatie is boekhouding, stroom is fysiek* — de slimme meter saldeert over drie fasen, de hoofdzekering niet. Dus **per fase** rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export telt als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies, batterij laden én ontladen met waarschuwing voor netto-totaal-sturing. Optionele stap in bat/lp/wp/pv, **voorgevuld uit het meterkastpaspoort** (`grp`-lijst); zonder paspoort aanvinklijst met standaardvermogens en label "indicatie". Vastleggen in rapport + `fase`-veld in MKP spec v0.2. Rekenkern als **pure functies** zodat de extract-logica-tests hem oppakken. Mockups liggen klaar (`fasecheck-mockup-*.png/html`) — eerst langs Maurits & Herman. |
 | **R4** | Normcheck-kern (roadmap fase 1) | 1.1 engine met echte grenswaarden over alle disciplines (harmonisatie: fysica-vlag veld-vs-kastmeting overal, Z-max per automaatkarakteristiek, PV's vaste 0,5 Ω-toets herzien) + 1.2 testuitbreiding. Laadpaal-restpunten: RCD-exclusiviteit, IP/IK bij buitenopstelling, karakteristiekveld. Daarna 1.3 IB22-classificatiemotor → 1.4 meetmiddelregistratie/kalibratie → 1.5 SCIOS-ready exportprofiel. |
 | **R5+** | Blog is gebouwd ✅. Verder: **betaalintegratie** Mollie/Stripe (HMAC-zegelontwerp ligt klaar), **Dropbox v2** (opslag + gedeelde teammap als collegiaal deelkanaal; key opnieuw configureren in Vercel + Dropbox App Console; keuze volledige back-up vs geanonimiseerd deelbestand), labelprinters (Niimbot als **driverlaag**: generieke print-interface + merk-drivers; Supvan T50 Pro alleen als Web-Bluetooth/BLE blijkt te werken), fase 2-rest (PV Scope 12, constructieverklaring-flow, CV-rekenhulp, normversie via toetsjaartal), fase 3 (brandrisico/Scope 10). **Slotstap: tablet-layout**, pas als de app functioneel stabiel is. |
+
+### P1-meting — nieuw spoor onder R3b (spec sinds 11-09-2026 in de repo)
+
+`docs/claude_p1-meting-featurespec.md`. Meten via de P1-poort van de slimme meter met een **Smartstuff Wifi P1 Dongle Pro+** (aangeschaft): een logger die de installateur een week achterlaat. Maakt van de geschatte fasebelasting in de Fasecheck een **gemeten** waarde, en later — zonder de afdekplaat eraf — een bevestiging van de fase per aardlek door de aardlek kort te schakelen en de sprong op de P1-data te lezen.
+
+Drie feiten die het ontwerp bepalen: de meter geeft per fase alleen **momentane** waarden (geen kWh per fase, dus piek/gemiddelde bestaan alleen als de dongle ze zelf bijhoudt); **stroom per fase is in DSMR 5 een geheel getal zonder richting**, dus log vermogen en geen stroom; en **een gemeten piek bevat de gelijktijdigheid al** — op een gemeten basisbelasting mag de 0,6-factor er niet nóg eens overheen, alleen op het nieuwe apparaat.
+
+Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met bekende faseverdeling uit `fasebewaker.yaml`) → **fase 1** meetmodus + import in de Fasecheck → **fase 2** centraal doorgeefluik (raakt de privacy-architectuur, vraagt een expliciet besluit) → **fase 3** fase per aardlek in de Kastscan.
+
+**Nu te doen in R3b zelfs zonder de fasecheck-spec:** de rekenkern een `bron: 'geschat' | 'gemeten'` laten accepteren, zodat er later niets herbouwd hoeft te worden.
 
 **Bewust vervallen:** licht/donker-thema (donker is bewuste veldkeuze), cloud sync, internationale expansie, community-laag.
 
@@ -149,7 +163,7 @@ Volgorde uit `YourWkb-releaseplan-checklist.md`. R0 en R0.5 zijn af.
 ## 8. Werkafspraken met Martin
 
 - Werk in **afgebakende releases** met expliciete scope; vraag niet om toestemming voor stappen die in het releaseplan staan — voer ze uit.
-- Lever bij elke release: gewijzigde bestanden, testresultaat (80/80), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
+- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 105), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
 - Werk `YourWkb-releaseplan-checklist.md` bij (vinkjes zetten) en dit bestand wanneer de stand verandert.
 - Nieuwe features toetsen aan de flow-regel **voordat** je bouwt; als de flow langer wordt, herontwerp.
 - Bij normvragen of twijfel over grenswaarden: leg de vraag voor aan Martin (hij is de expert) in plaats van te gokken.

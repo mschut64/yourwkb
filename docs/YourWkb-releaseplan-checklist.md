@@ -2,7 +2,9 @@
 
 *Gereconstrueerd op 29-08-2026 uit `CLAUDE.md` §5 en `docs/design-spec.md`. Het origineel uit de claude.ai-chats stond niet in de repo en is op de werkmachine niet teruggevonden; deze versie is vanaf nu de bron. Koers: `docs/YourWkb-roadmap-2026-08.md`.*
 
-Afvinkregel: een punt is pas ✅ als de wijziging in `main` staat, de regressietests 80/80 groen zijn en `npx next build` compileert.
+Afvinkregel: een punt is pas ✅ als de wijziging in `main` staat, de regressietests **volledig groen** zijn (nu 105) en `npx next build` compileert.
+
+*Bijgewerkt 11-09-2026: R1 volledig afgerond en live, belastingcheck uit roadmap §2.1 gebouwd, P1-meetspec toegevoegd.*
 
 ---
 
@@ -13,7 +15,7 @@ Zie `CLAUDE.md` §4 voor de inhoud van beide.
 
 ---
 
-## R1 — Design fase 2 ✅ (op de veldtest en de push na)
+## R1 — Design fase 2 ✅ AFGEROND EN LIVE (`v2026-08-29-A`, 29-08-2026)
 
 Doorvoeren van `docs/design-spec.md` **sectie 4** (per scherm — wat niet via de tokens meekomt). Secties 2a, 2b en 3 van de spec (de `K`/`S`-tokens en het landing-CSS-blok) zijn in een eerdere ronde al doorgevoerd; de tokens `S.rij`, `S.eenheid`, `S.inputMeting` en `S.btnGhost` bestaan dus wél maar worden nog nergens gebruikt.
 
@@ -61,9 +63,9 @@ Beide punten uit spec §4 zijn niet uitvoerbaar zoals geschreven. Uit R1 gehaald
 - [x] **Flow-regel getoetst: geen scherm, stap of bevestiging toegevoegd.** Alles wat erbij kwam is weergave van gegevens die de app al berekende. Drie dingen halen juist werk weg: de norm staat nu ónder het meetblok (geen terugscrollen naar de instructie), het adres staat vóluit op de bevestigingsregel (geen twee krappe velden lezen), en `inputMode="decimal"` opent meteen het cijfertoetsenbord.
 - [x] **Veldtest gedaan** (Martin, 29-08-2026)
 - [x] **Punt/komma-afspraak nagelopen.** Invoer was al waterdicht (alles via `toNum`); de wéérgave is rechtgetrokken — 31 berekende decimalen, 4 afschakeltijden, 12 placeholders en de DC/AC-grenswaarden staan nu op de Nederlandse komma, in de app én in het rapport. Regressietest 11.5 ving de tekstwijziging op en is meegewijzigd.
-- [ ] **Nog niet gepusht naar `main`** (= deploy naar Vercel). Wacht op akkoord van Martin.
+- [x] **Gepusht en gedeployed** (29-08-2026, `f3e6846..ab785e3`). Vercel-deploy READY, live op yourwkb.nl, versienummer in de kop bevestigd.
 
-### Afwijkingen van spec §4 — voorgelegd aan Martin 29-08-2026, nog geen akkoord
+### Afwijkingen van spec §4 — voorgelegd aan Martin 29-08-2026 en in de veldtest bevestigd
 
 De spec is geschreven tegen een mentaal model van "één meting per scherm". De app heeft dichte meetrasters. Letterlijk doorvoeren verlengt de flow en botst dus met de flow-regel. Vier voorstellen:
 
@@ -77,19 +79,60 @@ De spec is geschreven tegen een mentaal model van "één meting per scherm". De 
 
 ---
 
+## ⛔ Wat de openstaande releases blokkeert
+
+Drie van de vier openstaande releases wachten niet op werk maar op een **document dat niet in de repo staat**. Hetzelfde patroon als de ontbrekende `CLAUDE.md` bij de start van dit project: zet specs in `docs/` zodra ze bestaan.
+
+| Ontbreekt | Blokkeert | Gezocht op |
+|---|---|---|
+| systeemprompt fototest-kalibratie | R2 | — (aparte chat) |
+| `claude_kastscan-featurespec.md` | R3a | Google Drive `Kennisbank (1)`, 11-09-2026 |
+| `claude_fasecheck-featurespec.md` | R3b | Google Drive `Kennisbank (1)`, 11-09-2026 |
+
+**R4 (normcheck-kern) is de enige openstaande release die op niets wacht.**
+
+Nieuw binnengekomen en wél compleet: `docs/claude_p1-meting-featurespec.md` (11-09-2026).
+
+---
+
 ## R2 — Controleerbaar vakmanschap + AI-meekijker (fotocheck stap 8) ⏸
 
 Erkenningsblok in bedrijfsprofiel (InstallQ-erkenningsnummer, CO/BRL 6000-25, F-gassen BRL 100/200 — elk optioneel, eenmalig; rapport toont per discipline het relevante nummer + controleregel via echteinstallateur.nl / tlokb.nl). AI-meekijker op werkfoto's: optionele knop per checkpoint, foto's naar de beveiligde `/api/rapport`-route, bevindingen als signaal (nooit keuring-taal), privacymelding, offline grijs.
 
 **Blokkeert op:** de systeemprompt uit de fototest-kalibratie (aparte chat). Prijsmodel: advies optie A (inbegrepen, ~€0,03/analyse, ~€0,09/rapport).
 
-## R3a — Kastscan (fotocheck stap 6) ⏸
+## R3a — Kastscan (fotocheck stap 6) ⛔ geblokkeerd
 
-Spec `claude_kastscan-featurespec.md` (niet in de repo). Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — de foto vult in, de installateur bevestigt. Volle resolutie verplicht, HEIC-ondersteuning. Testbasis `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b.
+⛔ **Spec `claude_kastscan-featurespec.md` is niet in de repo en op 11-09-2026 niet op de werkmachine gevonden** (Google Drive `Kennisbank (1)` doorzocht). Zonder dat document kan hier niet gebouwd worden.
 
-## R3b — Fasecheck v1 ⏸
+Wél bekend: er bestaat **werkende Kastscan-code buiten deze repo** — de belastingcheck-rekenkern van `v2026-09-03-A` is daaruit overgenomen, inclusief tests. R3a is daarmee mogelijk minder werk dan het releaseplan suggereert, maar dat is niet te beoordelen zonder toegang.
 
-Spec `claude_fasecheck-featurespec.md` (niet in de repo), uitwerking in roadmap §2.1. Absorbeert de oude belastingcheck. Per fase rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies. Optionele stap in bat/lp/wp/pv, voorgevuld uit het meterkastpaspoort (`grp`-lijst). Rekenkern als pure functies zodat extract-logica hem oppakt. Eerst langs Maurits & Herman.
+Oorspronkelijke omschrijving. Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — de foto vult in, de installateur bevestigt. Volle resolutie verplicht, HEIC-ondersteuning. Testbasis `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b.
+
+## R3b — Fasecheck v1 🔄 deels gedaan
+
+Spec `claude_fasecheck-featurespec.md` **ligt niet in de repo**, uitwerking in roadmap §2.1. Absorbeert de oude belastingcheck. Per fase rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies. Optionele stap in bat/lp/wp/pv, voorgevuld uit het meterkastpaspoort (`grp`-lijst). Rekenkern als pure functies zodat extract-logica hem oppakt. Eerst langs Maurits & Herman.
+
+- [x] **Belastingcheck wordt berekend** (`v2026-09-03-A`, roadmap §2.1). Gelijktijdigheidsfactor **0,6** uit NEN-EN-IEC 61439 over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij); met gezamenlijke load balancer factor 1. De app beschréef die regel al bij de load balancing maar rekende hem nergens uit — `p.chk` werd alleen getoond. Rekenkern overgenomen uit Kastscan. **+25 regressietests (80 → 105).** Beperking t.o.v. Kastscan: daar kent elke groep een fase en wordt per fase gerekend; hier dragen groepen alleen `f: 1|3`.
+- [ ] Per fase rekenen (vraagt de faseverdeling — komt uit R3a of uit de P1-meting)
+- [ ] Rekenkern `bron: 'geschat' | 'gemeten'` laten accepteren — **kan nu al**, zonder de ontbrekende spec, en voorkomt herbouw zodra de P1-meting er is
+- [ ] Optionele stap in bat/lp/wp/pv, voorgevuld uit het MKP
+- [ ] Vastleggen in rapport + `fase`-veld in MKP spec v0.2
+- [ ] Langs Maurits & Herman
+
+### P1-meting — `docs/claude_p1-meting-featurespec.md` (in de repo sinds 11-09-2026)
+
+Hardware **aangeschaft**: Smartstuff Wifi P1 Dongle Pro+ (met P1-uitgang, zodat een bestaande loadbalancer of HomeWizard doorgelust blijft werken). Maakt van de geschatte fasebelasting een **gemeten** waarde — nu staat er letterlijk "indicatie o.b.v. schatting".
+
+Drie feiten die het ontwerp bepalen:
+- De meter geeft per fase alleen **momentane** waarden (W, A, V) — geen kWh per fase. Piek en gemiddelde bestaan alleen als de dongle ze zelf bijhoudt.
+- **Stroom per fase is in DSMR 5 een geheel getal zonder richting.** Log dus vermogen, niet stroom.
+- **Een gemeten piek bevat de gelijktijdigheid al.** De 0,6-factor mag er niet nóg eens overheen op een gemeten basisbelasting — alleen op het nieuwe apparaat.
+
+- [ ] **Fase 0 — spike** (Martin, thuis; referentie-installatie 3×25 A met bekende faseverdeling uit `fasebewaker.yaml`): dongle doorlussen, `GET /api/v2/sm/info`, tien telegrammen als fixtures in `tests/fixtures/p1/`, voeding controleren, ingebouwde historie, week via MQTT, handmatige stapproef. **Exitcriterium:** per-fase-vermogen in W-resolutie aanwezig · doorlussen stoort het andere apparaat niet · stapproef wijst 3 van 3 de juiste fase aan · uitkomst in `claude_p1-spike-<datum>.md`.
+- [ ] **Fase 1** — meetmodus op de dongle + import in de Fasecheck (`samenvatP1Meting`, `beoordeelMeetkwaliteit`, `fasePiekUitMeting` als pure functies in de regressiesuite)
+- [ ] **Fase 2** — centraal doorgeefluik. ⚠️ **Raakt de privacy-architectuur en vraagt een expliciet besluit van Martin** voordat er iets gebouwd wordt.
+- [ ] **Fase 3** — fase per aardlek bevestigen in de Kastscan
 
 ## R4 — Normcheck-kern (roadmap fase 1) ⏸
 
