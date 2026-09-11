@@ -30,9 +30,9 @@
 // gedeeld pakket — de vorm is daar al op gemaakt.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { toNum, GELIJKTIJDIGHEID, GROTE_VERBRUIKERS_MKP, FASE_RESERVE_KW } from "./model.js";
+import { toNum, FASE_RESERVE_KW, FASEN, belastingPerFase } from "./model.js";
 
-export const FASEN = ["L1", "L2", "L3"];
+export { FASEN };
 
 // ─── De open normvraag: telt teruglevering mee als belasting? ────────────────
 //
@@ -52,19 +52,6 @@ export const FASEN = ["L1", "L2", "L3"];
 // YourWkb-gedragsregel als default, en niet een stilzwijgend besluit in code.
 export const PV_TELLING = ["nul", "negatief", "positief"];
 
-const isGroot = (t) => GROTE_VERBRUIKERS_MKP.includes(String(t || "").trim().toLowerCase());
-
-// De fasenummers van een groep, volgens spec v0.2 §4.4. `fn` is leidend; zonder
-// `fn` is alleen bij een driefasegroep zeker waar hij hangt — namelijk overal.
-function fasenVan(g, aantalFasen) {
-  if (aantalFasen === 1) return [1];
-  if (Array.isArray(g.fn) && g.fn.length) {
-    return g.fn.map(Number).filter((n) => n >= 1 && n <= 3);
-  }
-  if (toNum(g.f) === 3) return [1, 2, 3];
-  return [];
-}
-
 /**
  * @param grp        groepen in paspoortvorm (spec v0.2 §4.4)
  * @param ha         hoofdaansluiting { f, a }
@@ -73,53 +60,22 @@ function fasenVan(g, aantalFasen) {
  * @param pvTelling  "nul" | "negatief" | "positief"
  */
 export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
-  const aantalFasen = toNum(ha && ha.f) === 3 ? 3 : 1;
   const ampere = toNum(ha && ha.a);
   if (!(ampere > 0)) return null;
 
-  const fasen = aantalFasen === 3 ? FASEN : ["L1"];
   const capaciteit = (ampere * 230) / 1000; // per fase
-  const lijst = Array.isArray(grp) ? grp : [];
+  // De optelling per fase staat in model.js, zodat de belastingcheck en deze
+  // balans met dezelfde getallen werken. Wat hier bovenop komt is de capaciteit,
+  // de reserve, het oordeel en het advies.
+  const pf = belastingPerFase(grp, ha, lbAan, pvTelling);
+  const gemeten = meting && FASEN.some((f) => toNum(meting[f]) > 0);
 
-  // Mét gezamenlijke sturing vervalt de korting. Load balancing is een
-  // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
-  // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
-  const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
-
-  const groot = { L1: 0, L2: 0, L3: 0 };
-  const gewoon = { L1: 0, L2: 0, L3: 0 };
-  const aantal = { L1: 0, L2: 0, L3: 0 };
-  let onbekendKw = 0, onbekendAantal = 0;
-
-  for (const g of lijst) {
-    let kw = toNum(g && g.kw);
-    if (!(kw > 0)) continue;
-
-    if ((g.rol || "af") === "voed") {
-      if (pvTelling === "nul") continue;
-      if (pvTelling === "negatief") kw = -kw;
-      // "positief": onveranderd meetellen
-    }
-
-    const nummers = fasenVan(g, aantalFasen);
-    if (!nummers.length) { onbekendKw += kw; onbekendAantal += 1; continue; }
-
-    const perFase = kw / nummers.length;
-    for (const n of nummers) {
-      const f = FASEN[n - 1];
-      (isGroot(g.t) ? groot : gewoon)[f] += perFase;
-      aantal[f] += 1;
-    }
-  }
-
-  const gemeten = meting && ["L1", "L2", "L3"].some((f) => toNum(meting[f]) > 0);
-
-  const rijen = fasen.map((f) => {
+  const rijen = pf.fasen.map((f) => {
     // Bij een GEMETEN basisbelasting gaat de gelijktijdigheidsfactor er niet
     // overheen: wat de meter zag liep werkelijk tegelijk, dus de gelijktijdigheid
     // zit er al in. Hem er nogmaals overheen leggen strijkt 40% van een echte
     // meting weg — de verkeerde kant op voor een conservatieve toets.
-    const belasting = gemeten ? toNum(meting[f]) : gewoon[f] + groot[f] * factor;
+    const belasting = gemeten ? toNum(meting[f]) : pf.belasting[f];
     const bezet = capaciteit > 0 ? belasting / capaciteit : 0;
     return {
       fase: f,
@@ -130,9 +86,9 @@ export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
       vrijKw: capaciteit - belasting - FASE_RESERVE_KW,
       bezet,
       niveau: bezet > 1 ? "afwijking" : bezet > 0.7 ? "let-op" : "ok",
-      aantal: aantal[f],
-      groot: groot[f],
-      gewoon: gewoon[f],
+      aantal: pf.aantal[f],
+      groot: pf.groot[f],
+      gewoon: pf.gewoon[f],
     };
   });
 
@@ -144,15 +100,15 @@ export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
     rijen,
     bron: gemeten ? "gemeten" : "geschat",
     label: gemeten && meting.label ? meting.label : "indicatie o.b.v. schatting",
-    factor: gemeten ? 1 : factor,
+    factor: gemeten ? 1 : pf.factor,
     sturing: lbAan === true,
     pvTelling,
     // Hoeveel er NIET is toegerekend omdat de fase onbekend is. Zolang dit boven
     // nul staat is de balans onvolledig, en dat moet zichtbaar zijn in plaats van
     // verstopt in een te gunstige uitkomst.
-    onbekendKw,
-    onbekendAantal,
-    volledig: onbekendAantal === 0,
+    onbekendKw: pf.onbekendKw,
+    onbekendAantal: pf.onbekendAantal,
+    volledig: pf.onbekendAantal === 0,
     niveau: ergste ? ergste.niveau : "ok",
     besteFase: beste ? beste.fase : "L1",
   };

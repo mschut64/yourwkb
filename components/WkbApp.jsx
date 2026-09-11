@@ -1,5 +1,23 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-11-C (fasecheck v1, stap 3 — de belastingcheck toetst per fase):
+//   • GEDRAGSWIJZIGING. De belastingcheck legde de opgetelde belasting langs de
+//     hele aansluiting (3 x A x 230 V). Hij legt nu elke fase langs de capaciteit
+//     van díé fase, net als Kastscan — besluit van Martin, 11-09-2026. Een kast
+//     die over het totaal ruim paste kan daardoor nu oranje of rood zijn: een
+//     laadpaal van 11 kW op één fase van 3x25 A was 38% van de aansluiting en is
+//     115% van die ene fase. Dat laatste is wat de zekering ziet.
+//   • De totaaltoets blijft eronder liggen als vangnet voor groepen waarvan de
+//     fase niet is vastgelegd; de strengste van de twee wint. Zo wordt een half
+//     ingevulde kast niet groen door wat er ontbreekt.
+//   • De optelling per fase staat nu in model.js (belastingPerFase) en wordt door
+//     de check en de balans gedeeld. Twee optellingen van dezelfde installatie
+//     lopen anders vroeg of laat uiteen — precies wat tussen deze app en Kastscan
+//     gebeurd was.
+//   • Het statusvlak noemt de fase waar het oordeel vandaan komt: "L2 loopt over
+//     de capaciteit van de fase" in plaats van "belasting overschrijdt de
+//     aansluiting", want dat laatste is dan niet waar.
+//
 // 2026-09-11-B (fasecheck v1, stap 2 — de balans per fase zichtbaar):
 //   • De paspoortstap toont onder de belastingcheck de belasting PER FASE: een
 //     balk per fase met de belasting tegen de capaciteit (A x 230 V), de fase
@@ -113,7 +131,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-11-B";
+const APP_VERSIE = "2026-09-11-C";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2958,27 +2976,47 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           const capaciteit = (fasenHa * toNum(voorbeeld.ha && voorbeeld.ha.a) * 230) / 1000;
 
           const kom = (n, d=1) => Number(n).toFixed(d).replace(".", ",");
+          // De balans deelt de invoer met de check hierboven: dezelfde groepen,
+          // dezelfde hoofdaansluiting, dezelfde sturingsvraag. Alleen de optiek
+          // verschilt — de check geeft één oordeel, de balans laat zien waar het
+          // vandaan komt. `meting` blijft voorlopig leeg; zodra de P1-dongle
+          // waarden levert gaat dat veld hier in en verandert het label mee.
+          const balans = faseBalans({ grp: voorbeeld.grp, ha: voorbeeld.ha, lbAan: m.lbAan });
+
+          // Sinds de toets per fase gaat (besluit 11-09-2026) kan het totaal
+          // ruim passen terwijl één fase overloopt. Dan is "belasting
+          // overschrijdt de aansluiting" onjuist: de aansluiting heeft ruimte
+          // genoeg, de fase niet. Noem dus de fase waar het oordeel vandaan komt.
+          const noem = (lijst) => lijst.join(" en ");
+          const overF = balans ? balans.rijen.filter(r => r.niveau === "afwijking").map(r => r.fase) : [];
+          const krapF = balans ? balans.rijen.filter(r => r.niveau === "let-op").map(r => r.fase) : [];
           const titel = uit.r === "groen" ? "Belasting past binnen de aansluiting"
-                      : uit.r === "rood"  ? "Belasting overschrijdt de aansluiting"
-                      :                     "Belasting nadert de grens van de aansluiting";
-          const cijfers = basis && capaciteit > 0
-            ? `${kom(basis.kw)} van ${kom(capaciteit)} kW`
-            : null;
+                      : uit.r === "rood"
+                        ? (overF.length ? `${noem(overF)} ${overF.length > 1 ? "lopen" : "loopt"} over de capaciteit van de fase`
+                                        : "Belasting overschrijdt de aansluiting")
+                        : (krapF.length ? `${noem(krapF)} ${krapF.length > 1 ? "naderen" : "nadert"} de grens van de fase`
+                                        : "Belasting nadert de grens van de aansluiting");
           const fasenTxt = voorbeeld.ha && voorbeeld.ha.a
             ? `${toNum(voorbeeld.ha.f) === 3 ? "3" : "1"}×${toNum(voorbeeld.ha.a)} A`
             : null;
-          // De balans deelt de invoer met de check hierboven: dezelfde groepen,
-          // dezelfde hoofdaansluiting, dezelfde sturingsvraag. Alleen de optiek
-          // verschilt — de check telt op over de aansluiting, de balans rekent
-          // per fase. `meting` blijft voorlopig leeg; zodra de P1-dongle waarden
-          // levert gaat dat veld hier in en verandert het label vanzelf mee.
-          const balans = faseBalans({ grp: voorbeeld.grp, ha: voorbeeld.ha, lbAan: m.lbAan });
+          // Komt het oordeel van een fase, dan hoort daar het getal van díé fase
+          // bij. "11,3 van 17,3 kW" onder de kop "L2 loopt over" laat de lezer
+          // rekenen met het verkeerde paar getallen — het totaal past immers.
+          const zwaarste = balans
+            ? balans.rijen.reduce((b, r) => (r.bezet > b.bezet ? r : b), balans.rijen[0])
+            : null;
+          const perFase = (overF.length || krapF.length) && zwaarste;
+          const cijfers = perFase
+            ? `${kom(zwaarste.belastingKw)} van ${kom(zwaarste.capaciteitKw)} kW op ${zwaarste.fase}`
+            : basis && capaciteit > 0
+              ? `${kom(basis.kw)} van ${kom(capaciteit)} kW`
+              : null;
           return (
             <>
               <StatusVlak
                 level={uit.r === "groen" ? "ok" : uit.r === "rood" ? "fail" : "warn"}
                 titel={titel}
-                sub={[[cijfers, fasenTxt ? `(${fasenTxt})` : null].filter(Boolean).join(" "),
+                sub={[[cijfers, fasenTxt ? `(${perFase ? "aansluiting " : ""}${fasenTxt})` : null].filter(Boolean).join(" "),
                       basis && basis.label].filter(Boolean).join(" · ")}
                 style={{marginTop:10}}
               />

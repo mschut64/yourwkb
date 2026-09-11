@@ -163,6 +163,76 @@ export function basisbelastingKw(groepen, lbAan, meting) {
   return { kw: gewoon + groot * factor, bron: "geschat", label: "indicatie o.b.v. schatting" };
 }
 
+// ─── BELASTING PER FASE ──────────────────────────────────────────────────────
+//
+// De optelling per fase, gedeeld door de belastingcheck en de fasebalans. Eén
+// bron, want twee optellingen van dezelfde installatie lopen vroeg of laat
+// uiteen — precies wat er tussen YourWkb en Kastscan gebeurd is.
+export const FASEN = ["L1", "L2", "L3"];
+
+// De fasenummers van een groep, volgens spec v0.2 §4.4. `fn` is leidend; zonder
+// `fn` is alleen bij een driefasegroep zeker waar hij hangt — namelijk overal.
+export function fasenVanGroep(g, aantalFasen) {
+  if (aantalFasen === 1) return [1];
+  if (Array.isArray(g && g.fn) && g.fn.length) {
+    return g.fn.map(Number).filter((n) => n >= 1 && n <= 3);
+  }
+  if (toNum(g && g.f) === 3) return [1, 2, 3];
+  return [];
+}
+
+/**
+ * Telt de paspoortgroepen op per fase.
+ *
+ * @param grp        groepen in paspoortvorm (spec v0.2 §4.4)
+ * @param ha         hoofdaansluiting { f, a }
+ * @param lbAan      gezamenlijke load balancing aanwezig
+ * @param pvTelling  "nul" | "negatief" | "positief" — zie fasebalans.js
+ */
+export function belastingPerFase(grp, ha, lbAan, pvTelling = "nul") {
+  const aantalFasen = toNum(ha && ha.f) === 3 ? 3 : 1;
+  const fasen = aantalFasen === 3 ? FASEN : ["L1"];
+
+  // Mét gezamenlijke sturing vervalt de korting. Load balancing is een
+  // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
+  // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
+  const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
+
+  const groot = { L1: 0, L2: 0, L3: 0 };
+  const gewoon = { L1: 0, L2: 0, L3: 0 };
+  const aantal = { L1: 0, L2: 0, L3: 0 };
+  let onbekendKw = 0, onbekendAantal = 0;
+
+  for (const g of Array.isArray(grp) ? grp : []) {
+    // Dezelfde terugvalwaarde als basisbelastingKw gebruikt: een laadpaal
+    // zonder ingevuld vermogen telt als 11 kW en niet als nul. Anders zou
+    // dezelfde groep in de totaaltoets wél en in de fasetoets níét meewegen.
+    let kw = groepVermogenKw(g);
+    if (isNaN(kw) || kw <= 0) continue;
+
+    if ((g.rol || "af") === "voed") {
+      if (pvTelling === "nul") continue;
+      if (pvTelling === "negatief") kw = -kw;
+      // "positief": onveranderd meetellen
+    }
+
+    const nummers = fasenVanGroep(g, aantalFasen);
+    if (!nummers.length) { onbekendKw += kw; onbekendAantal += 1; continue; }
+
+    const perGroep = kw / nummers.length;
+    for (const n of nummers) {
+      const f = FASEN[n - 1];
+      (isGroteVerbruikerMkp(g.t) ? groot : gewoon)[f] += perGroep;
+      aantal[f] += 1;
+    }
+  }
+
+  const belasting = { L1: 0, L2: 0, L3: 0 };
+  for (const f of FASEN) belasting[f] = gewoon[f] + groot[f] * factor;
+
+  return { fasen, belasting, groot, gewoon, aantal, factor, onbekendKw, onbekendAantal };
+}
+
 // De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
 // in chkKleur: "groen", "oranje" of "rood".
 //
@@ -186,9 +256,31 @@ export function belastingcheck(grp, ha, lbAan, datum, meting) {
   const basis = basisbelastingKw(grp, lbAan, meting);
   if (!basis) return null;
 
-  const belasting = basis.kw;
-  const capaciteit = (fasen * ampere * 230) / 1000;
-  const bezet = capaciteit > 0 ? belasting / capaciteit : 0;
+  const capTotaal = (fasen * ampere * 230) / 1000;
+  const capFase = (ampere * 230) / 1000;
+  let bezet = capTotaal > 0 ? basis.kw / capTotaal : 0;
+
+  // PER FASE TOETSEN, net als Kastscan (besluit Martin, 11-09-2026).
+  //
+  // Fasecompensatie is boekhouding, stroom is fysiek: de slimme meter saldeert
+  // over drie fasen, de hoofdzekering niet. Drie zware groepen die toevallig
+  // allemaal op L2 zitten passen ruim binnen 3 x 25 A en laten toch de zekering
+  // van L2 komen. Een toets op het totaal ziet dat niet.
+  //
+  // De totaaltoets hierboven blijft staan en dat is geen halfheid. Is elke groep
+  // aan een fase toegewezen, dan is de zwaarst belaste fase per definitie al
+  // minstens zo streng als het totaal — de totaaltoets voegt dan niets toe. Is
+  // een deel NIET toegewezen, dan is zij het enige wat dat vermogen nog ziet.
+  // De strengste van de twee wint, zodat een half ingevulde kast niet groen
+  // wordt door wat er ontbreekt.
+  //
+  // Alleen bij een geschatte basis: een gemeten piek is nu nog één totaalgetal
+  // zonder faseverdeling (basisbelastingKw › meting.piekKw). Zodra de P1-meting
+  // per fase binnenkomt, hoort die hier op dezelfde manier per fase getoetst.
+  if (fasen === 3 && basis.bron === "geschat") {
+    const pf = belastingPerFase(grp, ha, lbAan);
+    for (const f of FASEN) bezet = Math.max(bezet, capFase > 0 ? pf.belasting[f] / capFase : 0);
+  }
 
   const r = bezet > 1 ? "rood" : bezet > 0.7 ? "oranje" : "groen";
   return { r, d: String(datum || "") };

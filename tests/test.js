@@ -21,7 +21,7 @@
 // gepeuterd omdat die app één groot bestand was en er niets te importeren viel.
 // Nu is de rekenkern een gewone module en kan die omweg weg.
 import { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
-         isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
+         isGroteVerbruikerMkp, groepVermogenKw, belastingcheck, belastingPerFase,
          GELIJKTIJDIGHEID, GROOT_STANDAARD_KW,
          FASE_RESERVE_KW, periodeLabel, basisbelastingKw } from "../components/wkb/model.js";
 
@@ -326,6 +326,73 @@ eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }], { f: 1, a: 25 }, false, "
 eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }, { t: "wp", rol: "af", kw: 6.9 }],
    { f: 1, a: 25 }, false, "d").r, "rood",
    "13.10b met de warmtepomp erbij 8,58 van 5,75 — rood");
+
+// ═════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ CATEGORIE 13b: de belastingcheck toetst PER FASE (besluit Martin 11-09-2026)");
+// ═════════════════════════════════════════════════════════════════════════════
+//
+// Net als Kastscan. Hier zat het echte verschil tussen de twee apps: niet in
+// waar de gelijktijdigheidsfactor op wordt losgelaten — 0,6 x (A+B) is
+// hetzelfde als 0,6xA + 0,6xB — maar in waartegen er wordt getoetst. Kastscan
+// legt elke fase langs de capaciteit van díé fase, YourWkb legde het totaal
+// langs drie fasen samen. Daardoor kon dezelfde kast daar rood zijn en hier
+// groen.
+
+// HET GEVAL WAAR HET OM DRAAIT. Kookgroep en warmtepomp allebei op L2:
+// 8,58 kW van de 17,25 kW van de aansluiting — de helft, dus over het totaal
+// ruim groen. Maar op L2 zelf is het 8,58 van 5,75 kW: 149%.
+{
+  const beideOpL2 = [
+    { t: "kook", rol: "af", kw: 7.4, f: 1, fn: [2] },
+    { t: "wp",   rol: "af", kw: 6.9, f: 1, fn: [2] },
+  ];
+  eq((7.4 + 6.9) * GELIJKTIJDIGHEID / 17.25 < 0.7, true,
+     "13b.1 over het totaal zou dit onder de 70% blijven");
+  eq(belastingcheck(beideOpL2, ha3, false, "d").r, "rood",
+     "13b.2 maar op L2 loopt het over: rood");
+
+  // Dezelfde twee groepen, verdeeld: 4,44 op L1 en 4,14 op L2 van 5,75.
+  const verdeeld = [
+    { t: "kook", rol: "af", kw: 7.4, f: 1, fn: [1] },
+    { t: "wp",   rol: "af", kw: 6.9, f: 1, fn: [2] },
+  ];
+  eq(belastingcheck(verdeeld, ha3, false, "d").r, "oranje",
+     "13b.3 verdelen over twee fasen maakt van rood oranje — zonder dat er iets verdwijnt");
+}
+
+// Een driefasegroep verdeelt zich en loopt dus niet als geheel over één fase.
+eq(belastingcheck([{ t: "lp", rol: "af", kw: 11, f: 3, fn: [1, 2, 3] }], ha3, false, "d").r, "groen",
+   "13b.4 driefasig verdeelt zich over drie fasen");
+eq(belastingcheck([{ t: "lp", rol: "af", kw: 11, f: 1, fn: [1] }], ha3, false, "d").r, "rood",
+   "13b.5 diezelfde laadpaal op één fase is 6,6 van 5,75 — rood");
+
+// HET VANGNET. Zonder vastgelegde fase kan er per fase niets getoetst worden.
+// Dan blijft de totaaltoets over — anders zou een kast groen worden door wat
+// er ontbreekt in plaats van door wat er staat.
+{
+  const zonderFase = [{ t: "kook", rol: "af", kw: 7.4 }, { t: "wp", rol: "af", kw: 6.9 }];
+  eq(belastingcheck(zonderFase, ha3, false, "d").r, "groen",
+     "13b.6 zonder fase valt de check terug op het totaal");
+  const pf = belastingPerFase(zonderFase, ha3, false);
+  eq(pf.onbekendAantal, 2, "13b.7 en die groepen staan als onbekend geteld");
+  eq(pf.onbekendKw, 7.4 + 6.9, "13b.8 inclusief hun vermogen");
+}
+
+// Een enkelfasige aansluiting had de toets al per fase — die heeft er maar één.
+eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }], { f: 1, a: 25 }, false, "d").r, "oranje",
+   "13b.9 op 1 fase verandert er niets");
+
+// belastingPerFase gebruikt DEZELFDE terugvalwaarde als basisbelastingKw. Anders
+// zou een laadpaal zonder ingevuld vermogen in de totaaltoets als 7,4 kW meetellen
+// en in de fasetoets als nul — dan is de strengste van twee toetsen ineens de
+// minst goed geïnformeerde.
+{
+  const pf = belastingPerFase([{ t: "lp", rol: "af", f: 1, fn: [1] }], ha3, false);
+  eq(pf.belasting.L1, GROOT_STANDAARD_KW.lp * GELIJKTIJDIGHEID,
+     "13b.10 laadpaal zonder kw valt terug op de standaardwaarde");
+  eq(belastingPerFase([{ t: "alg", rol: "af", f: 1, fn: [1] }], ha3, false).belasting.L1, 0,
+     "13b.11 een gewone groep zonder kw heeft geen terugvalwaarde");
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log("\n▶ CATEGORIE 14: herkomst basisbelasting — geschat vs gemeten (fasecheck v1)");
