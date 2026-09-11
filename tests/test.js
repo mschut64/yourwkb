@@ -16,10 +16,14 @@
 // Voer uit met:  node test.js
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
-        isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
-        GELIJKTIJDIGHEID, GROOT_STANDAARD_KW,
-        RESERVE_KW, periodeLabel, basisbelastingKw } = require("./logica");
+// Importeert de rekenkern rechtstreeks. Tot 11-09-2026 draaide deze suite op
+// tests/logica.js, een bestand dat met een Babel-extractor uit WkbApp.jsx werd
+// gepeuterd omdat die app één groot bestand was en er niets te importeren viel.
+// Nu is de rekenkern een gewone module en kan die omweg weg.
+import { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
+         isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
+         GELIJKTIJDIGHEID, GROOT_STANDAARD_KW,
+         RESERVE_KW, periodeLabel, basisbelastingKw } from "../components/wkb/model.js";
 
 let passed = 0, failed = 0;
 const failures = [];

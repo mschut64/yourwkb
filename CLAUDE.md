@@ -53,7 +53,8 @@ Gebruik bij nieuw werk de namen van Kastscan, niet je eigen.
 
 ### Belangrijkste bestanden
 ```
-components/WkbApp.jsx      ← de héle app (~5700 regels, één bestand, bewust)
+components/WkbApp.jsx      ← de schermen (~5900 regels)
+components/wkb/model.js    ← de rekenkern: grenswaarden, cross-checks, belastingcheck
 app/page.js                ← rendert landing
 app/landing/page.js        ← marketingpagina
 app/app/page.js            ← laadt WkbApp (client-only, ssr:false)
@@ -71,9 +72,7 @@ content/blog/*.md          ← artikelen (frontmatter + markdown)
 docs/                      ← projectgeheugen: roadmap, releaseplan-checklist, design-spec, featurespecs
 lib/blog.js                ← frontmatter-parser + mini-markdown-renderer
 public/sw.js               ← service worker (v7)
-tests/extract-logica.js    ← Babel-extractie van norm-functies
-tests/logica.js            ← AUTO-GEGENEREERD, nooit handmatig bewerken
-tests/test.js              ← 105 regressietests (groeit mee; 80 t/m R1, +25 met de belastingcheck)
+tests/test.js              ← 128 regressietests; importeert components/wkb/model.js rechtstreeks
 ```
 
 ---
@@ -82,10 +81,11 @@ tests/test.js              ← 105 regressietests (groeit mee; 80 t/m R1, +25 me
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-node tests/extract-logica.js components/WkbApp.jsx   # regenereert tests/logica.js
-node tests/test.js                                    # moet volledig groen zijn (nu 105/105)
+node tests/test.js        # moet volledig groen zijn (nu 128/128)
 ```
-`tests/logica.js` wordt automatisch uit `WkbApp.jsx` gegenereerd (Babel haalt de pure normfuncties eruit) — dat voorkomt dat tests en implementatie uit sync lopen. Bewerk het bestand nooit met de hand.
+De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
+
+**Zet nieuwe normlogica in `model.js`, niet in `WkbApp.jsx`.** Alles wat daar staat is per definitie ongetest: `esc()`, `saneerProject`, `mkpBouw` en `genereerRapport` zitten nog in het schermbestand en hebben daarom geen enkele test. Dat is de reden dat de rekenkern eruit is gehaald — zie `docs/claude_kastscan-yourwkb-inventarisatie.md`.
 
 ### Vóór elke commit
 ```bash
@@ -135,7 +135,7 @@ Volgorde uit `YourWkb-releaseplan-checklist.md`. **R0, R0.5 en R1 zijn af** (zie
 | **R1** ✅ | **Design fase 2** — afgerond `v2026-08-29-A` | Doorgevoerd; de afwijkingen van de spec staan onderbouwd in de checklist. **Twee punten uit spec §4 blijven open en wachten op Martin:** de paspoort-risicoscore en het inspectiepunt-met-reden verwijzen naar UI die niet in de app bestaat. |
 | **R2** | Controleerbaar vakmanschap + AI-meekijker (= fotocheck **stap 8**) | Erkenningsblok in bedrijfsprofiel: InstallQ-erkenningsnummer, CO-certificaat (BRL 6000-25), F-gassen (BRL 100/200) — elk optioneel, eenmalig, rapport toont per discipline het relevante nummer + controleregel (echteinstallateur.nl / tlokb.nl). AI-meekijker op werkfoto's: optionele knop per checkpoint, foto's gebundeld naar de beveiligde `/api/rapport`-route, bevindingen als signaal (nooit keuring-taal), privacy-melding, offline grijs. **Wacht op de systeemprompt uit de fototest-kalibratie** (aparte chat). Prijsmodel: advies optie A (inbegrepen, ~€0,03/analyse, ~€0,09/rapport, ~2% van omzet). |
 | **R3a** | **Kastscan** (= fotocheck **stap 6**) | ⚠️ **Spec `claude_kastscan-featurespec.md` ligt niet in de repo en is op de werkmachine niet gevonden** — zonder dat document kan hier niet gebouwd worden. Er bestaat wél werkende Kastscan-code buiten deze repo: de belastingcheck-rekenkern van `v2026-09-03-A` is daaruit overgenomen. Verder: Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — **de foto vult in, de installateur bevestigt**. Volle resolutie verplicht (geen terugschaling), HEIC-ondersteuning. Testbasis: `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b. |
-| **R3b** | **Fasecheck v1** | ⚠️ **Spec `claude_fasecheck-featurespec.md` ligt niet in de repo.** Wél binnen: `docs/claude_p1-meting-featurespec.md` (P1-meting via de slimme meter — maakt van de geschatte fasebelasting een gemeten waarde; zie hieronder). **Deels al gedaan:** de belastingcheck wordt sinds `v2026-09-03-A` berekend (roadmap §2.1, gelijktijdigheid 0,6). Resterend uit de oorspronkelijke omschrijving: Kern: *fasecompensatie is boekhouding, stroom is fysiek* — de slimme meter saldeert over drie fasen, de hoofdzekering niet. Dus **per fase** rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export telt als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies, batterij laden én ontladen met waarschuwing voor netto-totaal-sturing. Optionele stap in bat/lp/wp/pv, **voorgevuld uit het meterkastpaspoort** (`grp`-lijst); zonder paspoort aanvinklijst met standaardvermogens en label "indicatie". Vastleggen in rapport + `fase`-veld in MKP spec v0.2. Rekenkern als **pure functies** zodat de extract-logica-tests hem oppakken. Mockups liggen klaar (`fasecheck-mockup-*.png/html`) — eerst langs Maurits & Herman. |
+| **R3b** | **Fasecheck v1** | ⚠️ **Spec `claude_fasecheck-featurespec.md` ligt niet in de repo.** Wél binnen: `docs/claude_p1-meting-featurespec.md` (P1-meting via de slimme meter — maakt van de geschatte fasebelasting een gemeten waarde; zie hieronder). **Deels al gedaan:** de belastingcheck wordt sinds `v2026-09-03-A` berekend (roadmap §2.1, gelijktijdigheid 0,6). Resterend uit de oorspronkelijke omschrijving: Kern: *fasecompensatie is boekhouding, stroom is fysiek* — de slimme meter saldeert over drie fasen, de hoofdzekering niet. Dus **per fase** rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export telt als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies, batterij laden én ontladen met waarschuwing voor netto-totaal-sturing. Optionele stap in bat/lp/wp/pv, **voorgevuld uit het meterkastpaspoort** (`grp`-lijst); zonder paspoort aanvinklijst met standaardvermogens en label "indicatie". Vastleggen in rapport + `fase`-veld in MKP spec v0.2. Rekenkern als **pure functies in `components/wkb/model.js`**, zodat de tests hem rechtstreeks importeren. Mockups liggen klaar (`fasecheck-mockup-*.png/html`) — eerst langs Maurits & Herman. |
 | **R4** | Normcheck-kern (roadmap fase 1) | 1.1 engine met echte grenswaarden over alle disciplines (harmonisatie: fysica-vlag veld-vs-kastmeting overal, Z-max per automaatkarakteristiek, PV's vaste 0,5 Ω-toets herzien) + 1.2 testuitbreiding. Laadpaal-restpunten: RCD-exclusiviteit, IP/IK bij buitenopstelling, karakteristiekveld. Daarna 1.3 IB22-classificatiemotor → 1.4 meetmiddelregistratie/kalibratie → 1.5 SCIOS-ready exportprofiel. |
 | **R5+** | Blog is gebouwd ✅. Verder: **betaalintegratie** Mollie/Stripe (HMAC-zegelontwerp ligt klaar), **Dropbox v2** (opslag + gedeelde teammap als collegiaal deelkanaal; key opnieuw configureren in Vercel + Dropbox App Console; keuze volledige back-up vs geanonimiseerd deelbestand), labelprinters (Niimbot als **driverlaag**: generieke print-interface + merk-drivers; Supvan T50 Pro alleen als Web-Bluetooth/BLE blijkt te werken), fase 2-rest (PV Scope 12, constructieverklaring-flow, CV-rekenhulp, normversie via toetsjaartal), fase 3 (brandrisico/Scope 10). **Slotstap: tablet-layout**, pas als de app functioneel stabiel is. |
 
