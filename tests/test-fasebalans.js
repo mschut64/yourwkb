@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { faseBalans, FASEN } from "../components/wkb/fasebalans.js";
-import { GELIJKTIJDIGHEID, FASE_RESERVE_KW } from "../components/wkb/model.js";
+import { GELIJKTIJDIGHEID, FASE_RESERVE_KW, FASE_KLEUR } from "../components/wkb/model.js";
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -152,6 +152,14 @@ eq(rij(faseBalans({ grp: metPv, ha: ha3 }), "L1").belastingKw !== 4 * GELIJKTIJD
   eq(r.richting, "af", "7.9 en dat staat er ook bij");
 }
 eq(FASEN, ["L1", "L2", "L3"], "7.10 fasenamen gelijk aan Kastscan");
+
+console.log("▶ CATEGORIE 8: dezelfde kleurtaal als Kastscan");
+// Deze hexwaarden staan letterlijk in components/kastscan/model.js › FASE_KLEUR.
+// Ze dragen dezelfde fase in de app, in het rapport en in het groepenoverzicht
+// van het zusterproject; uit elkaar lopen betekent twee kleurtalen voor één
+// installateur. Daarom vastgelegd in plaats van los onderhouden.
+eq(FASE_KLEUR, { L1: "#2196F3", L2: "#9B59B6", L3: "#14B8A6" }, "8.1 fasekleuren gelijk aan Kastscan");
+eq(FASEN.every((f) => !!FASE_KLEUR[f]), true, "8.2 elke fase heeft een kleur");
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);

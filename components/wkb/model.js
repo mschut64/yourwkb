@@ -177,6 +177,16 @@ export function basisbelastingKw(groepen, lbAan, meting) {
 // uiteen — precies wat er tussen YourWkb en Kastscan gebeurd is.
 export const FASEN = ["L1", "L2", "L3"];
 
+// Dezelfde fasekleuren als Kastscan (components/kastscan/model.js › FASE_KLEUR),
+// tot op de hexwaarde. Ze staan in de app, in het rapport en in het
+// groepenoverzicht van het zusterproject voor dezelfde fase, zodat een
+// installateur die beide gebruikt niet twee kleurtalen hoeft te leren.
+//
+// De regel bij een balk komt eveneens uit Kastscan: de fasekleur mag, want een
+// balk is een grafiek en geen aanduiding op een kast. Knelt het, dan wint het
+// oordeel van de kleur — oranje bij weinig ruimte, rood boven de capaciteit.
+export const FASE_KLEUR = { L1: "#2196F3", L2: "#9B59B6", L3: "#14B8A6" };
+
 // De fasenummers van een groep, volgens spec v0.2 §4.4. `fn` is leidend; zonder
 // `fn` is alleen bij een driefasegroep zeker waar hij hangt — namelijk overal.
 export function fasenVanGroep(g, aantalFasen) {

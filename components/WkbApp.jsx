@@ -1,5 +1,34 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-E (dezelfde weergave overal, en een verklaring die meebeweegt):
+//   • De fasebalans in het rapport is van een tabel naar BALKEN gegaan, dezelfde
+//     weergave als in de app en als het groepenoverzicht van Kastscan: per fase
+//     een kaart met "x van y kW", een balk, het bezettingspercentage en de vrije
+//     ruimte. Een balk laat in één oogopslag zien wélke fase vol zit; vier
+//     kolommen getallen moet je lezen.
+//   • FASE_KLEUR staat nu in model.js met exact de hexwaarden van Kastscan
+//     (L1 #2196F3, L2 #9B59B6, L3 #14B8A6) en wordt gebruikt in de app én in het
+//     rapport. De kleurregel komt ook daarvandaan: de fasekleur mag op een balk,
+//     want dat is een grafiek en geen aanduiding op een kast — maar knelt het,
+//     dan wint het oordeel (oranje bij weinig ruimte, rood boven de capaciteit).
+//     De app toonde tot nu toe groen/oranje/rood, Kastscan de fasekleur; dat zijn
+//     nu dezelfde drie schermen in dezelfde kleurtaal.
+//   • GEDRAGSWIJZIGING in de conformverklaring. Die eindigde met een vaste claim
+//     ("er zijn geen afwijkingen geconstateerd", of "de installatie is veilig in
+//     bedrijf gesteld") ongeacht wat er in hetzelfde rapport aan aandachtspunten
+//     stond — en sommige teksten claimden halverwege ook al dat de metingen aan
+//     de eisen voldeden. Een rapport dat boven de handtekening een rode fase
+//     toont en eronder zegt dat er niets aan de hand is, ondermijnt zichzelf.
+//     Die claims zijn uit de zes disciplineteksten gehaald en komen nu uit één
+//     functie, afgeleid van de cross-checks én de fasebalans:
+//       geen bevindingen  → "de meetwaarden voldoen aan de gestelde eisen"
+//       aandachtspunten   → telt ze, met verwijzing, en geen afwijkingen
+//       afwijkingen       → noemt ze en zegt expliciet dat de verklaring zich
+//                           daar NIET toe uitstrekt; beoordeling en afhandeling
+//                           liggen bij de installateur en zijn opdrachtgever.
+//     De zuiverheidsregel blijft daarmee overeind: bij afwijkingen doet dit
+//     document geen uitspraak over de veiligheid.
+//
 // 2026-09-12-D (de fasebalans staat in het rapport):
 //   • Het rapport toonde de uitkomst van de belastingcheck helemaal niet — die
 //     ging alleen de QR in. Een volgende installateur kon dus hoogstens "chk:
@@ -166,7 +195,7 @@ import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import { trackEvent } from "./analytics";
 import {
-  toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
+  toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR, isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
 } from "./wkb/model";
 // Het paspoortformaat komt uit de standaard zelf, niet uit een kopie hier:
 // github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
@@ -193,7 +222,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-D";
+const APP_VERSIE = "2026-09-12-E";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -413,7 +442,13 @@ const StatusVlak = ({ level="ok", titel, sub, style }) => {
 // gebruiken en een P1-meting er straks zonder vertaling in past. Hier staat
 // alléén de weergave, want die is per app verschillend: de rekenregels zijn
 // gedeeld, de designtokens niet.
-const BALANS_KLEUR = { ok:K.green, "let-op":K.orange, afwijking:K.red };
+// Kleur van een balk: knelt het, dan wint het oordeel; past het, dan draagt de
+// balk de fasekleur. Dezelfde regel en dezelfde hexwaarden als het
+// groepenoverzicht van Kastscan, zodat dezelfde fase daar en hier dezelfde kleur
+// heeft — in de app én in het rapport.
+const balansKleur = (r) => r.niveau === "afwijking" ? K.red
+                         : r.niveau === "let-op"    ? K.orange
+                         : (FASE_KLEUR[r.fase] || K.green);
 
 const FaseBalansVlak = ({ balans, style }) => {
   // Bij één fase valt er niets te verdelen; de belastingcheck erboven zegt daar
@@ -432,7 +467,7 @@ const FaseBalansVlak = ({ balans, style }) => {
       </div>
 
       {balans.rijen.map(r => {
-        const kleur = BALANS_KLEUR[r.niveau] || K.green;
+        const kleur = balansKleur(r);
         // Balk afgekapt op 100%: een fase die op 140% staat is niet anderhalf keer
         // zo breed te tekenen. Dát hij overloopt zegt de kleur, hóéveel het getal.
         const breedte = Math.max(0, Math.min(1, r.bezet)) * 100;
@@ -3356,29 +3391,54 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     // zuiverheidsregel geldt onverkort — wij verifiëren niets, wij maken
     // controleerbaar. Vandaar "aandachtspunt" en niet "afkeur", en een slotregel
     // die de verantwoordelijkheid laat waar hij hoort.
+    // Eén keer rekenen: het hoofdstuk hieronder én de conformverklaring leunen
+    // er allebei op, en twee losse berekeningen van dezelfde kast lopen uiteen.
+    const lbAanR = (data.mkp || {}).lbAan;
+    let balansR = null, basisR = null;
+    try {
+      const paspoortR = mkpBouw(data, discipline);
+      balansR = faseBalans({ grp: paspoortR.grp, ha: paspoortR.ha, lbAan: lbAanR });
+      basisR = basisbelastingKw(paspoortR.grp, lbAanR);
+    } catch { balansR = null; basisR = null; }
+
     const faseBalansHtml = () => {
-      const lbAanR = (data.mkp || {}).lbAan;
-      let paspoortR = null, balansR = null, basisR = null;
-      try {
-        paspoortR = mkpBouw(data, discipline);
-        balansR = faseBalans({ grp: paspoortR.grp, ha: paspoortR.ha, lbAan: lbAanR });
-        basisR = basisbelastingKw(paspoortR.grp, lbAanR);
-      } catch { return ""; }
       if (!balansR || !basisR) return "";
 
       const kom1 = (n) => Number(n).toFixed(1).replace(".", ",");
-      const KLASSE = { ok: "ok", "let-op": "warn", afwijking: "nok" };
       const WOORD  = { ok: "past", "let-op": "weinig ruimte", afwijking: "boven de capaciteit" };
       const meer = balansR.rijen.length > 1;
 
-      const rijenHtml = balansR.rijen.map(r => `
-        <tr>
-          <td><strong>${esc(r.fase)}</strong></td>
-          <td>${esc(kom1(r.capaciteitKw))} kW</td>
-          <td>${esc(kom1(r.belastingKw))} kW${r.richting === "voed" ? " <span style=\"color:#666\">(teruglevering)</span>" : ""}</td>
-          <td>${r.vrijKw > 0 ? `${esc(kom1(r.vrijKw))} kW` : "geen"}</td>
-          <td class="${KLASSE[r.niveau] || "ok"}">${esc(WOORD[r.niveau] || "past")}</td>
-        </tr>`).join("");
+      // Zelfde weergave als in de app en als het groepenoverzicht van Kastscan:
+      // balken, geen tabel. Een balk laat in één oogopslag zien wélke fase vol
+      // zit; een tabel met vier kolommen getallen moet je lezen. De kleurregel
+      // komt uit Kastscan — de fasekleur mag, want een balk is een grafiek en
+      // geen aanduiding op een kast — met het oordeel dat wint zodra het knelt.
+      const kaartenHtml = balansR.rijen.map(r => {
+        const pct = Math.max(0, Math.min(100, Math.round(r.bezet * 100)));
+        const kleur = r.niveau === "afwijking" ? "#C62828"
+                    : r.niveau === "let-op"    ? "#B45309"
+                    : (FASE_KLEUR[r.fase] || "#555");
+        const herkomst = r.groot > 0
+          ? `${esc(kom1(r.gewoon))} + ${esc(kom1(r.groot))} × ${esc(kom1(balansR.factor))} kW`
+          : r.richting === "voed" ? "teruglevering" : "";
+        return `
+        <div style="border:1px solid #ddd;border-radius:4px;padding:8px;page-break-inside:avoid">
+          <div style="font-size:8px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;color:${kleur}">
+            ${esc(r.fase)} · ${esc(String(r.aantal))} groep${r.aantal === 1 ? "" : "en"}
+          </div>
+          <div style="font-size:14px;font-weight:bold;margin-top:2px">
+            ${esc(kom1(r.belastingKw))} <span style="font-size:9px;font-weight:normal">van ${esc(kom1(r.capaciteitKw))} kW</span>
+          </div>
+          <div style="height:6px;border:1px solid #000;margin-top:4px;overflow:hidden">
+            <i style="display:block;height:100%;width:${pct}%;background:${kleur}"></i>
+          </div>
+          <div style="font-size:8px;margin-top:3px">
+            ${esc(String(pct))}% bezet · ${r.vrijKw > 0 ? `${esc(kom1(r.vrijKw))} kW vrij` : "geen ruimte vrij"}
+          </div>
+          <div style="font-size:8px;font-weight:bold;color:${kleur};margin-top:1px">${esc(WOORD[r.niveau] || "past")}</div>
+          ${herkomst ? `<div style="font-size:7.5px;color:#444;margin-top:2px">${herkomst}</div>` : ""}
+        </div>`;
+      }).join("");
 
       const over = balansR.rijen.filter(r => r.niveau === "afwijking").map(r => r.fase);
       const krap = balansR.rijen.filter(r => r.niveau === "let-op").map(r => r.fase);
@@ -3406,13 +3466,13 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <h2>Belasting ${meer ? "per fase" : "van de aansluiting"}</h2>
       <p style="font-size:9px;color:#555;margin-bottom:6px">
         ${hoe} De capaciteit per fase is de hoofdzekering × 230 V; van de vrije ruimte is
-        ${esc(kom1(FASE_RESERVE_KW))} kW reserve afgetrokken.
+        ${esc(kom1(FASE_RESERVE_KW))} kW reserve afgetrokken. De getallen onder de balk tonen waar de
+        belasting vandaan komt: gewone groepen plus de grote verbruikers maal de gelijktijdigheidsfactor.
         ${meer ? "Er is per fase gerekend en niet over het totaal: de slimme meter saldeert over drie fasen, de hoofdzekering niet." : ""}
       </p>
-      <table>
-        <tr><th>Fase</th><th>Capaciteit</th><th>Belasting</th><th>Vrije ruimte</th><th>Beoordeling</th></tr>
-        ${rijenHtml}
-      </table>
+      <div style="display:grid;grid-template-columns:repeat(${balansR.rijen.length},1fr);gap:8px;margin-bottom:8px;page-break-inside:avoid">
+        ${kaartenHtml}
+      </div>
       ${punten.length ? `<div class="warn-box">${punten.map(t => `<p>${t}</p>`).join("")}</div>` : ""}
       <p style="font-size:8px;color:#666;margin-bottom:8px">
         Deze tabel is een hulpmiddel bij het beoordelen van de ruimte op de aansluiting; het is geen meting
@@ -3421,12 +3481,63 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       </p>`;
     };
 
+    // ── De conformverklaring beweegt mee met de bevindingen ─────────────────
+    //
+    // De verklaringsteksten eindigden met een vaste claim — "er zijn geen
+    // afwijkingen geconstateerd" of "de installatie is veilig in bedrijf
+    // gesteld" — ongeacht wat er in hetzelfde rapport aan aandachtspunten stond.
+    // Een rapport dat boven de handtekening een rode fase toont en eronder zegt
+    // dat er niets aan de hand is, ondermijnt zichzelf.
+    //
+    // De claim staat nu niet meer in de zes disciplineteksten maar hier, op één
+    // plek, afgeleid van wat er werkelijk is vastgelegd: de cross-checks én de
+    // fasebalans. Daarmee kunnen ze niet meer uit elkaar lopen.
+    //
+    // De zuiverheidsregel blijft leidend. Bij afwijkingen doet dit document
+    // géén uitspraak over de veiligheid — het zegt wat er is gevonden en laat
+    // de beoordeling waar hij hoort. Wij verifiëren niets, wij maken
+    // controleerbaar.
+    const bevindingHtml = () => {
+      const balNiveau = balansR ? balansR.niveau : "ok";
+      const rood = redWarnings.length + (balNiveau === "afwijking" ? 1 : 0);
+      const oranje = (allWarnings.length - redWarnings.length) + (balNiveau === "let-op" ? 1 : 0);
+      const verwijs = balNiveau === "ok"
+        ? "het hoofdstuk Aandachtspunten"
+        : allWarnings.length
+          ? "de hoofdstukken Aandachtspunten en Belasting per fase"
+          : "het hoofdstuk Belasting per fase";
+
+      if (rood > 0) return `
+        <p style="font-size:9px;margin-bottom:12px" class="nok">
+          In dit rapport ${rood === 1
+            ? "is één punt vastgelegd dat afwijkt"
+            : `zijn ${esc(String(rood))} punten vastgelegd die afwijken`} van de
+          gestelde eisen${oranje > 0 ? `, naast ${esc(String(oranje))} aandachtspunt${oranje === 1 ? "" : "en"}` : ""}.
+          Zie ${verwijs}. <strong>Deze verklaring strekt zich niet uit tot ${rood === 1 ? "dat punt" : "die punten"}:</strong>
+          de beoordeling en de afhandeling ervan liggen bij de installateur en zijn opdrachtgever.
+        </p>`;
+
+      if (oranje > 0) return `
+        <p style="font-size:9px;margin-bottom:12px">
+          In dit rapport ${oranje === 1 ? "is één aandachtspunt" : `zijn ${esc(String(oranje))} aandachtspunten`} vastgelegd —
+          zie ${verwijs}. Er zijn geen afwijkingen van de gestelde eisen geconstateerd die een veilige
+          inbedrijfstelling verhinderen.
+        </p>`;
+
+      return `
+        <p style="font-size:9px;margin-bottom:12px">
+          De meetwaarden voldoen aan de gestelde eisen. Er zijn geen afwijkingen geconstateerd die een
+          veilige inbedrijfstelling verhinderen.
+        </p>`;
+    };
+
     const signHtml = (norm, verklaring) => `
       ${faseBalansHtml()}
       ${aiHtml()}
       ${notitieHtml()}
       <h2>Conformverklaring</h2>
-      <p style="font-size:9px;margin-bottom:12px">${verklaring}</p>
+      <p style="font-size:9px;margin-bottom:6px">${verklaring}</p>
+      ${bevindingHtml()}
       <div style="border:1px solid #ddd;border-radius:4px;padding:12px;font-size:9px;background:#fafafa">
         <p style="margin-bottom:8px">Ondergetekende verklaart dat bovenstaande gegevens en meetwaarden naar waarheid zijn ingevuld.</p>
         <table style="border:none;margin-bottom:0">
@@ -3688,7 +3799,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         ${waarschuwingHtml()}
         ${fotosHtml(GK_FOTO_CPS)}
-        ${signHtml("NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 §4.1, §4.2 en §4.3","De installatie is aangelegd conform de huidige NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 hoofdstuk §4.1, §4.2 en §4.3. De visuele controle en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
+        ${signHtml("NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 §4.1, §4.2 en §4.3","De installatie is aangelegd conform de huidige NEN1010:2015, NEN3140:2011, NEN2555 en BRL6000 hoofdstuk §4.1, §4.2 en §4.3. De visuele controle en metingen zijn over de gehele installatie uitgevoerd.")}
         </body></html>`;
 
     // ── COMBIKETEL RAPPORT ────────────────────────────────────────
@@ -3775,7 +3886,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         ${waarschuwingHtml()}
         ${fotosHtml(CV_FOTO_CPS)}
-        ${signHtml("BRL6000-25","De cv-installatie is geplaatst/vervangen conform de geldende normen en richtlijnen (BRL6000-25, NPR3378, Gasketelwet). De rookgasanalyse en alle meetwaarden voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+        ${signHtml("BRL6000-25","De cv-installatie is geplaatst/vervangen conform de geldende normen en richtlijnen (BRL6000-25, NPR3378, Gasketelwet). De rookgasanalyse en de meetwaarden zijn uitgevoerd en in dit rapport vastgelegd.")}
         </body></html>`;
 
     // ── WARMTEPOMP RAPPORT ────────────────────────────────────────
@@ -3842,8 +3953,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         ${waarschuwingHtml()}
         ${fotosHtml(WP_FOTO_CPS)}
         ${data.wpType==="Bodem/water (grond)"
-          ? signHtml("BRL 6000-21, NEN 1010","De bodemgebonden warmtepompinstallatie is geplaatst conform BRL 6000-21 (bodemenergiesystemen, bovengrondse deel); het ondergrondse deel (boring/bronnen) valt onder een SIKB 11000-gecertificeerde boorfirma. Het elektrotechnische deel voldoet aan NEN 1010. De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")
-          : signHtml("F-gassenverordening (BRL 100/200), NEN-EN 378, NEN 1010","De warmtepompinstallatie is geplaatst conform de geldende regelgeving: eventuele koudemiddelhandelingen zijn uitgevoerd onder geldige F-gassencertificering (BRL 100 bedrijfscertificaat en BRL 200 persoonscertificaat), het koudemiddelcircuit voldoet aan NEN-EN 378 en het elektrotechnische deel aan NEN 1010. De buitenunit voldoet aan de geluidseis uit het Besluit bouwwerken leefomgeving (max. 40 dB op de perceelgrens in de nachtperiode). De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+          ? signHtml("BRL 6000-21, NEN 1010","De bodemgebonden warmtepompinstallatie is geplaatst conform BRL 6000-21 (bodemenergiesystemen, bovengrondse deel); het ondergrondse deel (boring/bronnen) valt onder een SIKB 11000-gecertificeerde boorfirma. Het elektrotechnische deel voldoet aan NEN 1010. De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting zijn uitgevoerd en in dit rapport vastgelegd.")
+          : signHtml("F-gassenverordening (BRL 100/200), NEN-EN 378, NEN 1010","De warmtepompinstallatie is geplaatst conform de geldende regelgeving: eventuele koudemiddelhandelingen zijn uitgevoerd onder geldige F-gassencertificering (BRL 100 bedrijfscertificaat en BRL 200 persoonscertificaat), het koudemiddelcircuit voldoet aan NEN-EN 378 en het elektrotechnische deel aan NEN 1010. De buitenunit voldoet aan de geluidseis uit het Besluit bouwwerken leefomgeving (max. 40 dB op de perceelgrens in de nachtperiode). De metingen aan het verwarmingscircuit, de bron en de elektrische aansluiting zijn uitgevoerd en in dit rapport vastgelegd.")}
         </body></html>`;
 
     // ── ZONNEPANELEN RAPPORT ──────────────────────────────────────
@@ -3878,7 +3989,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         <p style="font-size:9px;color:#666">Load balancing is een instelbare softwarematige begrenzing en geen veiligheidsmaatregel; de vaste installatie en beveiliging zijn gedimensioneerd onafhankelijk van deze sturing. De instelling is vastgelegd in het meterkastpaspoort.</p>
         ${fotosHtml(LP_FOTO_CPS)}
-        ${signHtml("NEN 1010:2020 (laadvoorzieningen EV)","De laadvoorziening is aangelegd conform NEN 1010:2020, met de daarin opgenomen bepalingen voor laadvoorzieningen van elektrische voertuigen (aardlekbeveiliging met DC-foutstroomdetectie, afzonderlijke eindgroep). De metingen en de functionele laadtest voldoen aan de gestelde eisen. De installatie is veilig in bedrijf gesteld.")}
+        ${signHtml("NEN 1010:2020 (laadvoorzieningen EV)","De laadvoorziening is aangelegd conform NEN 1010:2020, met de daarin opgenomen bepalingen voor laadvoorzieningen van elektrische voertuigen (aardlekbeveiliging met DC-foutstroomdetectie, afzonderlijke eindgroep). De metingen en de functionele laadtest zijn uitgevoerd en in dit rapport vastgelegd.")}
         </body></html>`;
     } else if (discipline === "batterij") {
       const bm = data.batMeet || {};
@@ -3909,7 +4020,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
               <td><strong>Melding netbeheerder</strong></td><td>${bm.meldingNetbeheerder==="ja"?`gedaan (energieleveren.nl${mk.ean?`, EAN ${mk.ean}`:""})`:"nog niet gedaan"}</td></tr>
         </table>
         ${fotosHtml(BAT_FOTO_CPS)}
-        ${signHtml("NEN 1010:2020","De thuisbatterij is geplaatst en aangesloten conform NEN 1010:2020, met inachtneming van de fabrikantvoorschriften voor opstelling en ventilatie. De metingen voldoen aan de gestelde eisen, de aanwezigheid van het systeem is op de meterkast gemarkeerd en de installatie is bij de netbeheerder gemeld. De installatie is veilig in bedrijf gesteld.")}
+        ${signHtml("NEN 1010:2020","De thuisbatterij is geplaatst en aangesloten conform NEN 1010:2020, met inachtneming van de fabrikantvoorschriften voor opstelling en ventilatie. De metingen zijn uitgevoerd en in dit rapport vastgelegd, de aanwezigheid van het systeem is op de meterkast gemarkeerd en de installatie is bij de netbeheerder gemeld.")}
         </body></html>`;
     } else {
       const accentPV = "#EA580C";
@@ -3982,7 +4093,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         </table>
         ${waarschuwingHtml()}
         ${fotosHtml(PV_FOTO_CPS)}
-        ${signHtml("NEN1010:712","De PV-installatie is uitgevoerd conform NEN1010:712 en SCIOS Scope 12. De visuele inspectie en metingen zijn over de gehele installatie uitgevoerd. Er zijn geen afwijkingen geconstateerd die een veilige inbedrijfstelling verhinderen.")}
+        ${signHtml("NEN1010:712","De PV-installatie is uitgevoerd conform NEN1010:712 en SCIOS Scope 12. De visuele inspectie en metingen zijn over de gehele installatie uitgevoerd.")}
         </body></html>`;
     }
 
