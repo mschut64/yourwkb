@@ -196,6 +196,32 @@ eq(mkpBouw(metOnzin, "groepenkast").grp[0].fn, undefined, "6.8 ongeldige fasewaa
   eq(uit.map(g => g.kw), [5, 5], "6.19 één ingevuld vermogen geldt voor beide richtingen");
 }
 
+// ─── De uitkomst van de Fasecheck landt in het paspoort ─────────────────────
+//
+// Zonder dit is de Fasecheck een eenmalig adviesje op het scherm van één
+// installateur. Mét is het de fase die de vólgende monteur terugvindt als hij de
+// QR scant — en daarmee de invoer voor zíjn fasebalans.
+{
+  const lp = eigenApparaatRegels({ lpMerk: "Alfen", lpVermogen: "11 kW", lpFasen: 1, fc: { gekozen: "L3" } }, "laadpaal");
+  eq(lp[0].fn, [3], "6.22 de gekozen fase gaat mee als fn");
+  eq(lp[0].f, 1, "6.23 en het aantal fasen klopt daarmee");
+
+  // Een driefaseapparaat staat op alle drie; daar valt niets te kiezen.
+  eq(eigenApparaatRegels({ omvormerKw: "4", fc: { fasen: "3" } }, "pv")[0].fn, [1, 2, 3],
+     "6.24 driefasig staat op alle drie de fasen");
+
+  // Niets gekozen is niets schrijven: een gegokte fase is schadelijker dan een
+  // ontbrekende, want het advies van de volgende bouwt erop voort.
+  eq(eigenApparaatRegels({ wpType: "Daikin" }, "wp")[0].fn, undefined,
+     "6.25 zonder keuze wordt er geen fase gegokt");
+  eq(eigenApparaatRegels({ lpMerk: "Alfen", lpFasen: 1, fc: { gekozen: "L9" } }, "laadpaal")[0].fn, undefined,
+     "6.26 een onmogelijke fase wordt geweigerd");
+
+  // Beide regels van een accu krijgen dezelfde fase.
+  const bat = eigenApparaatRegels({ batMerk: "Sessy", batKw: "3", fc: { gekozen: "L2" } }, "batterij");
+  eq(bat.map(g => JSON.stringify(g.fn)), ["[2]", "[2]"], "6.27 laden en ontladen hangen aan dezelfde fase");
+}
+
 // ─── Voorvertoning en paspoort mogen niet uiteenlopen ───────────────────────
 //
 // De paspoortstap toont het eigen apparaat van deze klus als "dit komt in de

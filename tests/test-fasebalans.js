@@ -9,7 +9,7 @@
 // Voer uit met:  node tests/test-fasebalans.js
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { faseBalans, FASEN } from "../components/wkb/fasebalans.js";
+import { faseBalans, faseAdvies, FASEN } from "../components/wkb/fasebalans.js";
 import { GELIJKTIJDIGHEID, FASE_RESERVE_KW, FASE_KLEUR } from "../components/wkb/model.js";
 
 let passed = 0, failed = 0;
@@ -160,6 +160,59 @@ console.log("▶ CATEGORIE 8: dezelfde kleurtaal als Kastscan");
 // installateur. Daarom vastgelegd in plaats van los onderhouden.
 eq(FASE_KLEUR, { L1: "#2196F3", L2: "#9B59B6", L3: "#14B8A6" }, "8.1 fasekleuren gelijk aan Kastscan");
 eq(FASEN.every((f) => !!FASE_KLEUR[f]), true, "8.2 elke fase heeft een kleur");
+
+console.log("▶ CATEGORIE 9: waar kan het nieuwe apparaat het beste bij?");
+// De vraag waar de Fasecheck voor bestaat. Niet "past het ergens", maar "waar" —
+// beantwoord vóór de installateur zijn kabel trekt.
+
+const kaal = faseBalans({ grp: [], ha: ha3 });   // 5,75 kW vrij per fase
+{
+  // Een laadpaal van 11 kW, eenfasig: 11 x 0,6 = 6,6 kW erbij. Dat past op geen
+  // enkele fase van 3 x 25 A — ook niet op een lege.
+  const a = faseAdvies(kaal, { kw: 11, fasen: 1 });
+  eq(a.erbijKw, 11 * GELIJKTIJDIGHEID, "9.1 de factor geldt voor het nieuwe apparaat");
+  eq(a.past, false, "9.2 6,6 kW past niet op 5,75 kW");
+  eq(a.driefase, false, "9.3 eenfasig");
+}
+{
+  // Diezelfde laadpaal driefasig verdeelt zich: 2,2 kW per fase. Dan past hij wel,
+  // en valt er niets te kiezen.
+  const a = faseAdvies(kaal, { kw: 11, fasen: 3 });
+  eq(a.driefase, true, "9.4 driefasig verdeelt zich");
+  eq(a.besteFase, null, "9.5 geen advies waar geen keuze is");
+  eq(a.opties[0].erbijKw, (11 * GELIJKTIJDIGHEID) / 3, "9.6 een derde per fase");
+  eq(a.past, true, "9.7 en dan past hij wel");
+}
+{
+  // Met een kookgroep op L1 wijst het advies naar een lege fase.
+  const b = faseBalans({ grp: [{ t: "kook", rol: "af", kw: 7.4, f: 1, fn: [1] }], ha: ha3 });
+  const a = faseAdvies(b, { kw: 3.7, fasen: 1 });
+  eq(a.besteFase !== "L1", true, "9.8 niet op de fase waar de kookgroep hangt");
+  eq(a.past, true, "9.9 3,7 x 0,6 = 2,2 kW past op een lege fase");
+  const opL1 = a.opties.find((o) => o.fase === "L1");
+  eq(opL1.naKw, 7.4 * GELIJKTIJDIGHEID + 3.7 * GELIJKTIJDIGHEID, "9.10 op L1 komt het bovenop de kookgroep");
+}
+{
+  // Mét gezamenlijke sturing vervalt de korting, ook voor het nieuwe apparaat:
+  // de installatie moet ook bij falende sturing kloppen.
+  const b = faseBalans({ grp: [], ha: ha3, lbAan: true });
+  eq(faseAdvies(b, { kw: 4, fasen: 1 }).erbijKw, 4, "9.11 met sturing telt het volle vermogen");
+}
+// Een gewone verbruiker is geen grote verbruiker en krijgt de korting niet.
+eq(faseAdvies(kaal, { kw: 2, fasen: 1, groot: false }).erbijKw, 2, "9.12 geen factor over een gewone groep");
+
+// Op een GEMETEN basis gaat de factor niet over de meting, maar wél over het
+// apparaat dat er nog bij komt: dat zat niet in die meting.
+{
+  const gem = faseBalans({ grp: [], ha: ha3, meting: { L1: 4, L2: 1, L3: 1, label: "gemeten" } });
+  const a = faseAdvies(gem, { kw: 11, fasen: 1 });
+  eq(gem.factor, 1, "9.13 de meting zelf krijgt geen factor");
+  eq(a.erbijKw, 11 * GELIJKTIJDIGHEID, "9.14 het nieuwe apparaat wél");
+  eq(a.besteFase !== "L1", true, "9.15 en het advies mijdt de zwaarst gemeten fase");
+}
+
+eq(faseAdvies(null, { kw: 11 }), null, "9.16 zonder balans geen advies");
+eq(faseAdvies(kaal, { kw: 0 }), null, "9.17 zonder vermogen geen advies");
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);

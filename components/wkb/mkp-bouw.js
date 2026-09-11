@@ -55,10 +55,22 @@ function batterijRegels({ kwOntladen, kwLaden, naam, f, fn }) {
 // toen de accu hier twee regels kreeg en het scherm nog één regel van 3 kW liet
 // zien terwijl de belastingcheck eronder met 6,6 kW rekende. Eén definitie dus,
 // en de voorvertoning laat letterlijk zien wat er wordt weggeschreven.
+// De uitkomst van de Fasecheck (optioneel blok in de apparaatstap) als `fn`
+// volgens spec v0.2 §4.4. Alleen schrijven wat de installateur daadwerkelijk
+// heeft gekozen — een gegokte fase is schadelijker dan een ontbrekende, want het
+// advies van de vólgende installateur bouwt erop voort.
+function fcFase(data) {
+  const fc = (data && data.fc) || {};
+  if (toNum(fc.fasen) === 3) return { f: 3, fn: [1, 2, 3] };
+  const L = fc.gekozen;
+  if (["L1", "L2", "L3"].includes(L)) return { f: 1, fn: [Number(L.slice(1))] };
+  return {};
+}
+
 export function eigenApparaatRegels(data, discipline) {
   if (discipline === "laadpaal") {
     const kw = toNum(String(data.lpVermogen||"").replace(/[^0-9,.]/g,""));
-    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1 };
+    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1, ...fcFase(data) };
     if (kw>0) r.kw = kw;
     if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
     return [r];
@@ -69,16 +81,17 @@ export function eigenApparaatRegels(data, discipline) {
     // het meest voorkomende geval — en gelden beide regels met dezelfde waarde.
     const ontladen = toNum(data.batKw);
     const laden = toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : ontladen;
-    return batterijRegels({ kwOntladen: ontladen, kwLaden: laden, naam: data.batMerk });
+    const fase = fcFase(data);
+    return batterijRegels({ kwOntladen: ontladen, kwLaden: laden, naam: data.batMerk, f: fase.f, fn: fase.fn });
   }
   if (discipline === "pv") {
-    const r = { t:"pv", rol:"voed" };
+    const r = { t:"pv", rol:"voed", ...fcFase(data) };
     if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
     if (data.aantalPanelen) r.n = `PV ${data.aantalPanelen} panelen`.slice(0,40);
     return [r];
   }
   if (discipline === "wp") {
-    const r = { t:"wp", rol:"af" };
+    const r = { t:"wp", rol:"af", ...fcFase(data) };
     if (data.wpType) r.n = String(data.wpType).slice(0,40);
     return [r];
   }

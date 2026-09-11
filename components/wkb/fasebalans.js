@@ -30,7 +30,7 @@
 // gedeeld pakket — de vorm is daar al op gemaakt.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { toNum, FASE_RESERVE_KW, FASEN, belastingPerFase } from "./model.js";
+import { toNum, GELIJKTIJDIGHEID, FASE_RESERVE_KW, FASEN, belastingPerFase } from "./model.js";
 
 export { FASEN };
 
@@ -102,5 +102,69 @@ export function faseBalans({ grp, ha, lbAan, meting } = {}) {
     volledig: pf.onbekendAantal === 0,
     niveau: ergste ? ergste.niveau : "ok",
     besteFase: beste ? beste.fase : "L1",
+  };
+}
+
+// ─── WAAR KAN HET NIEUWE APPARAAT HET BESTE BIJ? ─────────────────────────────
+//
+// De fasebalans zegt hoe de kast er NU voor staat. Dit zegt wat er gebeurt als
+// je er een laadpaal, warmtepomp, batterij of omvormer bij hangt — per fase,
+// vóór de installatie begint. Dat is de vraag waar de hele Fasecheck voor
+// bestaat: niet "past het ergens", maar "waar".
+//
+// De gelijktijdigheidsfactor geldt hier WEL voor het nieuwe apparaat, ook als de
+// basis gemeten is. Een gemeten piek bevat de gelijktijdigheid van wat er tóén
+// hing; het apparaat dat er nu bij komt zat niet in die meting en moet dus zelf
+// nog gewogen worden. Met gezamenlijke sturing vervalt de korting, net als
+// overal elders.
+//
+// Een driefaseapparaat verdeelt zich over alle drie de fasen. Daar valt dus
+// niets te kiezen, en dat zegt de uitkomst ook: `driefase: true` en geen
+// besteFase. Een advies geven waar geen keuze is, is misleidend.
+/**
+ * @param balans  uitkomst van faseBalans
+ * @param kw      vermogen van het nieuwe apparaat
+ * @param fasen   1 of 3
+ * @param groot   telt het als grote verbruiker (laadpaal, warmtepomp, kookgroep, batterij)
+ */
+export function faseAdvies(balans, { kw, fasen = 1, groot = true } = {}) {
+  if (!balans || !Array.isArray(balans.rijen) || !balans.rijen.length) return null;
+  const vermogen = toNum(kw);
+  if (!(vermogen > 0)) return null;
+
+  const factor = groot ? (balans.sturing ? 1 : GELIJKTIJDIGHEID) : 1;
+  const erbijKw = vermogen * factor;
+  // Driefasig kan alleen op een aansluiting die drie fasen heeft.
+  const driefase = toNum(fasen) === 3 && balans.rijen.length === 3;
+
+  const opties = balans.rijen.map((r) => {
+    const extra = driefase ? erbijKw / 3 : erbijKw;
+    const naKw = r.belastingKw + extra;
+    const bezetNa = r.capaciteitKw > 0 ? naKw / r.capaciteitKw : 0;
+    return {
+      fase: r.fase,
+      erbijKw: extra,
+      naKw,
+      vrijNaKw: r.capaciteitKw - naKw - FASE_RESERVE_KW,
+      bezetNa,
+      niveauNa: bezetNa > 1 ? "afwijking" : bezetNa > 0.7 ? "let-op" : "ok",
+    };
+  });
+
+  if (driefase) {
+    const ergste = opties.reduce((b, o) => (o.bezetNa > b.bezetNa ? o : b), opties[0]);
+    return {
+      opties, driefase: true, besteFase: null, erbijKw, factor,
+      past: ergste.niveauNa !== "afwijking",
+      krap: ergste.niveauNa === "let-op",
+    };
+  }
+
+  // Eénfasig: de fase waar ná plaatsing de meeste ruimte overblijft.
+  const beste = opties.reduce((b, o) => (o.vrijNaKw > b.vrijNaKw ? o : b), opties[0]);
+  return {
+    opties, driefase: false, besteFase: beste.fase, erbijKw, factor,
+    past: beste.niveauNa !== "afwijking",
+    krap: beste.niveauNa === "let-op",
   };
 }

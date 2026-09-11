@@ -1,5 +1,28 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-F (optionele Fasecheck in de apparaatstap — R3b compleet):
+//   • Laadpaal, thuisbatterij, warmtepomp en PV krijgen in hun apparaatstap een
+//     Fasecheck: waar kan dit apparaat het beste bij, vóórdat de kabel getrokken
+//     wordt. De paspoortstap beantwoordde die vraag ook, maar die komt aan het
+//     eind van de flow — als het werk al gedaan is.
+//   • FLOW-REGEL. Geen extra scherm maar een dichtgeklapt blok in een stap die er
+//     al is: wie het niet gebruikt ziet één regel en tikt door, en de stapteller
+//     verandert niet. Is er een paspoort gescand, dan staat de balans er zonder
+//     één veld in te vullen — dan vervangt de check handwerk in plaats van het
+//     toe te voegen. Het releaseplan noemt dit een "optionele stap"; als scherm
+//     zou hij de flow wél verlengen, en de flow-regel gaat voor.
+//   • Zonder paspoort een aanvinklijst met de vier grote verbruikers op hun
+//     standaardvermogens, mét de fase erbij — zonder fase valt er niets te
+//     verdelen. Uitkomst draagt het label "indicatie".
+//   • Nieuw in de rekenkern: faseAdvies() in fasebalans.js (17 tests). De
+//     gelijktijdigheidsfactor geldt daar wél voor het nieuwe apparaat, óók op een
+//     gemeten basis: dat apparaat zat niet in de meting. Een driefaseapparaat
+//     verdeelt zich over alle drie de fasen — dan is er niets te kiezen, en dat
+//     zegt de uitkomst ook in plaats van een loos advies te geven.
+//   • De gekozen fase gaat mee het paspoort in als `fn` van dit apparaat. Zonder
+//     dat zou de Fasecheck een eenmalig adviesje op één scherm zijn; nu vindt de
+//     volgende monteur hem terug als hij de QR scant.
+//
 // 2026-09-12-E (dezelfde weergave overal, en een verklaring die meebeweegt):
 //   • De fasebalans in het rapport is van een tabel naar BALKEN gegaan, dezelfde
 //     weergave als in de app en als het groepenoverzicht van Kastscan: per fase
@@ -204,7 +227,7 @@ import {
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
 } from "meterkastpaspoort";
 import { mkpBouw, eigenApparaatRegels } from "./wkb/mkp-bouw";
-import { faseBalans } from "./wkb/fasebalans";
+import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport } from "./wkb/veilig";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
@@ -222,7 +245,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-E";
+const APP_VERSIE = "2026-09-12-F";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -450,7 +473,7 @@ const balansKleur = (r) => r.niveau === "afwijking" ? K.red
                          : r.niveau === "let-op"    ? K.orange
                          : (FASE_KLEUR[r.fase] || K.green);
 
-const FaseBalansVlak = ({ balans, style }) => {
+const FaseBalansVlak = ({ balans, style, onbekendHint }) => {
   // Bij één fase valt er niets te verdelen; de belastingcheck erboven zegt daar
   // al alles over, en een balk van één regel suggereert een keuze die er niet is.
   if (!balans || !Array.isArray(balans.rijen) || balans.rijen.length < 2) return null;
@@ -515,7 +538,7 @@ const FaseBalansVlak = ({ balans, style }) => {
       {!balans.volledig && (
         <div style={{ fontSize:11, color:K.orange, marginTop:8, lineHeight:1.45 }}>
           ⚠ {balans.onbekendAantal === 1 ? "1 groep" : `${balans.onbekendAantal} groepen`} ({kom(balans.onbekendKw)} kW)
-          {" "}heeft nog geen fase. Zet die in de groepen-stap (stap 6) bij de aardlekgroep — tot die tijd is
+          {" "}heeft nog geen fase. {onbekendHint || "Zet die in de groepen-stap (stap 6) bij de aardlekgroep"} — tot die tijd is
           de verdeling hierboven onvolledig en het advies hieronder niet betrouwbaar.
         </div>
       )}
@@ -537,6 +560,225 @@ const FaseBalansVlak = ({ balans, style }) => {
                   herverdelen over de fasen, sturing, of een zwaardere aansluiting.</>}
         </div>
       )}
+    </div>
+  );
+};
+
+// ─── FASECHECK — optioneel, vóór de installatie ───────────────────────────────
+//
+// De vraag van de installateur die met een laadpaal, warmtepomp, batterij of
+// omvormer voor de kast staat: wáár hang ik hem? De paspoortstap beantwoordt die
+// vraag ook, maar die komt aan het eind van de flow — als het werk al gedaan is.
+// Vandaar dit blok in de apparaatstap, vóór de kabel getrokken wordt.
+//
+// TOETS AAN DE FLOW-REGEL. De standaardflow mag niet langer worden, en dit is
+// daarom géén extra scherm maar een dichtgeklapt blok in een stap die er al is.
+// Wie het niet gebruikt ziet één regel en tikt door; de stapteller verandert
+// niet. Wie hem opent en een paspoort heeft gescand, ziet de balans zonder één
+// veld in te vullen — dan vervangt hij handwerk in plaats van het toe te voegen.
+// Het releaseplan noemt dit een "optionele stap"; als scherm zou hij de flow wél
+// verlengen, en de flow-regel gaat voor.
+const FC_VERBRUIKERS = [
+  ["kook", "🍳", "Kookgroep"],
+  ["wp",   "🌡️", "Warmtepomp"],
+  ["lp",   "🔌", "Laadpaal"],
+  ["bat",  "🔋", "Thuisbatterij"],
+];
+
+// Het apparaat van déze klus, uit de velden die de installateur al heeft
+// ingevuld. Alleen de grote verbruikers krijgen de gelijktijdigheidsfactor; een
+// PV-omvormer staat niet in die lijst en telt vol mee.
+function fcNieuwApparaat(data, discipline) {
+  if (discipline === "laadpaal") return {
+    t: "lp", naam: "laadpaal", groot: true,
+    kw: toNum(String(data.lpVermogen || "").replace(/[^0-9,.]/g, "")),
+    fasen: toNum(data.lpFasen) || 1,
+  };
+  if (discipline === "batterij") return {
+    t: "bat", naam: "thuisbatterij", groot: true,
+    // De zwaarste van laden en ontladen: dat is de kant die de fase het meest belast.
+    kw: Math.max(toNum(data.batKw) || 0, toNum(data.batKwLaad) || 0),
+    fasen: 1,
+  };
+  if (discipline === "pv") return {
+    t: "pv", naam: "PV-omvormer", groot: false,
+    kw: toNum(data.omvormerKw), fasen: 1,
+  };
+  if (discipline === "wp") return {
+    t: "wp", naam: "warmtepomp", groot: true,
+    kw: GROOT_STANDAARD_KW.wp, fasen: 1,
+  };
+  return null;
+}
+
+const FaseCheckBlok = ({ data, onChange, discipline }) => {
+  const fc = data.fc || {};
+  const zetFc = (obj) => onChange("fc", { ...fc, ...obj });
+  const apparaat = fcNieuwApparaat(data, discipline);
+  if (!apparaat) return null;
+
+  const kom = (n, d = 1) => Number(n).toFixed(d).replace(".", ",");
+  const knopFc = (actief) => ({ flex: 1, padding: "9px 4px", fontSize: 13, borderRadius: 8, cursor: "pointer",
+    fontFamily: "inherit", background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
+    border: `1px solid ${actief ? K.yellow : K.border}` });
+
+  // Bron 1: een gescand paspoort. Dan is er niets in te vullen — de kast staat er al in.
+  const uitPaspoort = Array.isArray(data.mkpImport?.grp) && data.mkpImport.grp.length > 0;
+  // Bron 2: de aanvinklijst, met de standaardvermogens uit GROOT_STANDAARD_KW.
+  // Zonder fase valt er niets te verdelen, dus die wordt per verbruiker gevraagd;
+  // dat is precies wat je van de automaten in de kast kunt aflezen.
+  const grpHandmatig = FC_VERBRUIKERS
+    .filter(([k]) => fc[`aan_${k}`])
+    .map(([k]) => {
+      const r = { t: k, rol: "af", f: 1 };
+      const L = fc[`fase_${k}`];
+      if (["L1", "L2", "L3"].includes(L)) r.fn = [Number(L.slice(1))];
+      return r;   // geen kw: groepVermogenKw valt terug op de standaardwaarde
+    });
+
+  const haA = toNum(uitPaspoort && data.mkpImport.ha?.a ? data.mkpImport.ha.a : fc.haA);
+  const haF = uitPaspoort && data.mkpImport.ha?.f ? toNum(data.mkpImport.ha.f) : (fc.haF === "1" ? 1 : 3);
+  const ha = { f: haF, a: haA };
+  const grp = uitPaspoort ? data.mkpImport.grp : grpHandmatig;
+
+  const balans = haA > 0 ? faseBalans({ grp, ha, lbAan: (data.mkp || {}).lbAan }) : null;
+  const kwNieuw = toNum(fc.kw) > 0 ? toNum(fc.kw) : apparaat.kw;
+  const fasenNieuw = toNum(fc.fasen) || apparaat.fasen;
+  const advies = balans ? faseAdvies(balans, { kw: kwNieuw, fasen: fasenNieuw, groot: apparaat.groot }) : null;
+
+  if (!fc.open) return (
+    <button
+      onClick={() => zetFc({ open: true })}
+      style={{ ...S.card, marginTop: 12, marginBottom: 0, width: "100%", textAlign: "left",
+        cursor: "pointer", fontFamily: "inherit", color: K.text, display: "block" }}>
+      <div style={{ fontWeight: 700, fontSize: 13 }}>⚡ Fasecheck <span style={{ fontWeight: 400, color: K.muted }}>(optioneel)</span></div>
+      <div style={{ fontSize: 11, color: K.muted, marginTop: 3 }}>
+        Waar kan deze {apparaat.naam} het beste bij? {uitPaspoort
+          ? "Het gescande paspoort staat klaar — tik om de verdeling te zien."
+          : "Tik om de kast in te vullen; het hoeft niet, maar het scheelt een verrassing achteraf."}
+      </div>
+    </button>
+  );
+
+  return (
+    <div style={{ ...S.card, marginTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, flex: 1 }}>⚡ Fasecheck</div>
+        <button onClick={() => zetFc({ open: false })}
+          style={{ background: "none", border: "none", color: K.muted, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+          inklappen
+        </button>
+      </div>
+
+      {uitPaspoort ? (
+        <div style={{ fontSize: 11, color: K.muted, marginBottom: 10 }}>
+          Overgenomen uit het gescande meterkastpaspoort — {data.mkpImport.grp.length} groepen. Klopt er iets
+          niet, dan is dat de opgave van een vorige installateur; jij blijft verantwoordelijk voor wat je meet.
+        </div>
+      ) : (<>
+        <div style={{ fontSize: 11, color: K.muted, marginBottom: 8 }}>
+          Geen paspoort gescand. Vink aan wat er in de kast hangt en op welke fase — dat lees je van de
+          automaten af. Er wordt dan met standaardvermogens gerekend, dus de uitkomst is een <strong>indicatie</strong>.
+        </div>
+        <label style={S.label}>Hoofdaansluiting</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          {[["3", "3-fase"], ["1", "1-fase"]].map(([w, l]) =>
+            <button key={w} style={knopFc((fc.haF || "3") === w)} onClick={() => zetFc({ haF: w })}>{l}</button>)}
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+            <input style={{ ...S.input, flex: 1, minWidth: 0 }} placeholder="25" inputMode="decimal"
+              value={fc.haA || ""} onChange={e => zetFc({ haA: e.target.value })}/>
+            <span style={{ fontSize: 13, color: K.muted, fontWeight: 700 }}>A</span>
+          </div>
+        </div>
+        {FC_VERBRUIKERS.map(([k, icoon, label]) => (
+          <div key={k} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+            <button onClick={() => zetFc({ [`aan_${k}`]: !fc[`aan_${k}`] })}
+              style={{ ...knopFc(!!fc[`aan_${k}`]), flex: "0 0 132px", textAlign: "left", paddingLeft: 10 }}>
+              {icoon} {label}
+            </button>
+            {fc[`aan_${k}`] && ["L1", "L2", "L3"].map(L => (
+              <button key={L} onClick={() => zetFc({ [`fase_${k}`]: fc[`fase_${k}`] === L ? "" : L })}
+                style={{ ...knopFc(fc[`fase_${k}`] === L), padding: "9px 2px" }}>{L}</button>
+            ))}
+            {fc[`aan_${k}`] && (
+              <span style={{ fontSize: 10, color: K.muted, flex: "0 0 42px", textAlign: "right" }}>
+                {kom(GROOT_STANDAARD_KW[k])} kW
+              </span>
+            )}
+          </div>
+        ))}
+      </>)}
+
+      {/* Het nieuwe apparaat. Voorgevuld uit wat er al is ingevuld; aanpasbaar,
+          want een laadvermogen van "11 kW" kan begrensd zijn op 3x16 A. */}
+      <div style={{ borderTop: `1px solid ${K.border}`, marginTop: 10, paddingTop: 10 }}>
+        <label style={S.label}>Deze {apparaat.naam}</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+            <input style={{ ...S.input, flex: 1, minWidth: 0 }} inputMode="decimal"
+              placeholder={apparaat.kw > 0 ? kom(apparaat.kw) : "kW"}
+              value={fc.kw ?? ""} onChange={e => zetFc({ kw: e.target.value })}/>
+            <span style={{ fontSize: 13, color: K.muted, fontWeight: 700 }}>kW</span>
+          </div>
+          {[["1", "1-fase"], ["3", "3-fase"]].map(([w, l]) =>
+            <button key={w} style={knopFc(String(fasenNieuw) === w)} onClick={() => zetFc({ fasen: w })}>{l}</button>)}
+        </div>
+      </div>
+
+      {!(haA > 0) ? (
+        <div style={{ fontSize: 11, color: K.muted, marginTop: 10 }}>
+          Vul de hoofdzekering in — zonder die waarde is er geen capaciteit om tegen af te zetten.
+        </div>
+      ) : !advies ? (
+        <div style={{ fontSize: 11, color: K.muted, marginTop: 10 }}>
+          Vul het vermogen van de {apparaat.naam} in om te zien waar hij past.
+        </div>
+      ) : (<>
+        <FaseBalansVlak balans={balans} style={{ marginTop: 10 }}
+          onbekendHint={uitPaspoort
+            ? "In het gescande paspoort staat daar geen fase bij"
+            : "Tik hierboven de fase aan bij die verbruiker"}/>
+        {(() => {
+          const beste = advies.opties.find(o => o.fase === advies.besteFase);
+          if (advies.driefase) return (
+            <StatusVlak
+              level={advies.past ? (advies.krap ? "warn" : "ok") : "fail"}
+              titel={advies.past ? "Past over de drie fasen" : "Past niet binnen de aansluiting"}
+              sub={`Driefasig verdeelt ${kom(advies.erbijKw)} kW zich over alle drie de fasen — ${kom(advies.opties[0].erbijKw)} kW per fase. Er valt hier dus niets te kiezen.`}
+              style={{ marginTop: 10 }}/>
+          );
+          return (
+            <StatusVlak
+              level={advies.past ? (advies.krap ? "warn" : "ok") : "fail"}
+              titel={advies.past ? `Beste fase: ${advies.besteFase}` : "Past op geen enkele fase"}
+              sub={advies.past
+                ? `Met ${kom(advies.erbijKw)} kW erbij blijft op ${advies.besteFase} nog ${kom(beste.vrijNaKw)} kW vrij${advies.krap ? " — krap, maar binnen de capaciteit" : ""}.`
+                : `Op de ruimste fase (${advies.besteFase}) komt de belasting op ${kom(beste.naKw)} van ${kom(balans.rijen[0].capaciteitKw)} kW. Herverdelen, sturing of een zwaardere aansluiting is hier aan de orde.`}
+              style={{ marginTop: 10 }}/>
+          );
+        })()}
+
+        {/* De uitkomst vastleggen: de gekozen fase gaat mee het paspoort in als
+            `fn` van dit apparaat, zodat de volgende installateur hem terugvindt. */}
+        {!advies.driefase && (<>
+          <div style={{ fontSize: 11, color: K.muted, marginTop: 10, marginBottom: 6 }}>
+            Waar komt hij te hangen? De keuze gaat mee in het meterkastpaspoort.
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {balans.rijen.map(r => (
+              <button key={r.fase} style={knopFc(fc.gekozen === r.fase)}
+                onClick={() => zetFc({ gekozen: fc.gekozen === r.fase ? "" : r.fase })}>{r.fase}</button>
+            ))}
+            <button style={knopFc(!fc.gekozen)} onClick={() => zetFc({ gekozen: "" })}>nog niet</button>
+          </div>
+        </>)}
+
+        <div style={{ fontSize: 10, color: K.muted, marginTop: 10, lineHeight: 1.45 }}>
+          {balans.bron === "gemeten" ? balans.label : "Indicatie op basis van opgegeven vermogens"} ·
+          {" "}de gelijktijdigheidsfactor {kom(advies.factor)} geldt hier ook voor het nieuwe apparaat, want dat
+          zat nog niet in de kast. Een hulpmiddel bij het kiezen — geen meting, en de installateur beslist.
+        </div>
+      </>)}
     </div>
   );
 };
@@ -2454,6 +2696,8 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
             </div>
           </div>
         ))}
+        <FaseCheckBlok data={data} onChange={onChange} discipline="pv"/>
+
         <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende →</button>
       </div>
     </div>
@@ -5041,6 +5285,8 @@ function WP_StapMateriaal({ data, onChange, onNext, onBack }) {
             </div>
           </div>
         </div>
+        <FaseCheckBlok data={data} onChange={onChange} discipline="wp"/>
+
         <button style={{...S.btn,background:K.yellow,color:"#000"}} onClick={onNext}>Volgende →</button>
       </div>
     </div>
@@ -5547,6 +5793,8 @@ function LP_StapMateriaal({ data, onChange, onNext, onBack }) {
           </div>
         </div>
       </div>
+      <FaseCheckBlok data={data} onChange={onChange} discipline="laadpaal"/>
+
       <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
     </div>
   );
@@ -5735,6 +5983,8 @@ function BAT_StapMateriaal({ data, onChange, onNext, onBack }) {
           <button style={knop(v("batEiland")==="nee")} onClick={()=>zet("batEiland","nee")}>Nee</button>
         </div>
       </div>
+      <FaseCheckBlok data={data} onChange={onChange} discipline="batterij"/>
+
       <button style={{...S.btn, width:"100%", background:K.yellow, color:"#000", marginTop:16}} onClick={onNext}>Volgende →</button>
     </div>
   );
