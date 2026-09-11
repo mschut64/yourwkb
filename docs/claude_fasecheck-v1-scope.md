@@ -31,7 +31,9 @@ De twee helften van het doel hebben **verschillende data** nodig. Dat is de bela
 
 ### ✅ "Waar komt de uitbreiding het beste?" — uit de passieve meting
 
-Vermogen per fase over een week geeft piek, p95 en gemiddelde. Capaciteit is A × 230 V; vrije ruimte is capaciteit min gemeten piek. Daaruit volgt direct welke fase ruimte heeft.
+De dongle houdt de netto piek per fase zelf bij (`P*max`/`P*min` uit `/api/v2/stats`). Capaciteit is A × 230 V; vrije ruimte is capaciteit min gemeten piek. Daaruit volgt direct welke fase ruimte heeft.
+
+*Wat er niet bij zit:* p95 en gemiddelde. `stats` geeft alleen uitersten. Wil je die alsnog, dan is er wél een tijdreeks nodig en komt de minuutlogging terug — beoordeel dat pas als blijkt dat de piek alleen te grof is.
 
 **Dit vervangt een schatting door een meting.** Nu staat er letterlijk *"indicatie o.b.v. schatting"*.
 
@@ -64,13 +66,13 @@ Het ontwerp is er juist op gemaakt om *"alle projectdata staat op het toestel"* 
 - **Eindpunt-tot-eindpuntversleuteling.** Elke dongle krijgt bij het flashen een eigen 256-bits sleutel, ook als QR op de behuizing. De installateur scant dat label; de sleutel staat daarna alleen lokaal in het project. **De server ziet uitsluitend versleutelde blobs.**
 - **Geen adres, geen klant.** Opslag alleen onder `dongleId`. De koppeling aan klant en adres bestaat alleen in de app.
 - **Kort bewaren.** TTL 30 dagen; na ophalen verwijdert de app de batches expliciet.
-- **Store-and-forward.** De dongle logt altijd lokaal en verstuurt per 15 minuten; bij wifi-uitval gaat de achterstand later mee, met volgnummers zodat gaten en dubbelen zichtbaar zijn.
+- **Store-and-forward.** De dongle verstuurt per 15 minuten, met volgnummers zodat gaten en dubbelen zichtbaar zijn. Omdat de piek een voortrollend maximum is en geen reeks, kost een gemiste verzending geen data: de volgende bevat het maximum nog steeds — tenzij er een herstart tussen zat, en dáárom wordt `start_time` meegestuurd.
 
 Het is dus geen dossier en geen sync: het is een tijdelijke, versleutelde brievenbus waar alleen de app met de gescande sleutel iets uit kan halen.
 
 ### De flow bij een klus
 
-1. **Schouwbezoek.** Dongle doorgelust in de P1-lijn; bestaande apparatuur blijft werken. Installateur scant de sleutel-QR, koppelt de dongle aan het project, start de meetmodus.
+1. **Schouwbezoek.** Dongle doorgelust in de P1-lijn; bestaande apparatuur blijft werken. Installateur scant de sleutel-QR en koppelt de dongle aan het project. De piekmeting loopt vanaf het opstarten vanzelf; wél `start_time` vastleggen als beginpunt.
 2. **Wifi.** De **klant** voert zijn eigen wifi-wachtwoord in op de dongle-pagina — niet de installateur.
 3. **Aardlek-proef in één doorloop.** Aardlekken één voor één ~15 s uit; zes stuks ≈ twee minuten. Een gebeurtenis triggert een **directe verzending**, los van de cadans van 15 minuten, zodat de app het resultaat binnen seconden toont en de installateur een mislukte proef ter plekke kan overdoen.
 4. **Dongle blijft een week liggen** en stuurt passief door.
@@ -107,12 +109,22 @@ In deze volgorde, omdat elke stap de vorige nodig heeft.
 **1 · Rekenkern uitbreiden met `bron`** — kan meteen, hangt aan niets.
 Per fase `bron: 'geschat' | 'gemeten'`. Bij `gemeten` gaat de gelijktijdigheidsfactor 0,6 **niet** over de basisbelasting — een gemeten piek bevat de gelijktijdigheid al — wel over het nieuwe apparaat. De reserve van 1,0 kW blijft (een week in september zegt niets over januari met een warmtepomp). Label wordt *"gemeten over n dagen (dd-mm t/m dd-mm)"*. Pure functies, zodat `extract-logica.js` ze oppakt.
 
-**2 · Meetmodus + gebeurtenislogging op de dongle.**
-Per minuut per fase. **Bevinding uit de spike: het bestandssysteem is 128 kB en een week minuutrecords past daar in geen realistische vorm op.** Met store-and-forward hoeft alleen de achterstand lokaal te passen, niet de hele week — dat verzacht het probleem maar heft het niet op bij langere wifi-uitval. Uitrekenen vóór de firmware af is. Gebeurtenissen volgen de detectieregels uit de P1-spec (sprong ≥ 250 W op één fase, andere fasen < 30 % daarvan).
+**2 · Pieken uitlezen — géén eigen minuutlogging.**
+De dongle houdt de netto piek per fase **zelf al bij**. `GET /api/v2/stats` geeft `P1max/P2max/P3max` (piek in W per fase) en `P1min/P2min/P3min` (dal; negatief = teruglevering), plus stroom- en spanningspiek per fase en de overspanningsduur. Dat is precies de kernwaarde die de Fasecheck nodig heeft.
+
+Daarmee vervalt de minuutlogging uit de oorspronkelijke spec, en daarmee ook het hele 128 kB-vraagstuk. Wat de firmware nog moet doen, is veel kleiner: **elk kwartier de eigen `stats` lezen en versleuteld doorsturen.** Geen bestandssysteem, geen opslagbeheer. (De dongle heeft ook MQTT aan boord, `mqttinterval` 10 s — een alternatieve route als een eigen broker aantrekkelijker blijkt dan een HTTP-push.)
+
+⚠️ **De teller reset bij elke herstart.** `start_time` in `stats` valt samen met het opstartmoment; op de referentiedongle stond `reboots` op 6, waarvan één tijdens de spike zelf. Dit faalt **stil en optimistisch**: na een herstart lees je een te lage piek af en adviseer je te ruim — precies de verkeerde kant op.
+
+Daarom is de regel: **lees `start_time` altijd mee en draag het maximum voort.** Springt `start_time` vooruit, dan was er een herstart; begin een nieuw venster maar houd het oude maximum vast. Een herstart kost dan hooguit het kwartier ertussenin in plaats van de hele week. Leg in de meting vast hoeveel herstarts er waren — dat hoort in de meetkwaliteit thuis, net als de dekking.
+
+⚠️ **`start_time` is geen gewone epoch.** De firmware schrijft lokale tijd weg alsof het UTC is: op 11-09-2026 gaf `1789150738` gelezen als epoch 20:18 terwijl het 18:18 was. Twee uur ernaast in de zomer, één in de winter. Corrigeren bij het inlezen, anders sluipt dat als stille fout in de periodelabels.
+
+**Wat `stats` níet geeft:** p95, gemiddelde afname/teruglevering, en een tijdprofiel. En geen gebeurtenissen — voor de aardlek-proef is een tijdreeks of live meelezen nodig. Zie stap 5.
 
 **3 · Doorgeefluik.** Sleutel bij het flashen, registratie, `POST /api/p1/ingest`, `GET`/`DELETE /api/p1/batches`, Upstash met TTL. Gedeelde `guard.js` voor rate limiting; **geen** `origineOk` op `ingest` — een dongle heeft geen Origin-header, de HMAC is daar de toegangscontrole.
 
-**4 · App: koppelen, ophalen, ontsleutelen.** Sleutel-QR scannen, batches ophalen, lokaal ontsleutelen, samenvatten met `samenvatP1Meting`, `beoordeelMeetkwaliteit` en `fasePiekUitMeting` — pure functies, fixtures uit de spike als testbasis.
+**4 · App: koppelen, ophalen, ontsleutelen.** Sleutel-QR scannen, batches ophalen, lokaal ontsleutelen, samenvatten met `samenvatP1Meting`, `beoordeelMeetkwaliteit` en `fasePiekUitMeting` — pure functies, fixtures uit de spike als testbasis. `samenvatP1Meting` werkt nu op een reeks `stats`-momentopnamen in plaats van op minuutrecords: maximum voortrollen, herstarts tellen, meetduur afleiden uit de gecorrigeerde `start_time`.
 
 **5 · Aardlek→fase uit de gebeurtenissen.** Matchen op tijdvenster. Meerfasige sprong → *"meerdere fasen — controleer per groep"*. Tegenstrijdig met handmatige invoer → tonen als verschil, **nooit stil overschrijven**.
 
@@ -144,6 +156,7 @@ Wordt de standaardflow klant-tot-rapport langer? **Nee.**
 ## Wat open blijft
 
 - **`claude_fasecheck-featurespec.md` ontbreekt.** Dit document legt de v1-scope en de meetkant vast, maar niet de rekenregels van de Fasecheck zelf (PV-export als negatieve belasting, batterij laden én ontladen, beste-fase-advies). Daarvoor is die spec nodig.
-- **Opslagberekening meetmodus** — 128 kB, zie stap 2.
+- ~~Opslagberekening meetmodus (128 kB)~~ — **vervallen**: de dongle houdt de piek per fase zelf bij, dus er hoeft niets per minuut gelogd te worden. Zie stap 2.
+- **Gebeurtenislogging voor de aardlek-proef** — dít is nu het enige stuk waar de firmware nog echt iets moet bijhouden. `stats` geeft geen gebeurtenissen.
 - **De vier randvoorwaarden hierboven** (verwerkersovereenkomst, privacyteksten, EU-regio, Vercel-plan).
 - **Fase 0 fysiek afmaken:** doorlussen naast de fasebewaker en de handmatige stapproef (oven → L3, wasmachine → L2, kookplaat → L1) op de referentie-installatie.
