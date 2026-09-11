@@ -74,10 +74,12 @@ import { trackEvent } from "./analytics";
 import {
   toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
 } from "./wkb/model";
+// Het paspoortformaat komt uit de standaard zelf, niet uit een kopie hier:
+// github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
 import {
   MKP_BASIS, MKP_SPEC_VERSIE, eanValide, mkpEncode, mkpDecode,
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
-} from "./wkb/mkp";
+} from "meterkastpaspoort";
 import { mkpBouw } from "./wkb/mkp-bouw";
 import { esc, saneerImport } from "./wkb/veilig";
 

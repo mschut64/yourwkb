@@ -13,7 +13,7 @@ import {
   MKP_BASIS, MKP_SPEC_VERSIE, eanValide,
   mkpEncode, mkpDecode, mkpUrl, mkpSamenvatting,
   QR_TEKENS_GRENS, qrWaarschuwing,
-} from "../components/wkb/mkp.js";
+} from "meterkastpaspoort";
 import { mkpBouw } from "../components/wkb/mkp-bouw.js";
 
 let passed = 0, failed = 0;

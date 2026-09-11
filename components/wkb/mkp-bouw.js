@@ -14,7 +14,7 @@
 // Let op: expliciete .js-extensie. Webpack vindt het bestand ook zonder,
 // maar Node niet — en de tests draaien op Node.
 import { toNum, belastingcheck } from "./model.js";
-import { MKP_SPEC_VERSIE, eanValide } from "./mkp.js";
+import { MKP_SPEC_VERSIE, eanValide } from "meterkastpaspoort";
 
 // Bouwt het paspoort-object uit de app-data conform de spec-versie uit mkp.js (nu v0.2).
 // Onbekende/lege velden worden weggelaten om de QR compact te houden.

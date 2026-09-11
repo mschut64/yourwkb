@@ -10,10 +10,11 @@
     "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
+    "meterkastpaspoort": "github:mschut64/meterkastpaspoort",
     "next": "14.2.35",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
     "qrcode": "^1.5.4",
-    "jsqr": "^1.4.0"
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }
