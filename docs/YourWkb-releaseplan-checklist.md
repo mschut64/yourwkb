@@ -120,6 +120,14 @@ Spec `claude_fasecheck-featurespec.md` **ligt niet in de repo**, uitwerking in r
 - [ ] Vastleggen in rapport + `fase`-veld in MKP spec v0.2
 - [ ] Langs Maurits & Herman
 
+### Gemeten Fasecheck v1 — scope vastgelegd 11-09-2026
+
+**`docs/claude_fasecheck-v1-scope.md`** — besluiten: verdelingsadvies zit **in v1** (de aardlek-proef schuift daarmee van fase 3 naar de kern), de **installateur** plaatst de dongle, **geen doorgeefluik** in v1, hardware is de **Pro+** met P1-uitgang zodat doorlussen kan.
+
+Grens die daaruit volgt: het verdelingsadvies reikt tot **aardlekniveau**, niet tot losse apparaten — uit opgeteld vermogen per fase is niet te scheiden wat elk apparaat bijdraagt. De app levert de feiten, de installateur beslist wat hij verhangt.
+
+Obstakel dat de flow bepaalt: de app draait op HTTPS, de dongle op HTTP, dus **de app kan de dongle niet rechtstreeks bevragen** (mixed content). Gekozen route: proef in één doorloop → bestand downloaden → delen naar YourWkb → de app rekent en toont het terwijl de installateur er nog staat.
+
 ### P1-meting — `docs/claude_p1-meting-featurespec.md` (in de repo sinds 11-09-2026)
 
 Hardware **aangeschaft**: Smartstuff Wifi P1 Dongle Pro+ (met P1-uitgang, zodat een bestaande loadbalancer of HomeWizard doorgelust blijft werken). Maakt van de geschatte fasebelasting een **gemeten** waarde — nu staat er letterlijk "indicatie o.b.v. schatting".
