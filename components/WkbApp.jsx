@@ -3303,9 +3303,9 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           // mkpBouw staat in een handler met een eigen try/catch; hier zou een
           // fout het hele paspoortscherm wit maken, en dan is de installateur
           // zijn stap kwijt voor een regel die alleen informeert.
-          let uit = null;
+          let uit = null, voorbeeld = null;
           try {
-            const voorbeeld = mkpBouw(data, discipline);
+            voorbeeld = mkpBouw(data, discipline);
             uit = belastingcheck(voorbeeld.grp, voorbeeld.ha, m.lbAan, "");
           } catch { return null; }
           if (!uit) return (
@@ -3314,16 +3314,32 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
               minstens één groep hierboven.
             </div>
           );
-          const kleur = uit.r==="groen" ? K.green : uit.r==="rood" ? K.red : K.orange;
+          // Dezelfde bron als de check zelf gebruikt, zodat het label meeverandert
+          // zodra er een P1-meting is: dan staat hier vanzelf "gemeten over 7
+          // dagen" in plaats van "indicatie o.b.v. schatting", zonder dat hier
+          // nog iets aan hoeft te veranderen.
+          const basis = basisbelastingKw(voorbeeld.grp, m.lbAan);
+          const fasenHa = toNum(voorbeeld.ha && voorbeeld.ha.f) === 3 ? 3 : 1;
+          const capaciteit = (fasenHa * toNum(voorbeeld.ha && voorbeeld.ha.a) * 230) / 1000;
+
+          const kom = (n, d=1) => Number(n).toFixed(d).replace(".", ",");
+          const titel = uit.r === "groen" ? "Belasting past binnen de aansluiting"
+                      : uit.r === "rood"  ? "Belasting overschrijdt de aansluiting"
+                      :                     "Belasting nadert de grens van de aansluiting";
+          const cijfers = basis && capaciteit > 0
+            ? `${kom(basis.kw)} van ${kom(capaciteit)} kW`
+            : null;
+          const fasenTxt = voorbeeld.ha && voorbeeld.ha.a
+            ? `${toNum(voorbeeld.ha.f) === 3 ? "3" : "1"}×${toNum(voorbeeld.ha.a)} A`
+            : null;
           return (
-            <div style={{marginTop:10, paddingTop:8, borderTop:`1px solid ${K.border}`}}>
-              <div style={{fontWeight:700, fontSize:13}}>
-                Belastingcheck: <span style={{color:kleur, textTransform:"uppercase"}}>{uit.r}</span>
-              </div>
-              <div style={{fontSize:11, color:K.muted, marginTop:2}}>
-                Indicatie op basis van de ingevulde vermogens; gaat mee in het meterkastpaspoort.
-              </div>
-            </div>
+            <StatusVlak
+              level={uit.r === "groen" ? "ok" : uit.r === "rood" ? "fail" : "warn"}
+              titel={titel}
+              sub={[[cijfers, fasenTxt ? `(${fasenTxt})` : null].filter(Boolean).join(" "),
+                    basis && basis.label].filter(Boolean).join(" · ")}
+              style={{marginTop:10}}
+            />
           );
         })()}
       </div>
