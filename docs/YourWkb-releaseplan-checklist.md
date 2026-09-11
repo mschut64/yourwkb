@@ -109,15 +109,19 @@ Wél bekend: er bestaat **werkende Kastscan-code buiten deze repo** — de belas
 
 Oorspronkelijke omschrijving. Foto van de geopende verdeler vult groepen/aardlekken/fasen vóór in — de foto vult in, de installateur bevestigt. Volle resolutie verplicht, HEIC-ondersteuning. Testbasis `claude_fotokalibratie-kasten-herman-2026-08.md`. Levert de faseverdeling aan R3b.
 
-## R3b — Fasecheck v1 🔄 deels gedaan
+## R3b — Fasecheck v1 🔄 rekenkern af, koppeling met de meting open
 
-Spec `claude_fasecheck-featurespec.md` **ligt niet in de repo**, uitwerking in roadmap §2.1. Absorbeert de oude belastingcheck. Per fase rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies. Optionele stap in bat/lp/wp/pv, voorgevuld uit het meterkastpaspoort (`grp`-lijst). Rekenkern als pure functies zodat extract-logica hem oppakt. Eerst langs Maurits & Herman.
+Spec `claude_fasecheck-featurespec.md` **ligt niet in de repo**, uitwerking in roadmap §2.1. Absorbeert de oude belastingcheck. Per fase rekenen: capaciteit = A × 230 V, vrije ruimte = capaciteit − piek, PV-export als negatieve belasting, reserve default 1,0 kW, oordeel groen/oranje/rood + beste-fase-advies. Optionele stap in bat/lp/wp/pv, voorgevuld uit het meterkastpaspoort (`grp`-lijst). Rekenkern als pure functies met een eigen testsuite. Eerst langs Maurits & Herman.
 
 - [x] **Belastingcheck wordt berekend** (`v2026-09-03-A`, roadmap §2.1). Gelijktijdigheidsfactor **0,6** uit NEN-EN-IEC 61439 over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij); met gezamenlijke load balancer factor 1. De app beschréef die regel al bij de load balancing maar rekende hem nergens uit — `p.chk` werd alleen getoond. Rekenkern overgenomen uit Kastscan. **+25 regressietests (80 → 105).** Beperking t.o.v. Kastscan: daar kent elke groep een fase en wordt per fase gerekend; hier dragen groepen alleen `f: 1|3`.
-- [ ] Per fase rekenen (vraagt de faseverdeling — komt uit R3a of uit de P1-meting)
-- [ ] Rekenkern `bron: 'geschat' | 'gemeten'` laten accepteren — **kan nu al**, zonder de ontbrekende spec, en voorkomt herbouw zodra de P1-meting er is
+- [x] **Rekenkern `bron: 'geschat' | 'gemeten'`** (`v2026-09-11-A`). `basisbelastingKw()` kent beide bronnen; op een gemeten piek gaat de gelijktijdigheidsfactor er **niet** overheen, want wat de meter zag liep werkelijk tegelijk. Gebouwd vóór de P1-meting er is, zodat er straks niets herbouwd hoeft te worden. **+2 tests.**
+- [x] **Fase per aardlekgroep vastleggen** (`v2026-09-11-A`). Veld `L` (L1/L2/L3 of leeg) per aardlekgroep in de groepen-stap, met dezelfde namen als Kastscan. Een gegokte fase is schadelijker dan een lege — het advies bouwt erop voort — dus "wissen" is een volwaardige keuze en leeglaten heeft geen rode rand.
+- [x] **`fn` in het paspoort volgens spec v0.2 §4.4.** Beide apps schreven `fase: "L2"`; dat veld bestaat niet in de specificatie en de referentielezer op meterkastpaspoort.nl kent het niet. Nu `fn: [2]` respectievelijk `fn: [1,2,3]`, in YourWkb én Kastscan.
+- [x] **Per fase rekenen + zichtbaar in de paspoortstap** (`v2026-09-11-B`). `components/wkb/fasebalans.js`: capaciteit = A × 230 V per fase, belasting per fase uit `grp[].fn`, vrije ruimte = capaciteit − belasting − 1,0 kW reserve, oordeel ok/let-op/afwijking per fase (drempels 70% en 100%) en de fase met de meeste ruimte als advies. De paspoortstap toont dat als balken onder de belastingcheck. Groepen zonder fase worden apart geteld in kW in plaats van overgeslagen — anders lijkt een half ingevulde kast te licht belast. **+41 tests (214 → 255).** De open normvraag *telt teruglevering mee als belasting?* is een parameter `pvTelling` met de huidige YourWkb-regel als default, geen stil besluit in code.
 - [ ] Optionele stap in bat/lp/wp/pv, voorgevuld uit het MKP
-- [ ] Vastleggen in rapport + `fase`-veld in MKP spec v0.2
+- [ ] Gelijktijdigheid **per fase of over het totaal?** — Kastscan doet het eerste, YourWkb het tweede; daardoor kan dezelfde kast in de ene app rood zijn en in de andere groen. Vraag 9 uit het voorstel van augustus, nog onbeantwoord. **Normvraag voor Martin.**
+- [ ] Telt teruglevering mee als belasting? Drie bronnen, drie antwoorden (nul / negatief / positief). Geen daarvan toetst maximale teruglevering zónder verbruik, fysiek het zwaarste geval. **Normvraag voor Martin en Herman.**
+- [ ] De fasebalans vastleggen in het rapport
 - [ ] Langs Maurits & Herman
 
 ### Gemeten Fasecheck v1 — scope vastgelegd 11-09-2026

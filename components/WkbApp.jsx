@@ -1,5 +1,19 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-11-B (fasecheck v1, stap 2 — de balans per fase zichtbaar):
+//   • De paspoortstap toont onder de belastingcheck de belasting PER FASE: een
+//     balk per fase met de belasting tegen de capaciteit (A x 230 V), de fase
+//     met de meeste vrije ruimte als advies voor een uitbreiding, en de melding
+//     welke fase overloopt. Dit is waar de Fasecheck om draait — de slimme meter
+//     saldeert over drie fasen, de hoofdzekering niet, dus drie zware groepen op
+//     L2 passen prima binnen 3x25 A en laten toch die zekering komen.
+//   • Groepen zonder vastgelegde fase worden apart geteld in kW en getoond met
+//     de verwijzing naar de groepen-stap. Ze stilzwijgend overslaan zou een half
+//     ingevulde kast te licht belast laten lijken — de verkeerde conclusie.
+//   • Rekenkern in components/wkb/fasebalans.js (41 tests), gevormd op de
+//     paspoort-groepenlijst zodat Kastscan hem ongewijzigd kan gebruiken en een
+//     P1-meting er zonder vertaling in past.
+//
 // 2026-09-11-A (fasecheck v1, stap 1 — herkomst van de basisbelasting):
 //   • basisbelastingKw() kent nu twee bronnen. Bij 'geschat' blijft alles zoals
 //     het was: optellen uit het paspoort met de gelijktijdigheidsfactor 0,6
@@ -81,6 +95,7 @@ import {
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
 } from "meterkastpaspoort";
 import { mkpBouw } from "./wkb/mkp-bouw";
+import { faseBalans } from "./wkb/fasebalans";
 import { esc, saneerImport } from "./wkb/veilig";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
@@ -98,7 +113,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-11-A";
+const APP_VERSIE = "2026-09-11-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -299,6 +314,96 @@ const StatusVlak = ({ level="ok", titel, sub, style }) => {
         <div style={{ fontSize:15, fontWeight:600, color:c.kleur, lineHeight:1.3 }}>{titel}</div>
         {sub && <div style={{ ...S.hint, color:K.textSoft, fontSize:13, marginTop:2 }}>{sub}</div>}
       </div>
+    </div>
+  );
+};
+
+// ─── FASEBALANS ───────────────────────────────────────────────────────────────
+// De belasting per fase als balken (roadmap §2.1 — Fasecheck).
+//
+// Waarom dit náást de belastingcheck staat en hem niet vervangt: de check kijkt
+// naar de aansluiting als geheel, dit kijkt naar wat er fysiek door elke fase
+// loopt. Fasecompensatie is boekhouding, stroom is niet — de slimme meter
+// saldeert over drie fasen, de hoofdzekering niet. Drie zware groepen die
+// toevallig allemaal op L2 zitten passen prima binnen 3×25 A en laten toch de
+// zekering van L2 komen. Alleen deze weergave laat dat zien.
+//
+// De rekenkant staat in components/wkb/fasebalans.js — gedeeld, getest en
+// gevormd op de paspoort-groepenlijst, zodat Kastscan hem ongewijzigd kan
+// gebruiken en een P1-meting er straks zonder vertaling in past. Hier staat
+// alléén de weergave, want die is per app verschillend: de rekenregels zijn
+// gedeeld, de designtokens niet.
+const BALANS_KLEUR = { ok:K.green, "let-op":K.orange, afwijking:K.red };
+
+const FaseBalansVlak = ({ balans, style }) => {
+  // Bij één fase valt er niets te verdelen; de belastingcheck erboven zegt daar
+  // al alles over, en een balk van één regel suggereert een keuze die er niet is.
+  if (!balans || !Array.isArray(balans.rijen) || balans.rijen.length < 2) return null;
+  const kom = (n, d=1) => Number(n).toFixed(d).replace(".", ",");
+  const beste = balans.rijen.find(r => r.fase === balans.besteFase);
+  const ruimte = beste && beste.vrijKw > 0;
+  const over = balans.rijen.filter(r => r.niveau === "afwijking").map(r => r.fase);
+  return (
+    <div style={{ borderRadius:K.radiusSm, padding:"12px 14px", background:K.surface,
+      border:`1px solid ${K.border}`, ...style }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, marginBottom:10 }}>
+        <span style={{ fontSize:13, fontWeight:700 }}>Belasting per fase</span>
+        <span style={{ fontSize:11, color:K.muted }}>{balans.label}</span>
+      </div>
+
+      {balans.rijen.map(r => {
+        const kleur = BALANS_KLEUR[r.niveau] || K.green;
+        // Balk afgekapt op 100%: een fase die op 140% staat is niet anderhalf keer
+        // zo breed te tekenen. Dát hij overloopt zegt de kleur, hóéveel het getal.
+        const breedte = Math.max(0, Math.min(1, r.bezet)) * 100;
+        return (
+          <div key={r.fase} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+            <span style={{ width:22, flexShrink:0, fontSize:13, fontWeight:700, color:kleur }}>{r.fase}</span>
+            <div style={{ flex:1, minWidth:0, height:10, borderRadius:5, background:K.bg,
+              border:`1px solid ${K.border}`, overflow:"hidden" }}>
+              <div style={{ width:`${breedte}%`, height:"100%", background:kleur }}/>
+            </div>
+            <span style={{ width:112, flexShrink:0, textAlign:"right", fontSize:11, color:K.textSoft,
+              fontVariantNumeric:"tabular-nums" }}>
+              {kom(r.belastingKw)} van {kom(r.capaciteitKw)} kW
+            </span>
+          </div>
+        );
+      })}
+
+      <div style={{ fontSize:11, color:K.muted, marginTop:2 }}>
+        {kom(balans.rijen[0].capaciteitKw)} kW per fase beschikbaar · {kom(FASE_RESERVE_KW)} kW reserve
+        aangehouden{balans.factor !== 1 ? ` · gelijktijdigheid ${kom(balans.factor, 1)} over de grote verbruikers` : ""}
+      </div>
+
+      {/* Het getal dat de installateur motiveert om de fase per aardlekgroep vast
+          te leggen. Zonder die toewijzing lijkt een half ingevulde kast licht
+          belast, en dat is precies de verkeerde conclusie. */}
+      {!balans.volledig && (
+        <div style={{ fontSize:11, color:K.orange, marginTop:8, lineHeight:1.45 }}>
+          ⚠ {balans.onbekendAantal === 1 ? "1 groep" : `${balans.onbekendAantal} groepen`} ({kom(balans.onbekendKw)} kW)
+          {" "}heeft nog geen fase. Zet die in de groepen-stap (stap 6) bij de aardlekgroep — tot die tijd is
+          de verdeling hierboven onvolledig en het advies hieronder niet betrouwbaar.
+        </div>
+      )}
+
+      {/* Het advies mag nooit geruststellender klinken dan de balans is. Zolang
+          één fase overloopt, is "hier is nog ruimte" het verkeerde eerste woord:
+          dan moet er eerst herverdeeld worden, en pas daarna uitgebreid. */}
+      {beste && (
+        <div style={{ fontSize:12, color:K.textSoft, marginTop:8, lineHeight:1.45 }}>
+          {over.length > 0
+            ? <>Eerst herverdelen: <strong style={{color:K.red}}>{over.join(" en ")}</strong> {over.length > 1 ? "lopen" : "loopt"} over
+                de capaciteit. {ruimte
+                  ? <>De meeste ruimte staat op <strong style={{color:K.text}}>{beste.fase}</strong> ({kom(beste.vrijKw)} kW vrij).</>
+                  : <>Geen enkele fase heeft nog vrije ruimte binnen de reserve.</>}</>
+            : ruimte
+              ? <>Meeste ruimte: <strong style={{color:K.text}}>{beste.fase}</strong> — {kom(beste.vrijKw)} kW vrij.
+                  Een nieuwe eenfasegroep hoort daar het minst in de weg te zitten.</>
+              : <>Geen enkele fase heeft nog vrije ruimte binnen de reserve. Een uitbreiding vraagt om
+                  herverdelen over de fasen, sturing, of een zwaardere aansluiting.</>}
+        </div>
+      )}
     </div>
   );
 };
@@ -2862,14 +2967,23 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           const fasenTxt = voorbeeld.ha && voorbeeld.ha.a
             ? `${toNum(voorbeeld.ha.f) === 3 ? "3" : "1"}×${toNum(voorbeeld.ha.a)} A`
             : null;
+          // De balans deelt de invoer met de check hierboven: dezelfde groepen,
+          // dezelfde hoofdaansluiting, dezelfde sturingsvraag. Alleen de optiek
+          // verschilt — de check telt op over de aansluiting, de balans rekent
+          // per fase. `meting` blijft voorlopig leeg; zodra de P1-dongle waarden
+          // levert gaat dat veld hier in en verandert het label vanzelf mee.
+          const balans = faseBalans({ grp: voorbeeld.grp, ha: voorbeeld.ha, lbAan: m.lbAan });
           return (
-            <StatusVlak
-              level={uit.r === "groen" ? "ok" : uit.r === "rood" ? "fail" : "warn"}
-              titel={titel}
-              sub={[[cijfers, fasenTxt ? `(${fasenTxt})` : null].filter(Boolean).join(" "),
-                    basis && basis.label].filter(Boolean).join(" · ")}
-              style={{marginTop:10}}
-            />
+            <>
+              <StatusVlak
+                level={uit.r === "groen" ? "ok" : uit.r === "rood" ? "fail" : "warn"}
+                titel={titel}
+                sub={[[cijfers, fasenTxt ? `(${fasenTxt})` : null].filter(Boolean).join(" "),
+                      basis && basis.label].filter(Boolean).join(" · ")}
+                style={{marginTop:10}}
+              />
+              <FaseBalansVlak balans={balans} style={{marginTop:10}}/>
+            </>
           );
         })()}
       </div>
