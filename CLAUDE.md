@@ -34,6 +34,23 @@ Elke toevoeging is **automatisch**, **optioneel**, of **vervangt handwerk**. Com
 - Mail: **Resend** (afzender `YourWkb <rapport@yourwkb.nl>`). AI-analyse: **Anthropic API** (server-side).
 - Contactadres: **info@yourwkb.nl** (bestaat en werkt).
 
+### ⚠️ Kastscan — het zusterproject dat je moet kennen
+
+**`~/projects/kastscan`** (kastscan.nl). Van foto naar gelabelde groepenkast: de foto vult in, de installateur bevestigt. Geen los experiment maar de tweede helft van hetzelfde plan — **de modules zijn zo gebouwd dat delen 1-op-1 naar YourWkb kunnen.** De belastingcheck uit `v2026-09-03-A` is daar al vandaan gekomen.
+
+Lees dat project vóór je aan de Fasecheck, de Kastscan-integratie of het meterkastpaspoort werkt. Wat daar staat en hier niet:
+
+- `components/kastscan/model.js` — 2016 regels, 103 exports, **1104 groene tests**. Modulair ESM, waar YourWkb bewust één bestand is.
+- Het complete fase-apparaat: `faseBalans`, `faseCapaciteitKw`, `FASE_RESERVE_KW`, `cycleFase`, `magEigenFase`, `zetFaseBlok`, `isMeerpolig`, `indicatiefVermogen`, `FASE_KLEUR`. Het commentaar bij `faseBalans` zegt letterlijk dat het de Fasecheck zijn invoer levert — niet zelf opnieuw schrijven.
+- `MKP_SPEC_VERSIE = 2` met `grp[].fase` (L1/L2/L3); YourWkb staat nog op 1 zonder dat veld.
+
+**Let op twee valkuilen die daaruit voortkomen**, uitgewerkt in `docs/claude_kastscan-yourwkb-inventarisatie.md`:
+
+1. **`belastingcheck` heet in beide apps hetzelfde maar rekent anders** — Kastscan per fase, YourWkb over het totaal. Dezelfde kast kan daar rood en hier groen zijn.
+2. **`fase` betekent in beide apps iets anders** — daar *welke* fase (L1/L2/L3), hier *hoeveel* fasen ("1"/"3").
+
+Gebruik bij nieuw werk de namen van Kastscan, niet je eigen.
+
 ### Belangrijkste bestanden
 ```
 components/WkbApp.jsx      ← de héle app (~5700 regels, één bestand, bewust)
