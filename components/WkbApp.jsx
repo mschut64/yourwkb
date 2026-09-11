@@ -794,7 +794,7 @@ const LEERUITLEG = {
   },
   fasekeuze: {
     titel: "Op welke fase zit deze aardlekgroep?",
-    tekst: "Dit is iets anders dan het fasetype hierboven. Fasetype zegt hoeveel fasen een groep gebruikt (1 of 3); dit veld zegt wélke fase dat is: L1, L2 of L3. Een slimme meter saldeert over drie fasen, maar de hoofdzekering doet dat niet — fasecompensatie is boekhouding, stroom is fysiek. Drie groepen die toevallig allemaal op L2 zitten kunnen die fase overbelasten terwijl de meter netjes binnen de grenzen lijkt te blijven. Met dit veld kan de app bij een uitbreiding zeggen welke fase nog ruimte heeft, én welke groep in aanmerking komt om te verhangen als de verdeling scheef staat. Weet je het niet zeker, laat het dan leeg: een gok is hier schadelijker dan een leeg veld, want het advies bouwt erop voort. Meten kan ook — schakel de aardlek kort uit en kijk welke fase inzakt.",
+    tekst: "Dit is iets anders dan het aantal fasen hierboven. Dat zegt hoeveel fasen een groep gebruikt (1 of 3); dit veld zegt wélke fase dat is: L1, L2 of L3 — dezelfde notatie als de Kastscan en het groepenoverzicht gebruiken. Een slimme meter saldeert over drie fasen, maar de hoofdzekering doet dat niet — fasecompensatie is boekhouding, stroom is fysiek. Drie groepen die toevallig allemaal op L2 zitten kunnen die fase overbelasten terwijl de meter netjes binnen de grenzen lijkt te blijven. Met dit veld kan de app bij een uitbreiding zeggen welke fase nog ruimte heeft, én welke groep in aanmerking komt om te verhangen als de verdeling scheef staat. Weet je het niet zeker, laat het dan leeg: een gok is hier schadelijker dan een leeg veld, want het advies bouwt erop voort. Meten kan ook — schakel de aardlek kort uit en kijk welke fase inzakt.",
   },
   delta_t_i: {
     titel: "ΔT en ΔI van de aardlekschakelaar",
@@ -1614,7 +1614,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                   </>
                 )}
 
-                <label style={S.label}>Fasetype</label>
+                <label style={S.label}>Aantal fasen</label>
                 <div style={{display:"flex",gap:8,marginBottom:14}}>
                   <Pill small active={ag.fase==="1"} onClick={()=>updAG(ag.id,"fase","1")}>⚡ 1-fase 230V</Pill>
                   <Pill small active={ag.fase==="3"} onClick={()=>updAG(ag.id,"fase","3")}>⚡⚡⚡ 3-fase 400V</Pill>
@@ -1635,7 +1635,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                   </div>
                 ) : (
                   <>
-                    <label style={S.label}>Op welke fase<LeerIcoon onderwerp="fasekeuze"/></label>
+                    <label style={S.label}>Fase<LeerIcoon onderwerp="fasekeuze"/></label>
                     <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
                       {["L1","L2","L3"].map(l=>(
                         <Pill key={l} small active={ag.L===l}
@@ -3820,7 +3820,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             return `<tr>
               <td><strong>${esc(ag.naam)}</strong></td>
               <td style="font-size:8px">${eindLijst}</td>
-              <td>${ag.fase==="3"?"3F 400V":"1F 230V"}</td>
+              <td>${ag.fase==="3"?"3F 400V":(ag.L?`1F ${esc(ag.L)}`:"1F 230V")}</td>
               <td>${geenRcd?"Geen":`${ag.rcdMa}mA ${ag.rcdType}`}</td>
               <td ${dtOk2?'class="ok"':'class="nok"'}>${dt}</td>
               <td ${diOk?'class="ok"':'class="nok"'}>${di}</td>
