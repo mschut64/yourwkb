@@ -16,6 +16,34 @@
 import { toNum, belastingcheck } from "./model.js";
 import { MKP_SPEC_VERSIE, eanValide } from "meterkastpaspoort";
 
+// ─── Een thuisbatterij is twee dingen tegelijk ───────────────────────────────
+//
+// Spec v0.2 §4.4 bij `rol`: "Een batterij kan beide rollen hebben; noteer de rol
+// met de hoogste stroom of twee regels." Deze app schreef altijd alleen `voed`,
+// en daarmee verdween de ladende kant volledig uit het paspoort — terwijl een
+// accu die met 11 kW laadt en met 3 kW ontlaadt aan de afnemende kant het
+// zwaarst is. Sinds 12-09-2026 dus twee regels (besluit Martin).
+//
+// Laden is een afname en telt als grote verbruiker mee in de
+// gelijktijdigheidsfactor; ontladen levert aan de kam en krijgt die korting
+// niet. Omdat de fasetoets per fase de zwaarste van beide richtingen neemt,
+// verandert er niets zolang laden en ontladen even zwaar zijn — en dat is
+// precies de bedoeling.
+function batterijRegels({ kwOntladen, kwLaden, naam, f, fn }) {
+  const basis = {};
+  if (f !== undefined) basis.f = f;
+  if (fn !== undefined) basis.fn = fn;
+  if (naam) basis.n = String(naam).slice(0, 40);
+  const regel = (rol, kw) => {
+    const r = { t: "bat", rol, ...basis };
+    if (toNum(kw) > 0) r.kw = toNum(kw);
+    return r;
+  };
+  // Ontladen eerst: dat is de rol die deze app altijd al schreef, dus een lezer
+  // die maar één regel verwerkt ziet hetzelfde als voorheen.
+  return [regel("voed", kwOntladen), regel("af", kwLaden)];
+}
+
 // Bouwt het paspoort-object uit de app-data conform de spec-versie uit mkp.js (nu v0.2).
 // Onbekende/lege velden worden weggelaten om de QR compact te houden.
 export function mkpBouw(data, discipline) {
@@ -40,7 +68,7 @@ export function mkpBouw(data, discipline) {
   const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
   const kwByIdB = m.kwById || {};
   let grp = (data.aardlekgroepen||[]).flatMap(ag =>
-    (ag.eindgroepen||[]).map(e => {
+    (ag.eindgroepen||[]).flatMap(e => {
       const r = {
         t: e.type ? (EIND_NAAR_MKP_B[e.type] || "ov") : "alg",
         rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
@@ -60,7 +88,11 @@ export function mkpBouw(data, discipline) {
       const kw = toNum(kwByIdB[e.id]);
       if (kw > 0) r.kw = kw;
       if (e.naam) r.n = String(e.naam).slice(0,40);
-      return r;
+      // Eén ingevuld vermogen per eindgroep; laden en ontladen apart vragen zou
+      // de groepenlijst verdubbelen voor een geval dat zelden asymmetrisch is.
+      // In de batterij-discipline, waar de accu zélf de klus is, kan het wel.
+      if (r.t === "bat") return batterijRegels({ kwOntladen: kw, kwLaden: kw, naam: e.naam, f: r.f, fn: r.fn });
+      return [r];
     })
   );
   if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = [...data.mkpImport.grp];  // gescand paspoort als basis
@@ -71,10 +103,12 @@ export function mkpBouw(data, discipline) {
     if (kw>0) r.kw = kw; if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
     grp = [...grp, r];
   } else if (discipline === "batterij") {
-    const r = { t:"bat", rol:"voed" };
-    if (toNum(data.batKw)>0) r.kw = toNum(data.batKw);
-    if (data.batMerk) r.n = String(data.batMerk).slice(0,40);
-    grp = [...grp, r];
+    // Hier is de accu de klus, dus is het redelijk om laden en ontladen apart te
+    // vragen. Blijft het laadvermogen leeg, dan is hij symmetrisch — verreweg
+    // het meest voorkomende geval — en gelden beide regels met dezelfde waarde.
+    const ontladen = toNum(data.batKw);
+    const laden = toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : ontladen;
+    grp = [...grp, ...batterijRegels({ kwOntladen: ontladen, kwLaden: laden, naam: data.batMerk })];
   } else if (discipline === "pv") {
     const r = { t:"pv", rol:"voed" };
     if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
@@ -86,7 +120,11 @@ export function mkpBouw(data, discipline) {
     grp = [...grp, r];
   }
   (m.extraGrp||[]).filter(g=>g.t).forEach(g=>{
-    const r = { t:g.t, rol:g.rol || ((g.t==="pv"||g.t==="bat")?"voed":"af") };
+    if (g.t === "bat" && !g.rol) {
+      grp = [...grp, ...batterijRegels({ kwOntladen: g.kw, kwLaden: g.kw })];
+      return;
+    }
+    const r = { t:g.t, rol:g.rol || (g.t==="pv" ? "voed" : "af") };
     if (toNum(g.kw)>0) r.kw = toNum(g.kw);
     grp = [...grp, r];
   });

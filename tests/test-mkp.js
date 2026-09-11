@@ -157,6 +157,45 @@ const metOnzin = JSON.parse(JSON.stringify(appData));
 metOnzin.aardlekgroepen[0].L = "L9";
 eq(mkpBouw(metOnzin, "groepenkast").grp[0].fn, undefined, "6.8 ongeldige fasewaarde wordt geweigerd");
 
+// ─── Een thuisbatterij is twee regels ───────────────────────────────────────
+//
+// Spec v0.2 §4.4: "Een batterij kan beide rollen hebben; noteer de rol met de
+// hoogste stroom of twee regels." Deze app schreef alleen `voed`, waardoor de
+// ladende kant uit het paspoort verdween.
+{
+  const accu = mkpBouw({
+    instMetingen: { hoofdzekering: "25", zDrieFase: true },
+    batMerk: "Sessy", batKw: "3", batKwLaad: "11",
+  }, "batterij");
+  eq(accu.grp.length, 2, "6.10 een accu levert twee regels op");
+  eq(accu.grp.map(g => g.rol), ["voed", "af"], "6.11 ontladen én laden");
+  eq(accu.grp.map(g => g.kw), [3, 11], "6.12 elk met zijn eigen vermogen");
+  eq(accu.grp.every(g => g.t === "bat"), true, "6.13 beide van het type bat");
+  // Ontladen staat vooraan: dat is wat deze app altijd al schreef, dus een lezer
+  // die maar één regel verwerkt ziet hetzelfde als voorheen.
+  eq(accu.grp[0].rol, "voed", "6.14 de oude rol blijft de eerste regel");
+
+  // Symmetrisch is de regel: leeg laadvermogen = gelijk aan ontladen.
+  const symm = mkpBouw({
+    instMetingen: { hoofdzekering: "25", zDrieFase: true }, batMerk: "Sessy", batKw: "3",
+  }, "batterij");
+  eq(symm.grp.map(g => g.kw), [3, 3], "6.15 zonder apart laadvermogen gelden beide richtingen gelijk");
+}
+
+// Een accu als eindgroep in een groepenkast krijgt óók twee regels, met de fase
+// van zijn aardlekgroep op allebei.
+{
+  const metAccu = JSON.parse(JSON.stringify(appData));
+  metAccu.aardlekgroepen[2].eindgroepen[0] = { id: 31, naam: "Thuisbatterij", type: "batterij", ampere: "16A" };
+  metAccu.aardlekgroepen[2].L = "L3";
+  metAccu.mkp.kwById[31] = "5";
+  const uit = mkpBouw(metAccu, "groepenkast").grp.filter(g => g.t === "bat");
+  eq(uit.length, 2, "6.16 ook als eindgroep twee regels");
+  eq(uit.map(g => g.rol), ["voed", "af"], "6.17 beide rollen");
+  eq(uit.every(g => JSON.stringify(g.fn) === "[3]"), true, "6.18 allebei op de fase van hun aardlekgroep");
+  eq(uit.map(g => g.kw), [5, 5], "6.19 één ingevuld vermogen geldt voor beide richtingen");
+}
+
 // En het geheel moet door de codering passen.
 const gebouwdHeen = await mkpEncode(gebouwd);
 eq((await mkpDecode(gebouwdHeen)).grp[0].fn, [2], "6.9 fasenummer overleeft de QR-codering");

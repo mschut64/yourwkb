@@ -1,5 +1,21 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-B (de thuisbatterij als twee regels in het paspoort):
+//   • Spec v0.2 §4.4 laat de keuze: "noteer de rol met de hoogste stroom of twee
+//     regels". Deze app schreef altijd alleen `voed`, waardoor de ladende kant
+//     volledig uit het paspoort verdween. Nu twee regels — besluit Martin.
+//   • GEDRAGSWIJZIGING bij asymmetrische accu's. Een accu die met 11 kW laadt en
+//     met 3 kW ontlaadt telde als 3 kW en telt nu als 6,6 kW (11 x 0,6, want
+//     laden is een afname van een grote verbruiker). Op één fase van 3x25 A gaat
+//     die van groen naar rood. Zijn laden en ontladen even zwaar — verreweg het
+//     meest voorkomende geval — dan verandert er niets.
+//   • Nieuw veld in de batterij-stap: "Max. laadvermogen (kW)", optioneel. Leeg
+//     laten betekent symmetrisch, dus de flow wordt niet langer voor wie het niet
+//     nodig heeft. Het bestaande veld heet nu "Max. ontlaadvermogen".
+//   • Ook de onbekend-pot van de fasebalans neemt nu de zwaarste richting en niet
+//     de som: een accu zonder vastgelegde fase telde anders voor laden én
+//     ontladen mee, terwijl hij nooit allebei tegelijk doet.
+//
 // 2026-09-12-A (fasecheck v1, stap 4 — teruglevering telt mee, maar telt niet op):
 //   • GEDRAGSWIJZIGING. Voedende groepen (PV, ontladende batterij) werden
 //     overgeslagen: "het slechtste geval is geen zon en een lege accu". Ze tellen
@@ -150,7 +166,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-A";
+const APP_VERSIE = "2026-09-12-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2754,6 +2770,11 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   } : discipline === "batterij" ? {
     t:"bat", rol:"voed",
     kw: toNum(data.batKw) || undefined,
+    // Het paspoort krijgt twee regels (mkp-bouw.js › batterijRegels): ontladen
+    // levert aan de kam, laden neemt af. Deze regel is de vóórvertoning daarvan
+    // en moet dus allebei noemen, anders lijkt de accu lichter dan hij in de
+    // belastingcheck meetelt.
+    kwLaad: toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : toNum(data.batKw) || undefined,
     n: (data.batMerk||"thuisbatterij").slice(0,40),
   } : discipline === "pv" ? {
     t:"pv", rol:"voed",
@@ -2886,7 +2907,9 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
             <div style={{flex:1, minWidth:0, fontSize:13}}>
               {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️"}[eigenApparaat.t])||"⚙️"} {eigenApparaat.n}
               <span style={{color:K.yellow, fontSize:11}}> · deze klus</span>
-              <span style={{color:K.muted, fontSize:11}}>{eigenApparaat.kw?` · ${eigenApparaat.kw} kW`:""}{eigenApparaat.rol==="voed"?" · ↩︎ voedend":""}</span>
+              <span style={{color:K.muted, fontSize:11}}>{eigenApparaat.t === "bat"
+                ? `${eigenApparaat.kw ? ` · ${eigenApparaat.kw} kW ↩︎ ontladen` : ""}${eigenApparaat.kwLaad ? ` · ${eigenApparaat.kwLaad} kW laden` : ""}`
+                : `${eigenApparaat.kw?` · ${eigenApparaat.kw} kW`:""}${eigenApparaat.rol==="voed"?" · ↩︎ voedend":""}`}</span>
             </div>
           </div>
         )}
@@ -3769,7 +3792,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <h2>Systeem</h2>
         <table>
           <tr><td><strong>Batterij</strong></td><td>${data.batMerk||"—"}</td><td><strong>Capaciteit</strong></td><td>${data.batKwh||"—"} kWh</td></tr>
-          <tr><td><strong>Max. (ont)laadvermogen</strong></td><td>${data.batKw||"—"} kW</td><td><strong>Koppeling</strong></td><td>${data.batKoppeling||"—"}-gekoppeld</td></tr>
+          <tr><td><strong>Max. vermogen</strong></td><td>${esc(data.batKw||"—")} kW ontladen${toNum(data.batKwLaad)>0 && toNum(data.batKwLaad)!==toNum(data.batKw) ? ` · ${esc(data.batKwLaad)} kW laden` : ""}</td><td><strong>Koppeling</strong></td><td>${data.batKoppeling||"—"}-gekoppeld</td></tr>
           <tr><td><strong>Back-up/eilandbedrijf</strong></td><td colspan="3">${data.batEiland==="ja" ? `ja — omschakeltest ${bm.eilandtest==="ja"?"geslaagd":"NIET geslaagd/uitgevoerd"}` : "nee"}</td></tr>
         </table>
         <h2>Plaatsingseisen</h2>
@@ -5466,9 +5489,27 @@ function BAT_StapMateriaal({ data, onChange, onNext, onBack }) {
             <input style={S.input} placeholder="bijv. 7,7" inputMode="decimal" value={v("batKwh")} onChange={e=>zet("batKwh",e.target.value)}/>
           </div>
           <div style={{flex:1}}>
-            <label style={S.label}>Max. (ont)laadvermogen (kW)</label>
+            <label style={S.label}>Max. ontladen (kW)</label>
             <input style={S.input} placeholder="bijv. 3,68" inputMode="decimal" value={v("batKw")} onChange={e=>zet("batKw",e.target.value)}/>
           </div>
+        </div>
+        {/* Apart veld sinds 12-09-2026. Een accu die met 11 kW laadt en met 3 kW
+            ontlaadt belast de fase aan de afnemende kant het zwaarst, en met één
+            getal verdween dat uit het paspoort. Leeg laten mag: verreweg de
+            meeste accu's zijn symmetrisch, en dan gelden beide richtingen met
+            dezelfde waarde. Zo wordt de flow niet langer voor wie hem niet nodig
+            heeft. */}
+        <div style={{display:"flex", gap:8, marginTop:12}}>
+          <div style={{flex:1}}>
+            <label style={S.label}>Max. laden (kW)</label>
+            <input style={S.input} placeholder={v("batKw") ? `${v("batKw")} — gelijk aan ontladen` : "alleen als het afwijkt"}
+              inputMode="decimal" value={v("batKwLaad")} onChange={e=>zet("batKwLaad",e.target.value)}/>
+          </div>
+          <div style={{flex:1}}/>
+        </div>
+        <div style={{fontSize:11, color:K.muted, marginTop:6}}>
+          Laat leeg als laden en ontladen even snel gaan. Wijken ze af, dan komen beide richtingen
+          apart in het paspoort — de fasecheck rekent met de zwaarste van de twee.
         </div>
         <label style={{...S.label, marginTop:12}}>Koppeling</label>
         <div style={{display:"flex", gap:8}}>

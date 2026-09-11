@@ -396,6 +396,32 @@ eq(belastingcheck([{ t: "lp", rol: "af", kw: 11, f: 1, fn: [1] }], ha3, false, "
      "13b.15 de totaaltoets kijkt dezelfde kant op");
 }
 
+// Een thuisbatterij staat sinds 12-09-2026 als twee regels in het paspoort, en
+// dat maakt uit zodra laden en ontladen niet even zwaar zijn. Laden is een
+// afname van een grote verbruiker (dus mét de factor 0,6), ontladen levert aan
+// de kam (dus zonder korting).
+{
+  const accu = [
+    { t: "bat", rol: "voed", kw: 3,  f: 1, fn: [1] },   // ontladen
+    { t: "bat", rol: "af",   kw: 11, f: 1, fn: [1] },   // laden
+  ];
+  const pf = belastingPerFase(accu, ha3, false);
+  eq(pf.voeding.L1, 3, "13b.16 ontladen aan de leverende kant");
+  eq(pf.afname.L1, 11 * GELIJKTIJDIGHEID, "13b.17 laden aan de afnemende kant, mét de factor");
+  eq(pf.belasting.L1, 11 * GELIJKTIJDIGHEID, "13b.18 de ladende kant is hier de zwaarste");
+  eq(pf.richting.L1, "af", "13b.19 en dat is de afnemende richting");
+  eq(belastingcheck(accu, ha3, false, "d").r, "rood", "13b.20 6,6 van 5,8 kW op L1 — rood");
+  // Vóór de tweede regel telde alleen het ontlaadvermogen mee: 3 van 5,8 = 52%.
+  eq(belastingcheck([accu[0]], ha3, false, "d").r, "groen",
+     "13b.21 met alleen de ontladende regel zou dezelfde accu groen zijn");
+
+  // Zonder vastgelegde fase geldt ook in de onbekend-pot de zwaarste richting,
+  // niet de som: die accu laadt en ontlaadt nooit tegelijk.
+  const zonderFase = accu.map(({ fn, ...rest }) => rest);
+  eq(belastingPerFase(zonderFase, ha3, false).onbekendKw, 11,
+     "13b.22 onbekend vermogen is de zwaarste richting, geen 14 kW");
+}
+
 // Een enkelfasige aansluiting had de toets al per fase — die heeft er maar één.
 eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }], { f: 1, a: 25 }, false, "d").r, "oranje",
    "13b.9 op 1 fase verandert er niets");

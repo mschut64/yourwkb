@@ -245,7 +245,10 @@ export function belastingPerFase(grp, ha, lbAan) {
   const gewoon = { L1: 0, L2: 0, L3: 0 };
   const voeding = { L1: 0, L2: 0, L3: 0 };
   const aantal = { L1: 0, L2: 0, L3: 0 };
-  let onbekendKw = 0, onbekendAantal = 0;
+  // Ook het niet-toegerekende vermogen kent twee richtingen, en ook daar geldt
+  // de zwaarste en niet de som. Anders telt een thuisbatterij zonder vastgelegde
+  // fase voor laden én ontladen mee, terwijl hij nooit allebei tegelijk doet.
+  let onbekendAf = 0, onbekendVoed = 0, onbekendAantal = 0;
 
   for (const g of Array.isArray(grp) ? grp : []) {
     // Dezelfde terugvalwaarde als basisbelastingKw gebruikt: een laadpaal
@@ -255,7 +258,11 @@ export function belastingPerFase(grp, ha, lbAan) {
     if (isNaN(kw) || kw <= 0) continue;
 
     const nummers = fasenVanGroep(g, aantalFasen);
-    if (!nummers.length) { onbekendKw += kw; onbekendAantal += 1; continue; }
+    if (!nummers.length) {
+      if ((g.rol || "af") === "voed") onbekendVoed += kw; else onbekendAf += kw;
+      onbekendAantal += 1;
+      continue;
+    }
 
     const perGroep = kw / nummers.length;
     const pot = (g.rol || "af") === "voed" ? voeding
@@ -276,7 +283,10 @@ export function belastingPerFase(grp, ha, lbAan) {
     richting[f] = voeding[f] > afname[f] ? "voed" : "af";
   }
 
-  return { fasen, belasting, afname, voeding, richting, groot, gewoon, aantal, factor, onbekendKw, onbekendAantal };
+  return {
+    fasen, belasting, afname, voeding, richting, groot, gewoon, aantal, factor,
+    onbekendKw: Math.max(onbekendAf, onbekendVoed), onbekendAantal,
+  };
 }
 
 // De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
