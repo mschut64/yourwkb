@@ -1,5 +1,20 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-D (de fasebalans staat in het rapport):
+//   • Het rapport toonde de uitkomst van de belastingcheck helemaal niet — die
+//     ging alleen de QR in. Een volgende installateur kon dus hoogstens "chk:
+//     rood" terugvinden, zonder de getallen eronder. Nu een eigen hoofdstuk
+//     "Belasting per fase", in het gedeelde slotblok, dus in elke discipline.
+//   • Tabel per fase (capaciteit, belasting, vrije ruimte, beoordeling in de
+//     bestaande rapportkleuren) plus een kader met de aandachtspunten: welke fase
+//     overloopt, waar de meeste ruimte zit, hoeveel vermogen nog geen fase heeft,
+//     en op welke fase de teruglevering de belasting bepaalt.
+//   • Toon volgens de zuiverheidsregel: "aandachtspunt", nooit "afkeur". De
+//     slotregel zegt expliciet dat dit een hulpmiddel is, geen meting en geen
+//     goedkeuring, en dat de installateur verantwoordelijk blijft.
+//   • Geen nieuwe normlogica in dit bestand: alle getallen komen uit faseBalans
+//     en basisbelastingKw, die hun eigen tests hebben. Hier staat alleen opmaak.
+//
 // 2026-09-12-C (hoofdaansluiting netter, en één definitie van het eigen apparaat):
 //   • De vijf ampèrekeuzes in de paspoortstap stonden elk op een eigen regel, zo
 //     groot als de hoofdknop van het scherm. Oorzaak: S.btn zet width:100%, en
@@ -178,7 +193,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-C";
+const APP_VERSIE = "2026-09-12-D";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -3325,7 +3340,89 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <!--FOTOSECTIE-EINDE-->`;
     };
 
+    // ── Belasting per fase (R3b) ─────────────────────────────────────────────
+    //
+    // Tot 12-09-2026 stond de uitkomst van de belastingcheck nergens in het
+    // rapport: hij ging alleen de QR in. Daarmee was het enige dat een volgende
+    // installateur of een opdrachtgever kon teruglezen "chk: rood", zonder de
+    // getallen eronder.
+    //
+    // Kernregel, ook hier: per fase. De slimme meter saldeert over drie fasen,
+    // de hoofdzekering niet. Staat alles op L2, dan zegt een totaal van 11 kW op
+    // een 3x25 A-aansluiting niets over de zekering die er daadwerkelijk uit
+    // vliegt.
+    //
+    // Toon: dit is een indicatie en geen meting, en zeker geen goedkeuring. De
+    // zuiverheidsregel geldt onverkort — wij verifiëren niets, wij maken
+    // controleerbaar. Vandaar "aandachtspunt" en niet "afkeur", en een slotregel
+    // die de verantwoordelijkheid laat waar hij hoort.
+    const faseBalansHtml = () => {
+      const lbAanR = (data.mkp || {}).lbAan;
+      let paspoortR = null, balansR = null, basisR = null;
+      try {
+        paspoortR = mkpBouw(data, discipline);
+        balansR = faseBalans({ grp: paspoortR.grp, ha: paspoortR.ha, lbAan: lbAanR });
+        basisR = basisbelastingKw(paspoortR.grp, lbAanR);
+      } catch { return ""; }
+      if (!balansR || !basisR) return "";
+
+      const kom1 = (n) => Number(n).toFixed(1).replace(".", ",");
+      const KLASSE = { ok: "ok", "let-op": "warn", afwijking: "nok" };
+      const WOORD  = { ok: "past", "let-op": "weinig ruimte", afwijking: "boven de capaciteit" };
+      const meer = balansR.rijen.length > 1;
+
+      const rijenHtml = balansR.rijen.map(r => `
+        <tr>
+          <td><strong>${esc(r.fase)}</strong></td>
+          <td>${esc(kom1(r.capaciteitKw))} kW</td>
+          <td>${esc(kom1(r.belastingKw))} kW${r.richting === "voed" ? " <span style=\"color:#666\">(teruglevering)</span>" : ""}</td>
+          <td>${r.vrijKw > 0 ? `${esc(kom1(r.vrijKw))} kW` : "geen"}</td>
+          <td class="${KLASSE[r.niveau] || "ok"}">${esc(WOORD[r.niveau] || "past")}</td>
+        </tr>`).join("");
+
+      const over = balansR.rijen.filter(r => r.niveau === "afwijking").map(r => r.fase);
+      const krap = balansR.rijen.filter(r => r.niveau === "let-op").map(r => r.fase);
+      const beste = balansR.rijen.find(r => r.fase === balansR.besteFase);
+      const punten = [];
+      if (over.length)
+        punten.push(`<strong>${esc(over.join(" en "))}</strong> ${over.length > 1 ? "komen" : "komt"} boven de capaciteit van de fase. Herverdelen over de fasen, sturing, of een zwaardere aansluiting is hier aan de orde.`);
+      else if (krap.length)
+        punten.push(`<strong>${esc(krap.join(" en "))}</strong> ${krap.length > 1 ? "hebben" : "heeft"} nog weinig ruimte over.`);
+      if (meer && beste && beste.vrijKw > 0)
+        punten.push(`De meeste vrije ruimte staat op <strong>${esc(beste.fase)}</strong> (${esc(kom1(beste.vrijKw))} kW). Een nieuwe eenfasegroep zit daar het minst in de weg.`);
+      if (!balansR.volledig)
+        punten.push(`Van ${esc(String(balansR.onbekendAantal))} ${balansR.onbekendAantal === 1 ? "groep" : "groepen"} is de fase niet vastgelegd (samen ${esc(kom1(balansR.onbekendKw))} kW). Die is hierboven niet toegerekend; de verdeling is in zoverre onvolledig.`);
+      const terug = balansR.rijen.filter(r => r.richting === "voed").map(r => r.fase);
+      if (terug.length)
+        punten.push(`Op <strong>${esc(terug.join(" en "))}</strong> is de teruglevering zwaarder dan het verbruik en bepaalt die de belasting. Eigengebruik telt daar niet bij op: dat loopt over de kam van de ene groep naar de andere en passeert de hoofdzekering niet.`);
+
+      const hoe = balansR.bron === "gemeten"
+        ? `Gebaseerd op een meting (${esc(balansR.label)}). De gelijktijdigheidsfactor is hier niet toegepast: wat de meter zag, liep werkelijk tegelijk.`
+        : `Indicatie op basis van de vastgelegde groepen en hun vermogens — geen meting. ${lbAanR === true
+            ? "Met gezamenlijke vermogenssturing is gerekend met het volle vermogen: sturing is een software-instelling en geen veiligheidsmaatregel."
+            : `Over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij) is gerekend met gelijktijdigheidsfactor ${esc(kom1(GELIJKTIJDIGHEID))} volgens de richtlijn NEN-EN-IEC 61439.`}`;
+
+      return `
+      <h2>Belasting ${meer ? "per fase" : "van de aansluiting"}</h2>
+      <p style="font-size:9px;color:#555;margin-bottom:6px">
+        ${hoe} De capaciteit per fase is de hoofdzekering × 230 V; van de vrije ruimte is
+        ${esc(kom1(FASE_RESERVE_KW))} kW reserve afgetrokken.
+        ${meer ? "Er is per fase gerekend en niet over het totaal: de slimme meter saldeert over drie fasen, de hoofdzekering niet." : ""}
+      </p>
+      <table>
+        <tr><th>Fase</th><th>Capaciteit</th><th>Belasting</th><th>Vrije ruimte</th><th>Beoordeling</th></tr>
+        ${rijenHtml}
+      </table>
+      ${punten.length ? `<div class="warn-box">${punten.map(t => `<p>${t}</p>`).join("")}</div>` : ""}
+      <p style="font-size:8px;color:#666;margin-bottom:8px">
+        Deze tabel is een hulpmiddel bij het beoordelen van de ruimte op de aansluiting; het is geen meting
+        van de werkelijke belasting en geen goedkeuring van de installatie. De installateur blijft
+        verantwoordelijk voor de beoordeling ter plaatse.
+      </p>`;
+    };
+
     const signHtml = (norm, verklaring) => `
+      ${faseBalansHtml()}
       ${aiHtml()}
       ${notitieHtml()}
       <h2>Conformverklaring</h2>
