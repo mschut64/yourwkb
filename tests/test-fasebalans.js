@@ -211,6 +211,32 @@ eq(faseAdvies(kaal, { kw: 2, fasen: 1, groot: false }).erbijKw, 2, "9.12 geen fa
   eq(a.besteFase !== "L1", true, "9.15 en het advies mijdt de zwaarst gemeten fase");
 }
 
+// OP ÉÉN FASE VALT ER NIETS TE VERDELEN. Dan is de vraag niet "waar", maar
+// alleen "past het" — en een beste fase noemen waar er maar één is, is een
+// advies zonder inhoud.
+{
+  const een = faseBalans({ grp: [{ t: "kook", rol: "af", kw: 7.4, f: 1 }], ha: ha1 });
+  // 1 x 25 A = 5,75 kW. De kookgroep neemt daar 4,44 kW van; er blijft 1,3 kW
+  // over, dus een apparaat van 2 kW (x 0,6 = 1,2) past net.
+  const a = faseAdvies(een, { kw: 2, fasen: 1 });
+  eq(a.enkelfase, true, "9.18 eenfasige aansluiting wordt als zodanig gemeld");
+  eq(a.besteFase, null, "9.19 en geeft geen beste-fase-advies");
+  eq(a.opties.length, 1, "9.20 er is één optie");
+  eq(a.past, true, "9.21 de vraag of het past blijft wél beantwoord");
+  eq(a.krap, true, "9.22 en of het krap is ook");
+  // Een zwaarder apparaat past er niet meer bij.
+  eq(faseAdvies(een, { kw: 3.7, fasen: 1 }).past, false, "9.23 3,7 kW erbij past niet op 1 x 25 A");
+
+  // Een driefaseapparaat op een eenfasige aansluiting is geen verdelingsvraag
+  // maar een onmogelijkheid.
+  const drie = faseAdvies(een, { kw: 11, fasen: 3 });
+  eq(drie.onmogelijk, true, "9.24 driefasig kan niet op één fase");
+  eq(drie.past, false, "9.25 en past dus niet");
+  eq(drie.besteFase, null, "9.26 zonder advies waar het wel zou kunnen");
+}
+// Op drie fasen blijft het advies gewoon staan.
+eq(faseAdvies(kaal, { kw: 2, fasen: 1 }).enkelfase, false, "9.27 drie fasen is niet enkelfase");
+
 eq(faseAdvies(null, { kw: 11 }), null, "9.16 zonder balans geen advies");
 eq(faseAdvies(kaal, { kw: 0 }), null, "9.17 zonder vermogen geen advies");
 

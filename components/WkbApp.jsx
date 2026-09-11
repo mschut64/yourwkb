@@ -1,5 +1,18 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-G (op één fase valt er niets te verdelen):
+//   • Op een eenfasige hoofdaansluiting gaf de Fasecheck nog "beste fase: L1" —
+//     een advies zonder inhoud, want er is er maar één. De verdeling vervalt
+//     daar nu helemaal: geen fasekolommen bij de verbruikers, geen 1/3-keuze
+//     voor het apparaat, geen fasekeuze achteraf. Wat overblijft is de vraag die
+//     er wél toe doet: past het erbij, en hoeveel blijft er over.
+//   • Een driefaseapparaat op een eenfasige aansluiting is geen verdelingsvraag
+//     maar een onmogelijkheid, en zegt dat nu ook — met de twee uitwegen erbij
+//     (verzwaring bij de netbeheerder, of een eenfasige uitvoering).
+//   • Zet je de aansluiting om naar één fase, dan vervallen eerder gemaakte
+//     fasekeuzes. Anders blijven ze stilzwijgend in het paspoort staan terwijl
+//     het scherm ze niet meer toont.
+//
 // 2026-09-12-F (optionele Fasecheck in de apparaatstap — R3b compleet):
 //   • Laadpaal, thuisbatterij, warmtepomp en PV krijgen in hun apparaatstap een
 //     Fasecheck: waar kan dit apparaat het beste bij, vóórdat de kabel getrokken
@@ -245,7 +258,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-F";
+const APP_VERSIE = "2026-09-12-G";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -636,6 +649,12 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
       return r;   // geen kw: groepVermogenKw valt terug op de standaardwaarde
     });
 
+  // Op een eenfasige aansluiting valt er niets te verdelen. Dan vervalt de
+  // fasekeuze — zowel bij de bestaande verbruikers als bij het nieuwe apparaat —
+  // en blijft alleen de vraag over of het erbij past.
+  const enkelfaseAansluiting = uitPaspoort
+    ? toNum(data.mkpImport.ha?.f) === 1
+    : fc.haF === "1";
   const haA = toNum(uitPaspoort && data.mkpImport.ha?.a ? data.mkpImport.ha.a : fc.haA);
   const haF = uitPaspoort && data.mkpImport.ha?.f ? toNum(data.mkpImport.ha.f) : (fc.haF === "1" ? 1 : 3);
   const ha = { f: haF, a: haA };
@@ -643,7 +662,7 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
 
   const balans = haA > 0 ? faseBalans({ grp, ha, lbAan: (data.mkp || {}).lbAan }) : null;
   const kwNieuw = toNum(fc.kw) > 0 ? toNum(fc.kw) : apparaat.kw;
-  const fasenNieuw = toNum(fc.fasen) || apparaat.fasen;
+  const fasenNieuw = enkelfaseAansluiting ? 1 : (toNum(fc.fasen) || apparaat.fasen);
   const advies = balans ? faseAdvies(balans, { kw: kwNieuw, fasen: fasenNieuw, groot: apparaat.groot }) : null;
 
   if (!fc.open) return (
@@ -653,8 +672,10 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
         cursor: "pointer", fontFamily: "inherit", color: K.text, display: "block" }}>
       <div style={{ fontWeight: 700, fontSize: 13 }}>⚡ Fasecheck <span style={{ fontWeight: 400, color: K.muted }}>(optioneel)</span></div>
       <div style={{ fontSize: 11, color: K.muted, marginTop: 3 }}>
-        Waar kan deze {apparaat.naam} het beste bij? {uitPaspoort
-          ? "Het gescande paspoort staat klaar — tik om de verdeling te zien."
+        {enkelfaseAansluiting
+          ? `Past deze ${apparaat.naam} er nog bij?`
+          : `Waar kan deze ${apparaat.naam} het beste bij?`} {uitPaspoort
+          ? "Het gescande paspoort staat klaar — tik om het te zien."
           : "Tik om de kast in te vullen; het hoeft niet, maar het scheelt een verrassing achteraf."}
       </div>
     </button>
@@ -677,13 +698,16 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
         </div>
       ) : (<>
         <div style={{ fontSize: 11, color: K.muted, marginBottom: 8 }}>
-          Geen paspoort gescand. Vink aan wat er in de kast hangt en op welke fase — dat lees je van de
-          automaten af. Er wordt dan met standaardvermogens gerekend, dus de uitkomst is een <strong>indicatie</strong>.
+          Geen paspoort gescand. Vink aan wat er in de kast hangt{enkelfaseAansluiting ? "" : " en op welke fase — dat lees je van de automaten af"}.
+          Er wordt met standaardvermogens gerekend, dus de uitkomst is een <strong>indicatie</strong>.
         </div>
         <label style={S.label}>Hoofdaansluiting</label>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           {[["3", "3-fase"], ["1", "1-fase"]].map(([w, l]) =>
-            <button key={w} style={knopFc((fc.haF || "3") === w)} onClick={() => zetFc({ haF: w })}>{l}</button>)}
+            <button key={w} style={knopFc((fc.haF || "3") === w)}
+              onClick={() => zetFc(w === "1"
+                ? { haF: w, fasen: "", gekozen: "", fase_kook: "", fase_wp: "", fase_lp: "", fase_bat: "" }
+                : { haF: w })}>{l}</button>)}
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
             <input style={{ ...S.input, flex: 1, minWidth: 0 }} placeholder="25" inputMode="decimal"
               value={fc.haA || ""} onChange={e => zetFc({ haA: e.target.value })}/>
@@ -696,7 +720,7 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
               style={{ ...knopFc(!!fc[`aan_${k}`]), flex: "0 0 132px", textAlign: "left", paddingLeft: 10 }}>
               {icoon} {label}
             </button>
-            {fc[`aan_${k}`] && ["L1", "L2", "L3"].map(L => (
+            {fc[`aan_${k}`] && !enkelfaseAansluiting && ["L1", "L2", "L3"].map(L => (
               <button key={L} onClick={() => zetFc({ [`fase_${k}`]: fc[`fase_${k}`] === L ? "" : L })}
                 style={{ ...knopFc(fc[`fase_${k}`] === L), padding: "9px 2px" }}>{L}</button>
             ))}
@@ -720,7 +744,7 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
               value={fc.kw ?? ""} onChange={e => zetFc({ kw: e.target.value })}/>
             <span style={{ fontSize: 13, color: K.muted, fontWeight: 700 }}>kW</span>
           </div>
-          {[["1", "1-fase"], ["3", "3-fase"]].map(([w, l]) =>
+          {!enkelfaseAansluiting && [["1", "1-fase"], ["3", "3-fase"]].map(([w, l]) =>
             <button key={w} style={knopFc(String(fasenNieuw) === w)} onClick={() => zetFc({ fasen: w })}>{l}</button>)}
         </div>
       </div>
@@ -739,7 +763,24 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
             ? "In het gescande paspoort staat daar geen fase bij"
             : "Tik hierboven de fase aan bij die verbruiker"}/>
         {(() => {
-          const beste = advies.opties.find(o => o.fase === advies.besteFase);
+          const beste = advies.opties.find(o => o.fase === advies.besteFase) || advies.opties[0];
+          if (advies.onmogelijk) return (
+            <StatusVlak
+              level="fail"
+              titel="Driefasig kan niet op deze aansluiting"
+              sub="De aansluiting heeft één fase. Een driefaseapparaat vraagt een verzwaring bij de netbeheerder, of een eenfasige uitvoering."
+              style={{ marginTop: 10 }}/>
+          );
+          // Eén fase: niets te verdelen, alleen de vraag of het erbij past.
+          if (advies.enkelfase) return (
+            <StatusVlak
+              level={advies.past ? (advies.krap ? "warn" : "ok") : "fail"}
+              titel={advies.past
+                ? (advies.krap ? "Past, maar krap" : "Past op de aansluiting")
+                : "Past niet op de aansluiting"}
+              sub={`Eén fase, dus niets te verdelen. Met ${kom(advies.erbijKw)} kW erbij komt de belasting op ${kom(beste.naKw)} van ${kom(balans.rijen[0].capaciteitKw)} kW${advies.past ? ` — ${kom(beste.vrijNaKw)} kW vrij` : ""}.`}
+              style={{ marginTop: 10 }}/>
+          );
           if (advies.driefase) return (
             <StatusVlak
               level={advies.past ? (advies.krap ? "warn" : "ok") : "fail"}
@@ -760,7 +801,7 @@ const FaseCheckBlok = ({ data, onChange, discipline }) => {
 
         {/* De uitkomst vastleggen: de gekozen fase gaat mee het paspoort in als
             `fn` van dit apparaat, zodat de volgende installateur hem terugvindt. */}
-        {!advies.driefase && (<>
+        {!advies.driefase && !advies.enkelfase && (<>
           <div style={{ fontSize: 11, color: K.muted, marginTop: 10, marginBottom: 6 }}>
             Waar komt hij te hangen? De keuze gaat mee in het meterkastpaspoort.
           </div>

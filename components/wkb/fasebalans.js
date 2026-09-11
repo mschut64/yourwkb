@@ -134,8 +134,15 @@ export function faseAdvies(balans, { kw, fasen = 1, groot = true } = {}) {
 
   const factor = groot ? (balans.sturing ? 1 : GELIJKTIJDIGHEID) : 1;
   const erbijKw = vermogen * factor;
+  // Op een eenfasige aansluiting valt er niets te verdelen: alles hangt aan
+  // dezelfde fase. Dan is de vraag niet "waar", maar alleen "past het". Een
+  // "beste fase" noemen waar er maar één is, is een advies zonder inhoud.
+  const enkelfase = balans.rijen.length === 1;
   // Driefasig kan alleen op een aansluiting die drie fasen heeft.
   const driefase = toNum(fasen) === 3 && balans.rijen.length === 3;
+  // Een driefaseapparaat op een eenfasige aansluiting is geen verdelingsvraag
+  // maar een onmogelijkheid; dat hoort als zodanig terug te komen.
+  const onmogelijk = toNum(fasen) === 3 && enkelfase;
 
   const opties = balans.rijen.map((r) => {
     const extra = driefase ? erbijKw / 3 : erbijKw;
@@ -151,19 +158,28 @@ export function faseAdvies(balans, { kw, fasen = 1, groot = true } = {}) {
     };
   });
 
+  if (onmogelijk) return {
+    opties, driefase: false, enkelfase: true, onmogelijk: true, besteFase: null,
+    erbijKw, factor, past: false, krap: false,
+  };
+
   if (driefase) {
     const ergste = opties.reduce((b, o) => (o.bezetNa > b.bezetNa ? o : b), opties[0]);
     return {
-      opties, driefase: true, besteFase: null, erbijKw, factor,
+      opties, driefase: true, enkelfase: false, onmogelijk: false, besteFase: null,
+      erbijKw, factor,
       past: ergste.niveauNa !== "afwijking",
       krap: ergste.niveauNa === "let-op",
     };
   }
 
-  // Eénfasig: de fase waar ná plaatsing de meeste ruimte overblijft.
+  // Eénfasig apparaat: de fase waar ná plaatsing de meeste ruimte overblijft —
+  // tenzij de aansluiting er maar één heeft, want dan is er niets te kiezen.
   const beste = opties.reduce((b, o) => (o.vrijNaKw > b.vrijNaKw ? o : b), opties[0]);
   return {
-    opties, driefase: false, besteFase: beste.fase, erbijKw, factor,
+    opties, driefase: false, enkelfase, onmogelijk: false,
+    besteFase: enkelfase ? null : beste.fase,
+    erbijKw, factor,
     past: beste.niveauNa !== "afwijking",
     krap: beste.niveauNa === "let-op",
   };
