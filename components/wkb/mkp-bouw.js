@@ -46,13 +46,17 @@ export function mkpBouw(data, discipline) {
         rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
         f: ag.fase==="3" ? 3 : 1,
       };
-      // Spec v0.2: fase per apparaat. Alleen meesturen als hij is vastgelegd —
-      // een gegokte fase is schadelijker dan een ontbrekende, want het advies
-      // bouwt erop voort. Een 3-fasegroep staat op alle drie en krijgt dus geen
-      // enkele fase mee. Intern heet dit veld `L` omdat `fase` hier al het
-      // AANTAL fasen aanduidt; in het paspoort heet het `fase`, zoals in de
-      // Kastscan en in de specificatie.
-      if (r.f !== 3 && ["L1","L2","L3"].includes(ag.L)) r.fase = ag.L;
+      // Spec v0.2 §4.4: `fn` is de LIJST fasenummers waarop de groep is
+      // aangesloten — [1], [2], [3] of [1,2,3]. Niet `fase` met "L2": dat
+      // schrijven zowel Kastscan als een eerdere versie van deze code, maar de
+      // specificatie en de referentielezer op meterkastpaspoort.nl kennen dat
+      // veld niet. Een lezer die zich aan de standaard houdt, ziet het dus niet.
+      //
+      // Alleen meesturen als de fase is vastgelegd — een gegokte fase is
+      // schadelijker dan een ontbrekende, want het advies bouwt erop voort.
+      // Intern heet het veld `L` omdat `fase` hier het AANTAL fasen aanduidt.
+      if (r.f === 3) r.fn = [1, 2, 3];
+      else if (["L1","L2","L3"].includes(ag.L)) r.fn = [Number(ag.L.slice(1))];
       const kw = toNum(kwByIdB[e.id]);
       if (kw > 0) r.kw = kw;
       if (e.naam) r.n = String(e.naam).slice(0,40);

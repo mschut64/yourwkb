@@ -19,11 +19,24 @@
 
 export const MKP_BASIS = "https://meterkastpaspoort.nl/p#";
 
-// v2 (= spec v0.2) voegt ten opzichte van v1 `fase` per apparaat toe: L1, L2 of
-// L3. Kastscan schrijft die al; YourWkb bleef op v1 staan, waardoor de
-// fasekoppeling verdween zodra een paspoort van de ene app in de andere werd
-// gescand. Ouder leesmateriaal blijft gewoon werken — mkpDecode kijkt alleen of
-// `v` een getal is, en alle velden zijn optioneel.
+// v2 = spec v0.2, zoals gepubliceerd op meterkastpaspoort.nl. Belangrijkste
+// wijziging voor ons: `grp[].fn` — de LIJST fasenummers waarop een groep is
+// aangesloten ([1], [2], [3] of [1,2,3]). In v0.1 kon `f` óók een fasenummer
+// bevatten, wat tot verwarring leidde; sinds v0.2 is `f` alleen nog het AANTAL
+// fasen en staat het nummer in `fn`.
+//
+// Let op: zowel Kastscan als een eerdere versie van deze code schreef hier
+// `fase: "L2"`. Dat veld staat niet in de specificatie en de referentielezer op
+// meterkastpaspoort.nl kent het niet — een standaardconforme lezer ziet het dus
+// niet. Schrijf `fn`.
+//
+// Nog niet geïmplementeerd uit v0.2: `mat[]` (materiaal in de kast, met
+// grp[].mat als verwijzing), `erk` in de logboekregel (erkenning als
+// uitgever:nummer, hoort bij R2) en `sid`/`sig` (Ed25519-ondertekening per
+// logboekregel).
+//
+// Ouder leesmateriaal blijft werken: mkpDecode kijkt alleen of `v` een getal
+// is, en alle velden zijn optioneel.
 export const MKP_SPEC_VERSIE = 2;
 
 // EAN-18 validatie: 18 cijfers, NL begint met 87, laatste cijfer = GS1

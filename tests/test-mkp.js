@@ -50,9 +50,9 @@ const paspoort = {
   ha: { f: 3, a: 25 },
   kam: { mm2: 16, a: 63 },
   grp: [
-    { t: "kook", rol: "af", f: 1, fase: "L2", kw: 7.4, n: "Kookgroep" },
-    { t: "lp",   rol: "af", f: 3, kw: 11 },
-    { t: "pv",   rol: "voed", f: 1, fase: "L1", kw: 4 },
+    { t: "kook", rol: "af", f: 1, fn: [2], kw: 7.4, n: "Kookgroep" },
+    { t: "lp",   rol: "af", f: 3, fn: [1,2,3], kw: 11 },
+    { t: "pv",   rol: "voed", f: 1, fn: [1], kw: 4 },
   ],
   log: [{ d: "2026-09-11", b: "BlauweVisie", w: "laadpaal geplaatst" }],
 };
@@ -67,8 +67,8 @@ const ruw = JSON.stringify(paspoort).length;
 eq(heen.length < ruw, true, `2.3 gecodeerd (${heen.length}) is korter dan ruw JSON (${ruw})`);
 
 // De fase per apparaat is de toevoeging van v2 en moet de rit overleven.
-eq(terug.grp[0].fase, "L2", "2.4 fase per apparaat blijft behouden");
-eq(terug.grp[1].fase, undefined, "2.5 3-fasegroep draagt geen enkele fase");
+eq(terug.grp[0].fn, [2], "2.4 fasenummer per apparaat blijft behouden");
+eq(terug.grp[1].fn, [1,2,3], "2.5 3-fasegroep draagt alle drie de fasen");
 eq(MKP_SPEC_VERSIE, 2, "2.6 spec-versie staat op 2 (v0.2)");
 
 // Whitespace om het fragment heen komt voor bij plakken uit een bericht.
@@ -91,7 +91,7 @@ const groot = {
   v: MKP_SPEC_VERSIE, d: "2026-09-11", pc: "2691JJ", nr: "72",
   ha: { f: 3, a: 35 },
   grp: Array.from({ length: 40 }, (_, i) => ({
-    t: "ov", rol: "af", f: 1, fase: ["L1","L2","L3"][i % 3], kw: 2.3,
+    t: "ov", rol: "af", f: 1, fn: [(i % 3) + 1], kw: 2.3,
     n: `Eindgroep ${i + 1} met een tamelijk lange omschrijving`,
   })),
   log: Array.from({ length: 8 }, (_, i) => ({
@@ -147,19 +147,19 @@ eq(gebouwd.pc, "2691JJ", "6.2 postcode zonder spaties, hoofdletters");
 eq(gebouwd.ha, { f: 3, a: 25 }, "6.3 hoofdaansluiting uit de metingen");
 
 // De kern van v0.2: de fase gaat mee, maar alleen waar hij is vastgelegd.
-eq(gebouwd.grp[0].fase, "L2", "6.4 vastgelegde fase gaat mee in het paspoort");
-eq(gebouwd.grp[1].fase, undefined, "6.5 3-fasegroep krijgt geen enkele fase");
+eq(gebouwd.grp[0].fn, [2], "6.4 vastgelegde fase gaat als fn mee in het paspoort");
+eq(gebouwd.grp[1].fn, [1,2,3], "6.5 3-fasegroep krijgt alle drie de fasen");
 eq(gebouwd.grp[1].f, 3, "6.6 wel het aantal fasen");
-eq(gebouwd.grp[2].fase, undefined, "6.7 leeg gelaten fase wordt niet gegokt");
+eq(gebouwd.grp[2].fn, undefined, "6.7 leeg gelaten fase wordt niet gegokt");
 
 // Een gegokte fase is schadelijker dan een ontbrekende: onzin mag er niet in.
 const metOnzin = JSON.parse(JSON.stringify(appData));
 metOnzin.aardlekgroepen[0].L = "L9";
-eq(mkpBouw(metOnzin, "groepenkast").grp[0].fase, undefined, "6.8 ongeldige fasewaarde wordt geweigerd");
+eq(mkpBouw(metOnzin, "groepenkast").grp[0].fn, undefined, "6.8 ongeldige fasewaarde wordt geweigerd");
 
 // En het geheel moet door de codering passen.
 const gebouwdHeen = await mkpEncode(gebouwd);
-eq((await mkpDecode(gebouwdHeen)).grp[0].fase, "L2", "6.9 fase overleeft de QR-codering");
+eq((await mkpDecode(gebouwdHeen)).grp[0].fn, [2], "6.9 fasenummer overleeft de QR-codering");
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);
