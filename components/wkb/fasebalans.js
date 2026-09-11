@@ -34,32 +34,18 @@ import { toNum, FASE_RESERVE_KW, FASEN, belastingPerFase } from "./model.js";
 
 export { FASEN };
 
-// ─── De open normvraag: telt teruglevering mee als belasting? ────────────────
-//
-// Hier lopen drie bronnen uiteen, en dat is niet opgelost:
-//
-//   "nul"       Voedende groepen tellen niet mee. Het ongunstigste geval is geen
-//               zon en een lege accu. Zo rekent YourWkb sinds v2026-09-03-A.
-//   "negatief"  Teruglevering verlaagt de belasting. Zo rekent Kastscan
-//               (INDICATIEF_KW["zonnepanelen"] = -3,0).
-//   "positief"  Teruglevering belast de hoofdzekering net zo goed — de stroom
-//               loopt er doorheen, richting daargelaten. Zo staat het in het
-//               voorstel van augustus.
-//
-// Geen van drie toetst het geval dat fysiek het zwaarst kan zijn: maximale
-// teruglevering zonder gelijktijdig verbruik. "positief" komt daar het dichtst
-// bij. De keuze is aan Martin en Herman; daarom een parameter met de huidige
-// YourWkb-gedragsregel als default, en niet een stilzwijgend besluit in code.
-export const PV_TELLING = ["nul", "negatief", "positief"];
+// De normvraag "telt teruglevering mee als belasting?" is op 12-09-2026 door
+// Martin beslist: ja, maar hij telt niet óp bij de afname. Zie de toelichting
+// bij belastingPerFase in model.js — de regel zelf staat daar, want daar wordt
+// hij toegepast.
 
 /**
- * @param grp        groepen in paspoortvorm (spec v0.2 §4.4)
- * @param ha         hoofdaansluiting { f, a }
- * @param lbAan      gezamenlijke load balancing aanwezig
- * @param meting     optioneel { L1, L2, L3, bron, label } — gemeten piek in kW
- * @param pvTelling  "nul" | "negatief" | "positief"
+ * @param grp     groepen in paspoortvorm (spec v0.2 §4.4)
+ * @param ha      hoofdaansluiting { f, a }
+ * @param lbAan   gezamenlijke load balancing aanwezig
+ * @param meting  optioneel { L1, L2, L3, bron, label } — gemeten piek in kW
  */
-export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
+export function faseBalans({ grp, ha, lbAan, meting } = {}) {
   const ampere = toNum(ha && ha.a);
   if (!(ampere > 0)) return null;
 
@@ -67,7 +53,7 @@ export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
   // De optelling per fase staat in model.js, zodat de belastingcheck en deze
   // balans met dezelfde getallen werken. Wat hier bovenop komt is de capaciteit,
   // de reserve, het oordeel en het advies.
-  const pf = belastingPerFase(grp, ha, lbAan, pvTelling);
+  const pf = belastingPerFase(grp, ha, lbAan);
   const gemeten = meting && FASEN.some((f) => toNum(meting[f]) > 0);
 
   const rijen = pf.fasen.map((f) => {
@@ -89,6 +75,12 @@ export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
       aantal: pf.aantal[f],
       groot: pf.groot[f],
       gewoon: pf.gewoon[f],
+      // Welke van de twee richtingen deze fase bepaalt. Zonder dit staat er
+      // "5,0 van 5,8 kW" bij een huis dat op dat moment niets verbruikt, en
+      // zoekt de installateur zich suf naar de verbruiker die er niet is.
+      voeding: pf.voeding[f],
+      afnameKw: pf.afname[f],
+      richting: gemeten ? "af" : pf.richting[f],
     };
   });
 
@@ -102,7 +94,6 @@ export function faseBalans({ grp, ha, lbAan, meting, pvTelling = "nul" } = {}) {
     label: gemeten && meting.label ? meting.label : "indicatie o.b.v. schatting",
     factor: gemeten ? 1 : pf.factor,
     sturing: lbAan === true,
-    pvTelling,
     // Hoeveel er NIET is toegerekend omdat de fase onbekend is. Zolang dit boven
     // nul staat is de balans onvolledig, en dat moet zichtbaar zijn in plaats van
     // verstopt in een te gunstige uitkomst.

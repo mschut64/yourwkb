@@ -308,8 +308,12 @@ eq(belastingcheck([{ t: "lp", rol: "af", kw: 11 }], { f: 3 }, false, "d"), null,
 eq(belastingcheck([], ha3, false, "d"), null, "13.8b zonder groepen geen check");
 eq(belastingcheck([{ t: "alg", rol: "af" }], ha3, false, "d"), null,
    "13.8c zonder een enkel bekend vermogen geen check");
-eq(belastingcheck([{ t: "pv", rol: "voed", kw: 8 }], ha3, false, "d"), null,
-   "13.8d alleen voedende groepen geven geen check");
+// Alleen PV is wél te toetsen — sinds 12-09-2026. Die omvormer duwt zijn stroom
+// door dezelfde hoofdzekering; dat er niets afneemt maakt hem niet onzichtbaar.
+eq(belastingcheck([{ t: "pv", rol: "voed", kw: 8 }], ha3, false, "d").r, "groen",
+   "13.8d alleen voedende groepen geven wél een check: 8 van 17,3 kW over de aansluiting");
+eq(belastingcheck([{ t: "pv", rol: "voed", kw: 8, f: 1, fn: [1] }], ha3, false, "d").r, "rood",
+   "13.8e en op één fase is diezelfde omvormer 8 van 5,8 kW");
 
 // De woorden volgen chkKleur in WkbApp.jsx: die leest op "groen" en "rood" en
 // valt voor al het overige terug op oranje. Een eigen woordkeus zou daar stil
@@ -376,6 +380,20 @@ eq(belastingcheck([{ t: "lp", rol: "af", kw: 11, f: 1, fn: [1] }], ha3, false, "
   const pf = belastingPerFase(zonderFase, ha3, false);
   eq(pf.onbekendAantal, 2, "13b.7 en die groepen staan als onbekend geteld");
   eq(pf.onbekendKw, 7.4 + 6.9, "13b.8 inclusief hun vermogen");
+}
+
+// Teruglevering telt mee maar telt niet op (besluit Martin 12-09-2026).
+{
+  const pvEnVerbruik = [
+    { t: "pv",  rol: "voed", kw: 5, f: 1, fn: [1] },
+    { t: "alg", rol: "af",   kw: 3, f: 1, fn: [1] },
+  ];
+  const pf = belastingPerFase(pvEnVerbruik, ha3, false);
+  eq(pf.belasting.L1, 5, "13b.12 de zwaarste richting bepaalt de fase, niet de som");
+  eq(pf.belasting.L1 !== 5 + 3, true, "13b.13 regressie: geen 8 kW op een fase die nooit 8 kW ziet");
+  eq(pf.richting.L1, "voed", "13b.14 hier is dat de teruglevering");
+  eq(basisbelastingKw(pvEnVerbruik, false).richting, "voed",
+     "13b.15 de totaaltoets kijkt dezelfde kant op");
 }
 
 // Een enkelfasige aansluiting had de toets al per fase — die heeft er maar één.

@@ -118,18 +118,40 @@ eq(rij(bij(4.1), "L1").niveau, "let-op", "6.2 net boven 70% is let-op");
 eq(rij(bij(5.75), "L1").niveau, "let-op", "6.3 precies vol is nog geen afwijking");
 eq(rij(bij(5.8), "L1").niveau, "afwijking", "6.4 erboven is afwijking");
 
-console.log("▶ CATEGORIE 7: de open normvraag over teruglevering");
+console.log("▶ CATEGORIE 7: teruglevering telt mee, maar telt niet op");
+// Besluit Martin 12-09-2026: "teruglevering telt positief mee, stroom is stroom
+// — let wel op dat eigengebruik binnen de meter blijft en niet de fasen zal
+// raken." Dus per fase de zwaarste van twee richtingen, niet hun som.
 
 const metPv = [{ t: "pv", rol: "voed", kw: 4, f: 1, fn: [1] }];
-eq(rij(faseBalans({ grp: metPv, ha: ha3 }), "L1").belastingKw, 0,
-   "7.1 default 'nul': teruglevering telt niet mee");
-// PV staat niet in de lijst grote verbruikers, dus de factor 0,6 raakt hem niet.
-eq(rij(faseBalans({ grp: metPv, ha: ha3, pvTelling: "negatief" }), "L1").belastingKw, -4,
-   "7.2 'negatief': teruglevering verlaagt de belasting");
-eq(rij(faseBalans({ grp: metPv, ha: ha3, pvTelling: "positief" }), "L1").belastingKw, 4,
-   "7.3 'positief': teruglevering belast de zekering net zo goed");
-eq(faseBalans({ grp: metPv, ha: ha3 }).pvTelling, "nul", "7.4 de gekozen telling staat in de uitkomst");
-eq(FASEN, ["L1", "L2", "L3"], "7.5 fasenamen gelijk aan Kastscan");
+eq(rij(faseBalans({ grp: metPv, ha: ha3 }), "L1").belastingKw, 4,
+   "7.1 teruglevering belast de zekering net zo goed als afname");
+// Op de voedende kant gaat geen gelijktijdigheidsfactor: de zon schijnt op alle
+// panelen tegelijk. Spec § kam spreekt van "de som van de voedende groepen".
+eq(rij(faseBalans({ grp: metPv, ha: ha3 }), "L1").belastingKw !== 4 * GELIJKTIJDIGHEID, true,
+   "7.2 geen 0,6 over teruglevering");
+
+// DE KERN VAN HET BESLUIT. 4 kW PV en 3 kW verbruik op dezelfde fase is geen
+// 7 kW: wat de panelen leveren en de wasmachine opneemt loopt over de kam van de
+// ene groep naar de andere en passeert de hoofdzekering nooit. Het zwaarste
+// moment is volle zon zonder verbruik — 4 kW.
+{
+  const beide = [...metPv, { t: "alg", rol: "af", kw: 3, f: 1, fn: [1] }];
+  const r = rij(faseBalans({ grp: beide, ha: ha3 }), "L1");
+  eq(r.belastingKw, 4, "7.3 eigengebruik telt niet op bij de teruglevering");
+  eq(r.belastingKw !== 4 + 3, true, "7.4 regressie: nooit de som van twee richtingen");
+  eq(r.afnameKw, 3, "7.5 de afnamekant blijft apart zichtbaar");
+  eq(r.voeding, 4, "7.6 en de voedende kant ook");
+  eq(r.richting, "voed", "7.7 de teruglevering bepaalt deze fase");
+}
+// Meer verbruik dan opwek: dan bepaalt de afname weer.
+{
+  const meerAf = [...metPv, { t: "alg", rol: "af", kw: 5, f: 1, fn: [1] }];
+  const r = rij(faseBalans({ grp: meerAf, ha: ha3 }), "L1");
+  eq(r.belastingKw, 5, "7.8 de zwaarste richting wint, hier de afname");
+  eq(r.richting, "af", "7.9 en dat staat er ook bij");
+}
+eq(FASEN, ["L1", "L2", "L3"], "7.10 fasenamen gelijk aan Kastscan");
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);

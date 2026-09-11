@@ -146,13 +146,14 @@ export function basisbelastingKw(groepen, lbAan, meting) {
   }
 
   const lijst = Array.isArray(groepen) ? groepen : [];
-  const afnemers = lijst.filter((g) => (g && g.rol) !== "voed");
-  let groot = 0, gewoon = 0, bekend = 0;
-  for (const g of afnemers) {
+  let groot = 0, gewoon = 0, voeding = 0, bekend = 0;
+  for (const g of lijst) {
     const kw = groepVermogenKw(g);
     if (isNaN(kw) || kw <= 0) continue;
     bekend += 1;
-    if (isGroteVerbruikerMkp(g.t)) groot += kw; else gewoon += kw;
+    if ((g && g.rol) === "voed") voeding += kw;
+    else if (isGroteVerbruikerMkp(g.t)) groot += kw;
+    else gewoon += kw;
   }
   if (!bekend) return null;
 
@@ -160,7 +161,13 @@ export function basisbelastingKw(groepen, lbAan, meting) {
   // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
   // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
   const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
-  return { kw: gewoon + groot * factor, bron: "geschat", label: "indicatie o.b.v. schatting" };
+  const afname = gewoon + groot * factor;
+  return {
+    kw: Math.max(afname, voeding),
+    bron: "geschat",
+    label: "indicatie o.b.v. schatting",
+    richting: voeding > afname ? "voed" : "af",
+  };
 }
 
 // ─── BELASTING PER FASE ──────────────────────────────────────────────────────
@@ -187,9 +194,45 @@ export function fasenVanGroep(g, aantalFasen) {
  * @param grp        groepen in paspoortvorm (spec v0.2 §4.4)
  * @param ha         hoofdaansluiting { f, a }
  * @param lbAan      gezamenlijke load balancing aanwezig
- * @param pvTelling  "nul" | "negatief" | "positief" — zie fasebalans.js
  */
-export function belastingPerFase(grp, ha, lbAan, pvTelling = "nul") {
+// ─── TERUGLEVERING TELT MEE, MAAR TELT NIET OP ───────────────────────────────
+//
+// Besluit Martin, 12-09-2026: *"teruglevering telt positief mee, stroom is
+// stroom — let wel op dat eigengebruik binnen de meter blijft en niet de fasen
+// zal raken."*
+//
+// Twee regels in één zin, en ze wijzen niet dezelfde kant op:
+//
+//   Teruglevering IS belasting. Een omvormer van 5 kW op L2 duwt die stroom door
+//   de kam en door de hoofdzekering van L2. De richting doet er voor een
+//   zekering niet toe — een smeltdraad kent geen plus en min.
+//
+//   Maar eigengebruik raakt de fasen NIET. Wat de PV levert en de wasmachine op
+//   hetzelfde moment opneemt, loopt van de ene groep naar de andere over de kam
+//   en passeert de hoofdzekering nooit. Afname en teruglevering bij elkaar
+//   optellen zou dus stroom tellen die er niet is.
+//
+// Daarom per fase de ZWAARSTE van twee richtingen, niet hun som:
+//
+//   afname        het ongunstigste moment zonder zon en met een lege accu
+//   teruglevering het ongunstigste moment met volle zon en geen verbruik
+//
+// Die twee kunnen per definitie niet tegelijk optreden. Precies het geval dat
+// geen van de drie eerdere antwoorden toetste.
+//
+// Op de voedende kant gaat GEEN gelijktijdigheidsfactor. De specificatie van het
+// meterkastpaspoort (§ kam) zegt: "de som van de voedende groepen, op het deel
+// van de kam waar hun stromen kunnen cumuleren, mag de kamcapaciteit niet
+// overschrijden" — een som, geen korting. Dat is ook fysisch te volgen: de zon
+// schijnt op alle panelen tegelijk, waar vier apparaten zelden tegelijk vol
+// draaien.
+//
+// Bekende beperking: `mkpBouw` zet een thuisbatterij altijd op rol "voed", dus
+// hij telt hier aan de leverende kant en nooit als ladende afnemer. De spec
+// erkent dat ("een batterij kan beide rollen hebben; noteer de rol met de
+// hoogste stroom of twee regels"). Zolang laden en ontladen even zwaar zijn
+// maakt het voor de zwaarste-van-twee geen verschil.
+export function belastingPerFase(grp, ha, lbAan) {
   const aantalFasen = toNum(ha && ha.f) === 3 ? 3 : 1;
   const fasen = aantalFasen === 3 ? FASEN : ["L1"];
 
@@ -200,6 +243,7 @@ export function belastingPerFase(grp, ha, lbAan, pvTelling = "nul") {
 
   const groot = { L1: 0, L2: 0, L3: 0 };
   const gewoon = { L1: 0, L2: 0, L3: 0 };
+  const voeding = { L1: 0, L2: 0, L3: 0 };
   const aantal = { L1: 0, L2: 0, L3: 0 };
   let onbekendKw = 0, onbekendAantal = 0;
 
@@ -207,30 +251,32 @@ export function belastingPerFase(grp, ha, lbAan, pvTelling = "nul") {
     // Dezelfde terugvalwaarde als basisbelastingKw gebruikt: een laadpaal
     // zonder ingevuld vermogen telt als 11 kW en niet als nul. Anders zou
     // dezelfde groep in de totaaltoets wél en in de fasetoets níét meewegen.
-    let kw = groepVermogenKw(g);
+    const kw = groepVermogenKw(g);
     if (isNaN(kw) || kw <= 0) continue;
-
-    if ((g.rol || "af") === "voed") {
-      if (pvTelling === "nul") continue;
-      if (pvTelling === "negatief") kw = -kw;
-      // "positief": onveranderd meetellen
-    }
 
     const nummers = fasenVanGroep(g, aantalFasen);
     if (!nummers.length) { onbekendKw += kw; onbekendAantal += 1; continue; }
 
     const perGroep = kw / nummers.length;
+    const pot = (g.rol || "af") === "voed" ? voeding
+              : isGroteVerbruikerMkp(g.t)  ? groot
+              :                              gewoon;
     for (const n of nummers) {
-      const f = FASEN[n - 1];
-      (isGroteVerbruikerMkp(g.t) ? groot : gewoon)[f] += perGroep;
-      aantal[f] += 1;
+      pot[FASEN[n - 1]] += perGroep;
+      aantal[FASEN[n - 1]] += 1;
     }
   }
 
+  const afname = { L1: 0, L2: 0, L3: 0 };
   const belasting = { L1: 0, L2: 0, L3: 0 };
-  for (const f of FASEN) belasting[f] = gewoon[f] + groot[f] * factor;
+  const richting = { L1: "af", L2: "af", L3: "af" };
+  for (const f of FASEN) {
+    afname[f] = gewoon[f] + groot[f] * factor;
+    belasting[f] = Math.max(afname[f], voeding[f]);
+    richting[f] = voeding[f] > afname[f] ? "voed" : "af";
+  }
 
-  return { fasen, belasting, groot, gewoon, aantal, factor, onbekendKw, onbekendAantal };
+  return { fasen, belasting, afname, voeding, richting, groot, gewoon, aantal, factor, onbekendKw, onbekendAantal };
 }
 
 // De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest

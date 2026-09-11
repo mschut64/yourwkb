@@ -1,5 +1,24 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-A (fasecheck v1, stap 4 — teruglevering telt mee, maar telt niet op):
+//   • GEDRAGSWIJZIGING. Voedende groepen (PV, ontladende batterij) werden
+//     overgeslagen: "het slechtste geval is geen zon en een lege accu". Ze tellen
+//     nu mee — besluit Martin 12-09-2026: stroom is stroom, een smeltdraad kent
+//     geen plus en min. Een omvormer van 8 kW op één fase van 3x25 A gaf geen
+//     enkele uitspraak en is nu rood.
+//   • Maar teruglevering telt niet OP bij de afname. Wat de panelen leveren en de
+//     wasmachine tegelijk opneemt, loopt over de kam van de ene groep naar de
+//     andere en passeert de hoofdzekering nooit. Per fase geldt dus de ZWAARSTE
+//     van twee richtingen: volle zon zonder verbruik, of vol verbruik zonder zon.
+//     Die twee kunnen niet tegelijk optreden. 4 kW PV naast 3 kW verbruik is 4 kW
+//     op die fase, geen 7 en geen 1.
+//   • Op de voedende kant gaat geen gelijktijdigheidsfactor: de spec van het
+//     paspoort spreekt bij de kam van "de som van de voedende groepen", en de zon
+//     schijnt op alle panelen tegelijk.
+//   • De balans zegt erbij wanneer de teruglevering een fase bepaalt. Zonder die
+//     regel staat er "5,0 van 5,8 kW" bij een huis dat niets verbruikt, en zoekt
+//     de installateur naar een verbruiker die er niet is.
+//
 // 2026-09-11-C (fasecheck v1, stap 3 — de belastingcheck toetst per fase):
 //   • GEDRAGSWIJZIGING. De belastingcheck legde de opgetelde belasting langs de
 //     hele aansluiting (3 x A x 230 V). Hij legt nu elke fase langs de capaciteit
@@ -131,7 +150,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-11-C";
+const APP_VERSIE = "2026-09-12-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -393,6 +412,24 @@ const FaseBalansVlak = ({ balans, style }) => {
         {kom(balans.rijen[0].capaciteitKw)} kW per fase beschikbaar · {kom(FASE_RESERVE_KW)} kW reserve
         aangehouden{balans.factor !== 1 ? ` · gelijktijdigheid ${kom(balans.factor, 1)} over de grote verbruikers` : ""}
       </div>
+
+      {/* Zonder deze regel staat er "5,0 van 5,8 kW" bij een huis dat op dat
+          moment niets verbruikt, en gaat de installateur zoeken naar een
+          verbruiker die er niet is. Teruglevering belast de zekering net zo
+          goed, maar het is een ander verhaal dan een zware groep. */}
+      {(() => {
+        const terug = balans.rijen.filter(r => r.richting === "voed");
+        if (!terug.length) return null;
+        return (
+          <div style={{ fontSize:11, color:K.muted, marginTop:8, lineHeight:1.45 }}>
+            ↑ Op {terug.map(r => r.fase).join(" en ")} bepaalt de <strong style={{color:K.textSoft}}>teruglevering</strong>
+            {" "}de belasting, niet het verbruik ({terug.map(r =>
+              `${terug.length > 1 ? r.fase + ": " : ""}${kom(r.voeding)} kW terug tegen ${kom(r.afnameKw)} kW afname`).join(" · ")}).
+            Eigengebruik telt daar niet bij op: dat loopt over de kam van de ene groep naar de andere
+            en passeert de hoofdzekering nooit.
+          </div>
+        );
+      })()}
 
       {/* Het getal dat de installateur motiveert om de fase per aardlekgroep vast
           te leggen. Zonder die toewijzing lijkt een half ingevulde kast licht
@@ -3007,7 +3044,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
             : null;
           const perFase = (overF.length || krapF.length) && zwaarste;
           const cijfers = perFase
-            ? `${kom(zwaarste.belastingKw)} van ${kom(zwaarste.capaciteitKw)} kW op ${zwaarste.fase}`
+            ? `${zwaarste.richting === "voed" ? "teruglevering " : ""}${kom(zwaarste.belastingKw)} van ${kom(zwaarste.capaciteitKw)} kW op ${zwaarste.fase}`
             : basis && capaciteit > 0
               ? `${kom(basis.kw)} van ${kom(capaciteit)} kW`
               : null;
