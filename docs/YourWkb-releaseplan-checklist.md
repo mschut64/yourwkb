@@ -122,11 +122,18 @@ Spec `claude_fasecheck-featurespec.md` **ligt niet in de repo**, uitwerking in r
 
 ### Gemeten Fasecheck v1 — scope vastgelegd 11-09-2026
 
-**`docs/claude_fasecheck-v1-scope.md`** — besluiten: verdelingsadvies zit **in v1** (de aardlek-proef schuift daarmee van fase 3 naar de kern), de **installateur** plaatst de dongle, **geen doorgeefluik** in v1, hardware is de **Pro+** met P1-uitgang zodat doorlussen kan.
+**`docs/claude_fasecheck-v1-scope.md`** — besluiten: verdelingsadvies zit **in v1** (de aardlek-proef schuift daarmee van fase 3 naar de kern), de **installateur** plaatst de dongle, hardware is de **Pro+** met P1-uitgang, en het **centrale doorgeefluik zit in v1** — dat is het expliciete besluit dat de P1-spec aan Martin voorlegde. Reden: de winst zit in *vooraf*. Een meting die je pas op locatie kunt uitlezen vertelt niets wat je bij het plannen al had willen weten.
 
-Grens die daaruit volgt: het verdelingsadvies reikt tot **aardlekniveau**, niet tot losse apparaten — uit opgeteld vermogen per fase is niet te scheiden wat elk apparaat bijdraagt. De app levert de feiten, de installateur beslist wat hij verhangt.
+Grens die blijft gelden: het verdelingsadvies reikt tot **aardlekniveau**, niet tot losse apparaten — uit opgeteld vermogen per fase is niet te scheiden wat elk apparaat bijdraagt. De app levert de feiten, de installateur beslist wat hij verhangt.
 
-Obstakel dat de flow bepaalt: de app draait op HTTPS, de dongle op HTTP, dus **de app kan de dongle niet rechtstreeks bevragen** (mixed content). Gekozen route: proef in één doorloop → bestand downloaden → delen naar YourWkb → de app rekent en toont het terwijl de installateur er nog staat.
+**Vier randvoorwaarden vóór er code naar productie gaat** (het doorgeefluik maakt van YourWkb een dienst met serverkant):
+- [ ] Verwerkersovereenkomst met de installateur (hij is verwerkingsverantwoordelijke, YourWkb verwerker)
+- [ ] `privacy-page.js` en `avg-page.js` bijwerken — er staat nu dat wij niets bewaren; dat wordt "tijdelijk versleutelde blokken die wij zelf niet kunnen lezen"
+- [ ] Upstash in de EU-regio
+- [ ] Vercel-plan: het project draait op hobby, dat past niet bij een betaalde dienst met extra serverfuncties
+- [ ] Uitgifteproces per dongle (registratie bij flashen + intrekken bij verlies)
+
+**Bouwvolgorde:** 1 rekenkern `bron` (kan meteen, hangt aan niets) → 2 meetmodus + gebeurtenislogging → 3 doorgeefluik → 4 app koppelen/ophalen/ontsleutelen → 5 aardlek→fase → 6 verdelingsadvies.
 
 ### P1-meting — `docs/claude_p1-meting-featurespec.md` (in de repo sinds 11-09-2026)
 
