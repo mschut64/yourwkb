@@ -74,6 +74,11 @@ import { trackEvent } from "./analytics";
 import {
   toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
 } from "./wkb/model";
+import {
+  MKP_BASIS, MKP_SPEC_VERSIE, eanValide, mkpEncode, mkpDecode,
+  mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
+} from "./wkb/mkp";
+import { mkpBouw } from "./wkb/mkp-bouw";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
 //   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
@@ -164,8 +169,6 @@ const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
 // Het paspoort is een JSON-object conform de open specificatie, gecomprimeerd
 // (deflate-raw) en base64url-gecodeerd in het URL-fragment achter /p#.
 // Fragmenten gaan nooit naar een server: privacy door architectuur.
-const MKP_BASIS = "https://meterkastpaspoort.nl/p#";
-const MKP_SPEC_VERSIE = 1;
 
 // Norm-editie: één plek. NEN 1010:2020 is nog niet aangewezen in de
 // Omgevingsregeling (daar staat 2015); toepassing van een nieuwere editie is
@@ -173,151 +176,8 @@ const MKP_SPEC_VERSIE = 1;
 const NORM_EDITIE_VOETNOOT = "Getoetst aan NEN 1010:2020. In de Omgevingsregeling is momenteel NEN 1010:2015 aangewezen; toepassing van een nieuwere editie is toegestaan — het veiligheidsniveau ligt daarmee ten minste op het wettelijk aangewezen niveau.";
 const SCOPE_VOETNOOT = "De uitgevoerde werkzaamheden zijn getoetst aan de actuele editie van NEN 1010. De bestaande installatie is beoordeeld op veiligheid en op samenhang met de uitgevoerde werkzaamheden; voor het overige geldt het rechtens verkregen niveau (de normeditie ten tijde van aanleg).";
 
-// EAN-18 validatie: 18 cijfers, NL begint met 87, laatste cijfer = GS1
-// modulo-10-controlecijfer (afwisselend ×3/×1 vanaf rechts, aanvullen tot tiental).
-// Let op: dit is dus géén elfproef (die was van oude bankrekeningnummers).
-const eanValide = (ean) => {
-  const s = String(ean||"").replace(/\s/g,"");
-  if (!/^\d{18}$/.test(s)) return false;
-  if (!s.startsWith("87")) return false;
-  let som = 0;
-  for (let i = 0; i < 17; i++) {
-    const cijfer = s.charCodeAt(16 - i) - 48;      // van rechts naar links, excl. controlecijfer
-    som += cijfer * (i % 2 === 0 ? 3 : 1);
-  }
-  const controle = (10 - (som % 10)) % 10;
-  return controle === (s.charCodeAt(17) - 48);
-};
-
-// bytes ⇄ base64url
-const _b64urlEnc = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-const _b64urlDec = (s) => {
-  const b64 = s.replace(/-/g,"+").replace(/_/g,"/") + "===".slice((s.length + 3) % 4);
-  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-};
-
-// JSON → deflate-raw → base64url (CompressionStream: standaard browser-API,
-// iOS 16.4+/Chrome 103+ — ruim gedekt op monteurstelefoons).
-async function mkpEncode(obj) {
-  const bron = new TextEncoder().encode(JSON.stringify(obj));
-  const cs = new CompressionStream("deflate-raw");
-  const gecomprimeerd = new Uint8Array(await new Response(
-    new Blob([bron]).stream().pipeThrough(cs)
-  ).arrayBuffer());
-  return _b64urlEnc(gecomprimeerd);
-}
-
-async function mkpDecode(frag) {
-  const bytes = _b64urlDec(String(frag||"").trim());
-  const ds = new DecompressionStream("deflate-raw");
-  const json = await new Response(
-    new Blob([bytes]).stream().pipeThrough(ds)
-  ).text();
-  const obj = JSON.parse(json);
-  if (!obj || typeof obj.v !== "number") throw new Error("geen geldig meterkastpaspoort");
-  return obj;
-}
-
-
-// Bouwt het paspoort-object uit de app-data conform spec v0.1.
-// Onbekende/lege velden worden weggelaten om de QR compact te houden.
-function mkpBouw(data, discipline) {
-  const m = data.mkp || {};
-  const p = { v: MKP_SPEC_VERSIE, d: new Date().toISOString().slice(0,10) };
-  if (data.postcode)   p.pc = String(data.postcode).replace(/\s/g,"").toUpperCase();
-  if (data.huisnummer) p.nr = String(data.huisnummer) + (data.toevoeging ? " " + String(data.toevoeging) : "");
-  if (m.ean && eanValide(m.ean)) p.ean = String(m.ean).replace(/\s/g,"");
-  if (m.ean2 && eanValide(m.ean2)) p.ean2 = String(m.ean2).replace(/\s/g,"");
-  const bjBron = data.bouwjaar || m.bj || data.mkpImport?.bj;
-  if (bjBron) p.bj = String(bjBron);
-  const instB = data.instMetingen || {};
-  const haA_inst = toNum(instB.hoofdzekering);
-  if (haA_inst > 0) {
-    p.ha = { f: instB.zDrieFase ? 3 : 1, a: haA_inst };
-  } else if (m.haF || m.haA) {
-    p.ha = {}; if (m.haF) p.ha.f = toNum(m.haF); if (toNum(m.haA)>0) p.ha.a = toNum(m.haA);
-  } else if (data.mkpImport?.ha) {
-    p.ha = data.mkpImport.ha;
-  }
-  if (m.kamMm2 || m.kamA) { p.kam = {}; if (m.kamMm2) p.kam.mm2 = toNum(m.kamMm2); if (m.kamA) p.kam.a = toNum(m.kamA); }
-  const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
-  const kwByIdB = m.kwById || {};
-  let grp = (data.aardlekgroepen||[]).flatMap(ag =>
-    (ag.eindgroepen||[]).map(e => {
-      const r = {
-        t: e.type ? (EIND_NAAR_MKP_B[e.type] || "ov") : "alg",
-        rol: e.type==="pv" || e.type==="batterij" ? "voed" : "af",
-        f: ag.fase==="3" ? 3 : 1,
-      };
-      const kw = toNum(kwByIdB[e.id]);
-      if (kw > 0) r.kw = kw;
-      if (e.naam) r.n = String(e.naam).slice(0,40);
-      return r;
-    })
-  );
-  if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = [...data.mkpImport.grp];  // gescand paspoort als basis
-  // Startmodus (laadpaal/batterij): eigen apparaat + ter plekke gesignaleerde verbruikers toevoegen
-  if (discipline === "laadpaal") {
-    const kw = toNum(String(data.lpVermogen||"").replace(/[^0-9,\.]/g,""));
-    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1 };
-    if (kw>0) r.kw = kw; if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
-    grp = [...grp, r];
-  } else if (discipline === "batterij") {
-    const r = { t:"bat", rol:"voed" };
-    if (toNum(data.batKw)>0) r.kw = toNum(data.batKw);
-    if (data.batMerk) r.n = String(data.batMerk).slice(0,40);
-    grp = [...grp, r];
-  } else if (discipline === "pv") {
-    const r = { t:"pv", rol:"voed" };
-    if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
-    if (data.aantalPanelen) r.n = `PV ${data.aantalPanelen} panelen`.slice(0,40);
-    grp = [...grp, r];
-  } else if (discipline === "wp") {
-    const r = { t:"wp", rol:"af" };
-    if (data.wpType) r.n = String(data.wpType).slice(0,40);
-    grp = [...grp, r];
-  }
-  (m.extraGrp||[]).filter(g=>g.t).forEach(g=>{
-    const r = { t:g.t, rol:g.rol || ((g.t==="pv"||g.t==="bat")?"voed":"af") };
-    if (toNum(g.kw)>0) r.kw = toNum(g.kw);
-    grp = [...grp, r];
-  });
-  if (grp.length) p.grp = grp;
-  if (m.lbAan !== undefined) {
-    p.lb = { aan: !!m.lbAan };
-    if (m.lbAan) {
-      if (m.lbTyp) p.lb.typ = m.lbTyp;
-      if (m.lbMax) p.lb.max = toNum(m.lbMax);
-      if (m.lbReg) p.lb.reg = String(m.lbReg).slice(0,40);
-    }
-  }
-  // De belastingcheck wordt nu BEREKEND in plaats van met de hand ingevuld
-  // (roadmap 2.1). Alleen meesturen als er iets te toetsen viel: zonder
-  // hoofdaansluiting of zonder een enkele bekende belasting zou "groen" een
-  // uitspraak zijn die nergens op steunt.
-  const chkUitkomst = belastingcheck(grp, p.ha, m.lbAan, p.d);
-  if (chkUitkomst) p.chk = chkUitkomst;
-  // Logboek: nieuwe regel bovenaan, geïmporteerde historie eronder, max 8 regels.
-  const nieuweRegel = {
-    d: p.d,
-    b: (data.instBedrijf || data.instNaam || "installateur").slice(0,40),
-    w: (m.logOmschrijving || data.typeWerk || "werkzaamheden meterkast").slice(0,60),
-  };
-  const oudeLog = Array.isArray(data.mkpImport?.log) ? data.mkpImport.log : [];
-  p.log = [nieuweRegel, ...oudeLog].slice(0,8);
-  return p;
-}
 
 // Korte leesbare samenvatting van een (gescand) paspoort voor de UI.
-function mkpSamenvatting(p) {
-  const delen = [];
-  if (p.pc || p.nr) delen.push(`${p.pc||""} ${p.nr||""}`.trim());
-  if (p.ha) delen.push(`${p.ha.f||"?"}×${p.ha.a||"?"}A`);
-  if (p.kam) delen.push(`kam ${p.kam.a||"?"}A`);
-  if (p.bj) delen.push(`aanleg ${p.bj}`);
-  if (p.log?.[0]) delen.push(`laatst: ${p.log[0].b} (${p.log[0].d})`);
-  return delen.join(" · ") || "meterkastpaspoort";
-}
 
 // Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
 // Laadgroep/thuisbatterij ook relevant wanneer die via de hoofdgroepenkast gevoed worden

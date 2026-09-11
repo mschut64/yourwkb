@@ -55,6 +55,8 @@ Gebruik bij nieuw werk de namen van Kastscan, niet je eigen.
 ```
 components/WkbApp.jsx      ← de schermen (~5900 regels)
 components/wkb/model.js    ← de rekenkern: grenswaarden, cross-checks, belastingcheck
+components/wkb/mkp.js      ← HET PASPOORTFORMAAT — bedoeld om gedeeld te worden met Kastscan
+components/wkb/mkp-bouw.js ← de vertaling app-gegevens → paspoort (app-specifiek)
 app/page.js                ← rendert landing
 app/landing/page.js        ← marketingpagina
 app/app/page.js            ← laadt WkbApp (client-only, ssr:false)
@@ -81,9 +83,13 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-node tests/test.js        # moet volledig groen zijn (nu 128/128)
+npm test                  # normlogica (128) + paspoortformaat (40)
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
+
+**`mkp.js` is de standaard, `mkp-bouw.js` is van deze app.** Het formaat — coderen, decoderen, EAN-controle, QR-grens — hoort in `mkp.js` en gaat op termijn naar de repo `meterkastpaspoort`, waar ook de specificatie staat. De vertaling van app-gegevens naar een paspoort verschilt per app en blijft dus hier. Zet niets app-specifieks in `mkp.js`.
+
+**Let op bij imports binnen `components/wkb/`:** gebruik expliciete `.js`-extensies. Webpack vindt het bestand ook zonder, Node niet — en de tests draaien op Node.
 
 **Zet nieuwe normlogica in `model.js`, niet in `WkbApp.jsx`.** Alles wat daar staat is per definitie ongetest: `esc()`, `saneerProject`, `mkpBouw` en `genereerRapport` zitten nog in het schermbestand en hebben daarom geen enkele test. Dat is de reden dat de rekenkern eruit is gehaald — zie `docs/claude_kastscan-yourwkb-inventarisatie.md`.
 
