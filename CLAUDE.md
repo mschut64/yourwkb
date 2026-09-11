@@ -85,7 +85,7 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-npm test                  # 293 tests: normlogica, paspoort, ontsmetting, fasebalans
+npm test                  # 298 tests: normlogica, paspoort, ontsmetting, fasebalans
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 
@@ -118,7 +118,7 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ## 4. Actuele stand (11-09-2026)
 
-**Live:** app `v2026-09-12-B` + security-release + landing + blog (2 artikelen). Testsuite **293 tests** (`npm test`). Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
+**Live:** app `v2026-09-12-C` + security-release + landing + blog (2 artikelen). Testsuite **298 tests** (`npm test`). Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
 
 Recent afgerond:
 - **R1 — design fase 2 (`v2026-08-29-A`, 29-08-2026), volledig afgerond en veldbevestigd.** Meetwaarden overal 20px/700 met tabular-nums en de eenheid via `S.eenheid` in alle zes disciplines; normvlak per meetblok via het nieuwe `StatusVlak` (uitspraak in woorden + grenswaarde, zodat je bij afkeur niet terugscrollt); stapteller "Stap i van n" + voortgangsbalk centraal boven het scherm; schermtitels 15 → 20px; startscherm op `S.rij` met disciplinetegels met kleurvlak; één gele knop per scherm (elf handgemaakte grijze knoppen naar `S.btnGhost`); komma-weergave in app én rapport. Vier fouten meegefixt: `@babel/core` ontbrak in `package.json` (extract-logica faalde op een verse checkout), de toevoeging viel uit het projectnummer (`2691JJ-72` i.p.v. `2691JJ-72a`), de paspoort-import zette `projectId` nooit (rapport toonde "—"), en 15 hardgecodeerde stapnummers waren fout zodra een scherm door meerdere disciplines wordt gebruikt. **Afwijkingen van de design-spec staan onderbouwd in de checklist** — met name: géén `S.inputMeting` (32px) op de meetvelden en géén statuspil in de projectenlijst, beide omdat ze op 375px de meetrasters respectievelijk het projectnummer kapotmaken.
@@ -185,14 +185,16 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 5. **Bij grote regex-bewerkingen op `WkbApp.jsx`:** schrijf per stap weg en assert op het aantal treffers. Een `s.index()` op een ontbrekend anker heeft het bestand een keer gecorrumpeerd; herstel toen vanaf de laatste opgeleverde kopie.
 6. **Demo-QR's nooit zelf genereren** — gebruik `public/mkp-demo-qr.png` / `mkp-demo-sticker.png`. Een zelfgemaakte mockup-QR met ongeldige payload heeft een "storing" veroorzaakt die er geen was.
 7. **Web Share Target werkt, maar een WebAPK moet ververst worden** (app verwijderen + opnieuw installeren) voordat het deel-menu de nieuwe manifest-entry kent.
-8. De app kan zich **niet** als bestands-opener registreren op Android; deelbestanden gaan als `.txt`/`text-plain` (Android weigert `application/json` in het deelmenu).
+8. **`S.btn` zet `width:100%`.** Een rij keuzeknoppen met `flex:"0 0 auto"` erover valt daardoor uit elkaar: flex-basis auto pakt die 100% en elke knop vult een hele regel. Gebruik voor een rij compacte keuzes een `grid` met vaste kolommen, niet een flexrij met wrap. (Vijf ampèrekeuzes stonden zo maandenlang als vijf volle knoppen onder elkaar.)
+9. **Bouw nooit na wat `mkp-bouw.js` al schrijft.** De paspoortstap had een eigen kopie van het "eigen apparaat"; die is twee keer uiteengelopen met de echte QR-inhoud. Voorvertoningen halen hun regels uit `eigenApparaatRegels`, en een test bewaakt dat ze gelijk blijven. Hetzelfde geldt voor de belastingcheck, die al op `mkpBouw` draait.
+10. De app kan zich **niet** als bestands-opener registreren op Android; deelbestanden gaan als `.txt`/`text-plain` (Android weigert `application/json` in het deelmenu).
 
 ---
 
 ## 8. Werkafspraken met Martin
 
 - Werk in **afgebakende releases** met expliciete scope; vraag niet om toestemming voor stappen die in het releaseplan staan — voer ze uit.
-- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 293), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
+- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 298), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
 - Werk `YourWkb-releaseplan-checklist.md` bij (vinkjes zetten) en dit bestand wanneer de stand verandert.
 - Nieuwe features toetsen aan de flow-regel **voordat** je bouwt; als de flow langer wordt, herontwerp.
 - Bij normvragen of twijfel over grenswaarden: leg de vraag voor aan Martin (hij is de expert) in plaats van te gokken.

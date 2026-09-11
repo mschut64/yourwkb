@@ -1,5 +1,17 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-12-C (hoofdaansluiting netter, en één definitie van het eigen apparaat):
+//   • De vijf ampèrekeuzes in de paspoortstap stonden elk op een eigen regel, zo
+//     groot als de hoofdknop van het scherm. Oorzaak: S.btn zet width:100%, en
+//     met flex-basis auto vulde elke knop daardoor een hele rij. Nu een raster
+//     van vijf kolommen, waarin de kolom de breedte bepaalt.
+//   • De voorvertoning van het eigen apparaat bouwde dat apparaat zélf na, naast
+//     mkpBouw. Die kopie liep twee keer uiteen met wat er werkelijk in de QR
+//     belandde — het laatst bij de accu, die als één regel van 3 kW in beeld
+//     stond terwijl de belastingcheck eronder met 6,6 kW rekende. De regels
+//     komen nu uit mkp-bouw.js (eigenApparaatRegels), met een test die bewaakt
+//     dat voorvertoning en paspoort gelijk blijven.
+//
 // 2026-09-12-B (de thuisbatterij als twee regels in het paspoort):
 //   • Spec v0.2 §4.4 laat de keuze: "noteer de rol met de hoogste stroom of twee
 //     regels". Deze app schreef altijd alleen `voed`, waardoor de ladende kant
@@ -147,7 +159,7 @@ import {
   MKP_BASIS, MKP_SPEC_VERSIE, eanValide, mkpEncode, mkpDecode,
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
 } from "meterkastpaspoort";
-import { mkpBouw } from "./wkb/mkp-bouw";
+import { mkpBouw, eigenApparaatRegels } from "./wkb/mkp-bouw";
 import { faseBalans } from "./wkb/fasebalans";
 import { esc, saneerImport } from "./wkb/veilig";
 
@@ -166,7 +178,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-B";
+const APP_VERSIE = "2026-09-12-C";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2762,29 +2774,12 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   const haA_app = uitApp_haA || m.haA || "";
   const bj_app  = data.bouwjaar || m.bj || "";
 
-  // Eigen apparaat uit déze klus — komt altijd in het paspoort:
-  const eigenApparaat = discipline === "laadpaal" ? {
-    t:"lp", rol:"af", f: toNum(data.lpFasen)||1,
-    kw: toNum(String(data.lpVermogen||"").replace(/[^0-9,\.]/g,"")) || undefined,
-    n: (data.lpMerk||"laadpaal").slice(0,40),
-  } : discipline === "batterij" ? {
-    t:"bat", rol:"voed",
-    kw: toNum(data.batKw) || undefined,
-    // Het paspoort krijgt twee regels (mkp-bouw.js › batterijRegels): ontladen
-    // levert aan de kam, laden neemt af. Deze regel is de vóórvertoning daarvan
-    // en moet dus allebei noemen, anders lijkt de accu lichter dan hij in de
-    // belastingcheck meetelt.
-    kwLaad: toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : toNum(data.batKw) || undefined,
-    n: (data.batMerk||"thuisbatterij").slice(0,40),
-  } : discipline === "pv" ? {
-    t:"pv", rol:"voed",
-    kw: toNum(data.omvormerKw) || undefined,
-    n: `PV ${data.aantalPanelen||"?"} panelen`.slice(0,40),
-  } : discipline === "wp" ? {
-    t:"wp", rol:"af",
-    kw: undefined,
-    n: (data.wpType||"warmtepomp").slice(0,40),
-  } : null;
+  // Eigen apparaat uit déze klus — komt altijd in het paspoort. Eén definitie,
+  // in mkp-bouw.js: deze regel toont wat daar wordt weggeschreven en bouwt het
+  // niet zelf na. Die nabouw liep twee keer uiteen met wat er werkelijk in de QR
+  // belandde; het laatst bij de accu, die hier één regel van 3 kW liet zien
+  // terwijl de belastingcheck eronder met 6,6 kW rekende.
+  const eigenRegels = isStartModus ? eigenApparaatRegels(data, discipline) : [];
 
   // Extra verbruikers die de monteur ter plekke ziet (alleen in startmodus bewerkbaar)
   const extraGrp = m.extraGrp || [];
@@ -2847,9 +2842,16 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           {[["1","1-fase"],["3","3-fase"]].map(([v,l]) =>
             <button key={v} style={knopStijl(m.haF===v)} onClick={()=>zet("haF",v)}>{l}</button>)}
         </div>
-        <div style={{display:"flex", gap:8, flexWrap:"wrap", marginBottom:10}}>
+        {/* Een raster en geen flex-rij: S.btn zet width:100%, en met flex-basis
+            auto vulde elke knop daardoor een hele regel — vijf ampèrewaarden
+            onder elkaar, elk zo groot als de hoofdknop van het scherm. In een
+            grid bepaalt de kolom de breedte en doet die width niets meer. */}
+        <div style={{display:"grid", gridTemplateColumns:"repeat(5, 1fr)", gap:6, marginBottom:10}}>
           {["25","35","40","50","63"].map(a =>
-            <button key={a} style={{...knopStijl(m.haA===a), flex:"0 0 auto", minWidth:56}} onClick={()=>zet("haA",a)}>{a} A</button>)}
+            <button key={a} onClick={()=>zet("haA",a)}
+              style={{...knopStijl(m.haA===a), width:"auto", minWidth:0, marginBottom:0, padding:"0 2px", minHeight:K.tap}}>
+              {a} A
+            </button>)}
         </div>
         <label style={S.label}>Bouwjaar / aanlegperiode kast (schatting mag)</label>
         <input style={{...S.input}} placeholder='bijv. 1998 of "±1990"' value={m.bj||""} onChange={e=>zet("bj",e.target.value)}/>
@@ -2902,17 +2904,20 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
         ) : (
           <div style={{fontSize:11, color:K.muted, marginBottom:8}}>Jouw {({laadpaal:"laadpaal",batterij:"batterij",pv:"PV-installatie",wp:"warmtepomp"}[discipline])||"apparaat"} staat er automatisch in. Zie je in de kast nog andere grote verbruikers of opwekkers (kookgroep, warmtepomp, PV…)? Voeg ze toe — hoeft niet compleet, elk gegeven helpt de volgende monteur.</div>
         )}
-        {isStartModus && eigenApparaat && (
-          <div style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
+        {eigenRegels.map((g, i) => (
+          <div key={`eigen${i}`} style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
             <div style={{flex:1, minWidth:0, fontSize:13}}>
-              {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️"}[eigenApparaat.t])||"⚙️"} {eigenApparaat.n}
-              <span style={{color:K.yellow, fontSize:11}}> · deze klus</span>
-              <span style={{color:K.muted, fontSize:11}}>{eigenApparaat.t === "bat"
-                ? `${eigenApparaat.kw ? ` · ${eigenApparaat.kw} kW ↩︎ ontladen` : ""}${eigenApparaat.kwLaad ? ` · ${eigenApparaat.kwLaad} kW laden` : ""}`
-                : `${eigenApparaat.kw?` · ${eigenApparaat.kw} kW`:""}${eigenApparaat.rol==="voed"?" · ↩︎ voedend":""}`}</span>
+              {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️"}[g.t])||"⚙️"} {g.n || ({lp:"Laadpaal",bat:"Thuisbatterij",pv:"PV-omvormer",wp:"Warmtepomp"}[g.t]) || g.t}
+              {/* "deze klus" hoort er één keer te staan, ook als het apparaat
+                  twee regels vult — anders leest het als twee apparaten. */}
+              {i === 0 && <span style={{color:K.yellow, fontSize:11}}> · deze klus</span>}
+              <span style={{color:K.muted, fontSize:11}}>
+                {g.kw ? ` · ${String(g.kw).replace(".", ",")} kW` : ""}
+                {g.t === "bat" ? (g.rol === "voed" ? " ↩︎ ontladen" : " laden") : (g.rol === "voed" ? " · ↩︎ voedend" : "")}
+              </span>
             </div>
           </div>
-        )}
+        ))}
         {isStartModus && Array.isArray(data.mkpImport?.grp) && data.mkpImport.grp.map((g,i)=>(
           <div key={`imp${i}`} style={{display:"flex", gap:6, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${K.border}`}}>
             <div style={{flex:1, minWidth:0, fontSize:13, color:K.muted}}>

@@ -14,7 +14,7 @@ import {
   mkpEncode, mkpDecode, mkpUrl, mkpSamenvatting,
   QR_TEKENS_GRENS, qrWaarschuwing,
 } from "meterkastpaspoort";
-import { mkpBouw } from "../components/wkb/mkp-bouw.js";
+import { mkpBouw, eigenApparaatRegels } from "../components/wkb/mkp-bouw.js";
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -195,6 +195,25 @@ eq(mkpBouw(metOnzin, "groepenkast").grp[0].fn, undefined, "6.8 ongeldige fasewaa
   eq(uit.every(g => JSON.stringify(g.fn) === "[3]"), true, "6.18 allebei op de fase van hun aardlekgroep");
   eq(uit.map(g => g.kw), [5, 5], "6.19 één ingevuld vermogen geldt voor beide richtingen");
 }
+
+// ─── Voorvertoning en paspoort mogen niet uiteenlopen ───────────────────────
+//
+// De paspoortstap toont het eigen apparaat van deze klus als "dit komt in de
+// QR". Die regel bouwde het apparaat tot 12-09-2026 zélf na, met een kopie van
+// de regels uit mkpBouw — en die kopie liep twee keer uiteen met het echte
+// paspoort. Nu één definitie; deze test bewaakt dat het één blijft.
+for (const [disc, data] of [
+  ["laadpaal", { lpMerk: "Alfen", lpVermogen: "11 kW", lpFasen: 3 }],
+  ["batterij", { batMerk: "Sessy", batKw: "3", batKwLaad: "11" }],
+  ["pv",       { omvormerKw: "4.2", aantalPanelen: 12 }],
+  ["wp",       { wpType: "Daikin Altherma" }],
+]) {
+  const volledig = mkpBouw({ ...data, instMetingen: { hoofdzekering: "25", zDrieFase: true } }, disc);
+  eq(volledig.grp, eigenApparaatRegels(data, disc),
+     `6.20 (${disc}) de voorvertoning toont precies wat het paspoort krijgt`);
+}
+eq(eigenApparaatRegels({}, "groepenkast"), [],
+   "6.21 in de groepenkast is er geen eigen apparaat — die komt uit de kastinventaris");
 
 // En het geheel moet door de codering passen.
 const gebouwdHeen = await mkpEncode(gebouwd);

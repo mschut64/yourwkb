@@ -44,6 +44,47 @@ function batterijRegels({ kwOntladen, kwLaden, naam, f, fn }) {
   return [regel("voed", kwOntladen), regel("af", kwLaden)];
 }
 
+// ─── Het apparaat van déze klus ──────────────────────────────────────────────
+//
+// In de startmodus (laadpaal, batterij, pv, wp) is er nog geen kastinventaris en
+// vormt het eigen apparaat de kern van het paspoort. Apart exporteerbaar omdat
+// de paspoortstap dezelfde regels als voorvertoning toont: "dit komt in de QR".
+//
+// Die voorvertoning bouwde het apparaat tot 12-09-2026 zélf op, met een eigen
+// kopie van deze regels in WkbApp.jsx. Dat liep twee keer uiteen — het laatst
+// toen de accu hier twee regels kreeg en het scherm nog één regel van 3 kW liet
+// zien terwijl de belastingcheck eronder met 6,6 kW rekende. Eén definitie dus,
+// en de voorvertoning laat letterlijk zien wat er wordt weggeschreven.
+export function eigenApparaatRegels(data, discipline) {
+  if (discipline === "laadpaal") {
+    const kw = toNum(String(data.lpVermogen||"").replace(/[^0-9,.]/g,""));
+    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1 };
+    if (kw>0) r.kw = kw;
+    if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
+    return [r];
+  }
+  if (discipline === "batterij") {
+    // Hier is de accu de klus, dus is het redelijk om laden en ontladen apart te
+    // vragen. Blijft het laadvermogen leeg, dan is hij symmetrisch — verreweg
+    // het meest voorkomende geval — en gelden beide regels met dezelfde waarde.
+    const ontladen = toNum(data.batKw);
+    const laden = toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : ontladen;
+    return batterijRegels({ kwOntladen: ontladen, kwLaden: laden, naam: data.batMerk });
+  }
+  if (discipline === "pv") {
+    const r = { t:"pv", rol:"voed" };
+    if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
+    if (data.aantalPanelen) r.n = `PV ${data.aantalPanelen} panelen`.slice(0,40);
+    return [r];
+  }
+  if (discipline === "wp") {
+    const r = { t:"wp", rol:"af" };
+    if (data.wpType) r.n = String(data.wpType).slice(0,40);
+    return [r];
+  }
+  return [];
+}
+
 // Bouwt het paspoort-object uit de app-data conform de spec-versie uit mkp.js (nu v0.2).
 // Onbekende/lege velden worden weggelaten om de QR compact te houden.
 export function mkpBouw(data, discipline) {
@@ -96,29 +137,8 @@ export function mkpBouw(data, discipline) {
     })
   );
   if (!grp.length && Array.isArray(data.mkpImport?.grp)) grp = [...data.mkpImport.grp];  // gescand paspoort als basis
-  // Startmodus (laadpaal/batterij): eigen apparaat + ter plekke gesignaleerde verbruikers toevoegen
-  if (discipline === "laadpaal") {
-    const kw = toNum(String(data.lpVermogen||"").replace(/[^0-9,\.]/g,""));
-    const r = { t:"lp", rol:"af", f: toNum(data.lpFasen)||1 };
-    if (kw>0) r.kw = kw; if (data.lpMerk) r.n = String(data.lpMerk).slice(0,40);
-    grp = [...grp, r];
-  } else if (discipline === "batterij") {
-    // Hier is de accu de klus, dus is het redelijk om laden en ontladen apart te
-    // vragen. Blijft het laadvermogen leeg, dan is hij symmetrisch — verreweg
-    // het meest voorkomende geval — en gelden beide regels met dezelfde waarde.
-    const ontladen = toNum(data.batKw);
-    const laden = toNum(data.batKwLaad) > 0 ? toNum(data.batKwLaad) : ontladen;
-    grp = [...grp, ...batterijRegels({ kwOntladen: ontladen, kwLaden: laden, naam: data.batMerk })];
-  } else if (discipline === "pv") {
-    const r = { t:"pv", rol:"voed" };
-    if (toNum(data.omvormerKw)>0) r.kw = toNum(data.omvormerKw);
-    if (data.aantalPanelen) r.n = `PV ${data.aantalPanelen} panelen`.slice(0,40);
-    grp = [...grp, r];
-  } else if (discipline === "wp") {
-    const r = { t:"wp", rol:"af" };
-    if (data.wpType) r.n = String(data.wpType).slice(0,40);
-    grp = [...grp, r];
-  }
+  // Startmodus (laadpaal/batterij/pv/wp): het eigen apparaat van deze klus.
+  grp = [...grp, ...eigenApparaatRegels(data, discipline)];
   (m.extraGrp||[]).filter(g=>g.t).forEach(g=>{
     if (g.t === "bat" && !g.rol) {
       grp = [...grp, ...batterijRegels({ kwOntladen: g.kw, kwLaden: g.kw })];
