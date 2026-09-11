@@ -18,7 +18,8 @@
 
 const { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
         isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
-        GELIJKTIJDIGHEID, GROOT_STANDAARD_KW } = require("./logica");
+        GELIJKTIJDIGHEID, GROOT_STANDAARD_KW,
+        RESERVE_KW, periodeLabel, basisbelastingKw } = require("./logica");
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -321,6 +322,82 @@ eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }], { f: 1, a: 25 }, false, "
 eq(belastingcheck([{ t: "kook", rol: "af", kw: 7.4 }, { t: "wp", rol: "af", kw: 6.9 }],
    { f: 1, a: 25 }, false, "d").r, "rood",
    "13.10b met de warmtepomp erbij 8,58 van 5,75 — rood");
+
+// ═════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ CATEGORIE 14: herkomst basisbelasting — geschat vs gemeten (fasecheck v1)");
+
+// De kern van stap 1. Dezelfde installatie, twee bronnen:
+//   geschat  → 11 kW laadpaal × 0,6 = 6,6 kW
+//   gemeten  → wat de meter zag, ONGEKORT
+const lpAlleen = [{ t: "lp", rol: "af", kw: 11 }];
+
+eq(basisbelastingKw(lpAlleen, false, null).kw, 6.6,
+   "14.1 geschat: de factor 0,6 gaat over de grote verbruiker");
+eq(basisbelastingKw(lpAlleen, false, null).bron, "geschat", "14.2 bron is geschat");
+
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 6.6, dagen: 7 }).kw, 6.6,
+   "14.3 gemeten: de gemeten piek wordt onverkort overgenomen");
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 6.6, dagen: 7 }).bron, "gemeten",
+   "14.4 bron is gemeten");
+
+// Dít is de fout die stap 1 moet voorkomen: de factor nogmaals over een
+// gemeten piek leggen strijkt 40% van een echte meting weg.
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 10, dagen: 7 }).kw, 10,
+   "14.5 de gelijktijdigheidsfactor gaat NIET over een gemeten piek");
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 10, dagen: 7 }).kw !== 10 * GELIJKTIJDIGHEID, true,
+   "14.6 regressie: een gemeten piek wordt nooit met 0,6 vermenigvuldigd");
+
+// Load balancing raakt alleen de schatting. Een meting is een meting.
+eq(basisbelastingKw(lpAlleen, true, null).kw, 11,
+   "14.7 geschat met sturing: korting vervalt, vol vermogen");
+eq(basisbelastingKw(lpAlleen, true, { piekKw: 7.2, dagen: 7 }).kw, 7.2,
+   "14.8 gemeten: de lbAan-vlag verandert een meting niet");
+
+// Terugval: zonder bruikbare piek wint de schatting. beoordeelMeetkwaliteit
+// levert bij te weinig dekking geen piek, en een halve week mag niet als
+// "gemeten" door het leven gaan.
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 0, dagen: 7 }).bron, "geschat",
+   "14.9 piek 0 telt niet als meting");
+eq(basisbelastingKw(lpAlleen, false, { dagen: 7 }).bron, "geschat",
+   "14.10 meting zonder piek valt terug op schatting");
+eq(basisbelastingKw(lpAlleen, false, {}).bron, "geschat",
+   "14.11 leeg meetobject valt terug op schatting");
+eq(basisbelastingKw([], false, null), null,
+   "14.12 zonder groepen en zonder meting valt er niets te toetsen");
+eq(basisbelastingKw([], false, { piekKw: 4.2, dagen: 6 }).kw, 4.2,
+   "14.13 een meting staat op eigen benen — ook zonder paspoortgroepen");
+
+// Het label is wat de installateur leest. "indicatie" moet weg zodra er
+// gemeten is, anders blijft het rapport zichzelf tegenspreken.
+eq(basisbelastingKw(lpAlleen, false, null).label, "indicatie o.b.v. schatting",
+   "14.14 label bij schatting");
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 5, dagen: 7 }).label.startsWith("gemeten over 7 dagen"), true,
+   "14.15 label bij meting noemt het aantal dagen");
+eq(basisbelastingKw(lpAlleen, false, { piekKw: 5, dagen: 1 }).label, "gemeten over 1 dag",
+   "14.16 enkelvoud bij één dag");
+
+// De periode komt uit epoch-seconden (formaat yourwkb-p1).
+eq(periodeLabel(1788998400, 1789603200), "10-09 t/m 17-09", "14.17 periodelabel dd-mm");
+eq(periodeLabel(null, null), null, "14.18 zonder periode geen periodelabel");
+
+// De reserve blijft staan: een week in september zegt niets over januari met
+// een warmtepomp.
+eq(RESERVE_KW, 1.0, "14.19 reserve blijft 1,0 kW");
+
+// En de doorwerking naar de check zelf: dezelfde kast, gemeten zwaarder dan
+// geschat, geeft een strenger oordeel.
+const ha3ref = { f: 3, a: 25 };
+eq(belastingcheck(lpAlleen, ha3ref, false, "2026-09-11").r, "groen",
+   "14.20 geschat 6,6 van 17,25 kW is groen");
+eq(belastingcheck(lpAlleen, ha3ref, false, "2026-09-11", { piekKw: 13, dagen: 7 }).r, "oranje",
+   "14.21 gemeten 13 van 17,25 kW is oranje — de meting stuurt het oordeel");
+eq(belastingcheck(lpAlleen, ha3ref, false, "2026-09-11", { piekKw: 18, dagen: 7 }).r, "rood",
+   "14.22 gemeten boven de capaciteit is rood");
+
+// De uitkomstvorm blijft ongewijzigd: p.chk gaat rechtstreeks de QR in en het
+// meterkastpaspoort is een open standaard.
+eq(Object.keys(belastingcheck(lpAlleen, ha3ref, false, "d", { piekKw: 13, dagen: 7 })).sort().join(","),
+   "d,r", "14.23 uitkomst blijft {r,d} — geen stille spec-wijziging in de QR");
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log("\n═══════════════════════════════════════════════");

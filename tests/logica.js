@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // YourWkb — Pure logica module (AUTO-GEGENEREERD — NIET HANDMATIG BEWERKEN)
 // Gegenereerd uit: WkbApp.jsx
-// Op: 2026-09-02 09:30:44
+// Op: 2026-09-11 16:52:16
 // Draai 'node extract-logica.js <WkbApp.jsx>' opnieuw na elke wijziging aan de
 // norm-validatie in de app. De regressietest (test.js) draait hier direct op.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,40 +170,130 @@ function groepVermogenKw(g) {
   return isGroteVerbruikerMkp(g && g.t) ? GROOT_STANDAARD_KW[String(g.t).toLowerCase()] : NaN;
 }
 
-// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
-// in chkKleur: "groen", "oranje" of "rood".
+// ── Herkomst van de basisbelasting (fasecheck v1, stap 1) ───────────────────
+// De basisbelasting komt uit een van twee bronnen, en dat verschil verandert de
+// rekenregel — niet alleen het etiket.
+//
+//   'geschat'  De som van de paspoortgroepen, met de gelijktijdigheidsfactor
+//              0,6 over de grote verbruikers. Zo rekent deze app het nu.
+//
+//   'gemeten'  De gemeten piek uit een P1-meting IS de basisbelasting. Hier
+//              gaat de factor er NIET overheen: wat de meter zag, is wat er
+//              werkelijk tegelijk liep — de gelijktijdigheid zit er al in. Hem
+//              er nogmaals overheen leggen zou 40% van een echte meting
+//              wegstrepen en de installatie kunstmatig licht rekenen. Dat is
+//              precies de verkeerde kant op voor een toets die conservatief
+//              hoort te zijn. De factor blijft wél gelden voor een apparaat dat
+//              er nog bij komt en dus niet in de meting zat.
+//
+// Zonder bruikbare meting valt hij terug op de schatting: beoordeelMeetkwaliteit
+// levert bij te weinig dekking of te korte looptijd geen piek, en een half
+// gemeten week mag niet als "gemeten" door het leven gaan.
 
-// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
-// in chkKleur: "groen", "oranje" of "rood".
-function belastingcheck(grp, ha, lbAan, datum) {
-  const lijst = Array.isArray(grp) ? grp : [];
-  const fasen = toNum(ha && ha.f) === 3 ? 3 : 1;
-  const ampere = toNum(ha && ha.a);
-  if (!(ampere > 0)) return null;
+// ── Herkomst van de basisbelasting (fasecheck v1, stap 1) ───────────────────
+// De basisbelasting komt uit een van twee bronnen, en dat verschil verandert de
+// rekenregel — niet alleen het etiket.
+//
+//   'geschat'  De som van de paspoortgroepen, met de gelijktijdigheidsfactor
+//              0,6 over de grote verbruikers. Zo rekent deze app het nu.
+//
+//   'gemeten'  De gemeten piek uit een P1-meting IS de basisbelasting. Hier
+//              gaat de factor er NIET overheen: wat de meter zag, is wat er
+//              werkelijk tegelijk liep — de gelijktijdigheid zit er al in. Hem
+//              er nogmaals overheen leggen zou 40% van een echte meting
+//              wegstrepen en de installatie kunstmatig licht rekenen. Dat is
+//              precies de verkeerde kant op voor een toets die conservatief
+//              hoort te zijn. De factor blijft wél gelden voor een apparaat dat
+//              er nog bij komt en dus niet in de meting zat.
+//
+// Zonder bruikbare meting valt hij terug op de schatting: beoordeelMeetkwaliteit
+// levert bij te weinig dekking of te korte looptijd geen piek, en een half
+// gemeten week mag niet als "gemeten" door het leven gaan.
+const RESERVE_KW = 1.0;
 
-  // Alleen AFNEMENDE groepen. Een PV-omvormer of een ontladende batterij
-  // verlaagt de piek door de hoofdzekering niet: het slechtste geval is geen
-  // zon en een lege accu. PV als negatieve belasting hoort bij de Fasecheck
-  // (R3b), waar het over saldering per fase gaat en niet over deze toets.
+function periodeLabel(van, tot) {
+  const dd = sec => {
+    // Let op: Number(null) is 0 en epoch 0 is een geldige datum (01-01-1970).
+    // Zonder deze grens wordt "geen periode" stilzwijgend een periode in het
+    // rapport. Een meetperiode ligt altijd ruim na 1970.
+    const n = Number(sec);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const d = new Date(n * 1000);
+    if (isNaN(d.getTime())) return null;
+    return String(d.getDate()).padStart(2, "0") + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  };
+  const a = dd(van),
+    b = dd(tot);
+  return a && b ? `${a} t/m ${b}` : null;
+}
+
+function basisbelastingKw(groepen, lbAan, meting) {
+  const piek = toNum(meting && meting.piekKw);
+  const dagen = toNum(meting && meting.dagen);
+  if (piek > 0) {
+    const periode = periodeLabel(meting.van, meting.tot);
+    const dagdeel = dagen > 0 ? `over ${dagen} ${dagen === 1 ? "dag" : "dagen"}` : null;
+    return {
+      kw: piek,
+      bron: "gemeten",
+      label: ["gemeten", dagdeel, periode ? `(${periode})` : null].filter(Boolean).join(" ")
+    };
+  }
+  const lijst = Array.isArray(groepen) ? groepen : [];
   const afnemers = lijst.filter(g => (g && g.rol) !== "voed");
-  let groot = 0;
-  let gewoon = 0;
-  let bekend = 0;
+  let groot = 0,
+    gewoon = 0,
+    bekend = 0;
   for (const g of afnemers) {
     const kw = groepVermogenKw(g);
     if (isNaN(kw) || kw <= 0) continue;
     bekend += 1;
     if (isGroteVerbruikerMkp(g.t)) groot += kw;else gewoon += kw;
   }
-  // Geen enkele bekende belasting: dan valt er niets te toetsen, en "groen"
-  // zou hier een uitspraak zijn die nergens op steunt.
   if (!bekend) return null;
 
   // Mét gezamenlijke sturing vervalt de korting. Load balancing is een
   // software-instelling en geen veiligheidsmaatregel — de installatie moet ook
   // bij falende sturing kloppen, en dan is vol vermogen de veilige kant.
   const factor = lbAan === true ? 1 : GELIJKTIJDIGHEID;
-  const belasting = gewoon + groot * factor;
+  return {
+    kw: gewoon + groot * factor,
+    bron: "geschat",
+    label: "indicatie o.b.v. schatting"
+  };
+}
+
+// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
+// in chkKleur: "groen", "oranje" of "rood".
+//
+// `meting` is optioneel en verandert de vorm van de uitkomst NIET: p.chk gaat
+// rechtstreeks het meterkastpaspoort in, en dat is een open standaard. Een veld
+// toevoegen is een spec-wijziging (v0.2) en geen bijvangst van deze functie.
+// Wie de herkomst wil tonen, roept basisbelastingKw apart aan.
+
+// De uitkomst voor `p.chk`. Woorden en vorm volgen wat deze app zelf uitleest
+// in chkKleur: "groen", "oranje" of "rood".
+//
+// `meting` is optioneel en verandert de vorm van de uitkomst NIET: p.chk gaat
+// rechtstreeks het meterkastpaspoort in, en dat is een open standaard. Een veld
+// toevoegen is een spec-wijziging (v0.2) en geen bijvangst van deze functie.
+// Wie de herkomst wil tonen, roept basisbelastingKw apart aan.
+function belastingcheck(grp, ha, lbAan, datum, meting) {
+  const fasen = toNum(ha && ha.f) === 3 ? 3 : 1;
+  const ampere = toNum(ha && ha.a);
+  if (!(ampere > 0)) return null;
+
+  // Alleen AFNEMENDE groepen tellen mee in de geschatte basis; dat zit in
+  // basisbelastingKw. Een PV-omvormer of een ontladende batterij verlaagt de
+  // piek door de hoofdzekering niet: het slechtste geval is geen zon en een
+  // lege accu. PV als negatieve belasting hoort bij de Fasecheck (R3b), waar
+  // het over saldering per fase gaat en niet over deze toets.
+  //
+  // Geen enkele bekende belasting: dan valt er niets te toetsen, en "groen"
+  // zou hier een uitspraak zijn die nergens op steunt.
+  const basis = basisbelastingKw(grp, lbAan, meting);
+  if (!basis) return null;
+  const belasting = basis.kw;
   const capaciteit = fasen * ampere * 230 / 1000;
   const bezet = capaciteit > 0 ? belasting / capaciteit : 0;
   const r = bezet > 1 ? "rood" : bezet > 0.7 ? "oranje" : "groen";
@@ -419,4 +509,4 @@ function pvCrossChecks(strings, instMet, materiaal) {
 
 // ─── GEDEELDE HELPERS ─────────────────────────────────────────────────────────
 
-module.exports = { toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, belastingcheck };
+module.exports = { toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, isGroteVerbruikerMkp, groepVermogenKw, belastingcheck, RESERVE_KW, periodeLabel, basisbelastingKw };

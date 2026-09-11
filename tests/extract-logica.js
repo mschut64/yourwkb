@@ -23,6 +23,8 @@ const NODIG = new Set([
   // Belastingcheck (roadmap 2.1) — overgenomen uit Kastscan, 03-09-2026.
   "GROTE_VERBRUIKERS_MKP", "GELIJKTIJDIGHEID", "GROOT_STANDAARD_KW",
   "isGroteVerbruikerMkp", "groepVermogenKw", "belastingcheck",
+  // Fasecheck v1 stap 1 — herkomst van de basisbelasting, 11-09-2026.
+  "RESERVE_KW", "periodeLabel", "basisbelastingKw",
 ]);
 
 const ast = babel.parse(src, {
