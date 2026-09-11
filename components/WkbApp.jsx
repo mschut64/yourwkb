@@ -79,6 +79,7 @@ import {
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
 } from "./wkb/mkp";
 import { mkpBouw } from "./wkb/mkp-bouw";
+import { esc, saneerImport } from "./wkb/veilig";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
 //   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
@@ -5025,55 +5026,11 @@ function exporteerProjecten() {
   return lijst.length;
 }
 
-// HTML-escaping voor gebruikersinvoer in rapport-HTML (audit BEV-03)
-function esc(v) {
-  return String(v ?? "")
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-}
-
-// Schema-validatie en -sanering voor geïmporteerde back-ups en gedeelde
-// projecten (audit BEV-04): strings begrensd, foto's alleen als raster-dataURL,
-// aantallen en diepte gecapt. Onbekende velden blijven behouden (compatibiliteit)
-// maar worden wel gesaneerd.
-const FOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
-function saneerWaarde(v, diepte) {
-  if (diepte > 7) return undefined;
-  if (typeof v === "string") {
-    if (v.startsWith("data:")) return FOTO_RE.test(v) && v.length < 9_000_000 ? v : undefined;
-    return v.slice(0, 4000);
-  }
-  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
-  if (typeof v === "boolean" || v == null) return v;
-  if (Array.isArray(v)) return v.slice(0, 400).map(x => saneerWaarde(x, diepte+1));
-  if (typeof v === "object") {
-    const uit = {};
-    let n = 0;
-    for (const k of Object.keys(v)) {
-      if (++n > 120) break;
-      const w = saneerWaarde(v[k], diepte+1);
-      if (w !== undefined) uit[k.slice(0,64)] = w;
-    }
-    return uit;
-  }
-  return undefined;
-}
-function saneerProject(p) {
-  if (!p || typeof p !== "object" || typeof p.id !== "string" || p.id.length > 64) return null;
-  const schoon = saneerWaarde(p, 0);
-  return schoon && schoon.id ? schoon : null;
-}
 
 function importeerProjecten(jsonText) {
-  if (typeof jsonText !== "string" || jsonText.length > 60_000_000)
-    throw new Error("Bestand is te groot om te importeren");
-  let data;
-  try { data = JSON.parse(jsonText); }
-  catch { throw new Error("Ongeldig JSON-bestand"); }
-  const rauw = Array.isArray(data) ? data : data.projecten;
-  if (!Array.isArray(rauw)) throw new Error("Geen geldig YourWkb back-up bestand");
-  const inkomend = rauw.slice(0, 500).map(saneerProject).filter(Boolean);
-  if (!inkomend.length) throw new Error("Geen geldige projecten in dit bestand");
+  // De poort waar invoer van buiten doorheen moet staat in wkb/veilig.js en is
+  // daar getest; hier blijft alleen het samenvoegen met de opslag over.
+  const inkomend = saneerImport(jsonText);
   const bestaand = laadProjecten();
   const bestaandIds = new Set(bestaand.map(p => p.id));
   // Bestaande projecten met dezelfde id krijgen voorrang als ze nieuwer zijn,
