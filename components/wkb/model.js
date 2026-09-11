@@ -115,7 +115,7 @@ export function groepVermogenKw(g) {
 // Zonder bruikbare meting valt hij terug op de schatting: beoordeelMeetkwaliteit
 // levert bij te weinig dekking of te korte looptijd geen piek, en een half
 // gemeten week mag niet als "gemeten" door het leven gaan.
-export const RESERVE_KW = 1.0;
+export const FASE_RESERVE_KW = 1.0;
 
 export function periodeLabel(van, tot) {
   const dd = (sec) => {

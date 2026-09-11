@@ -58,6 +58,7 @@ components/wkb/model.js    ← de rekenkern: grenswaarden, cross-checks, belasti
 components/wkb/mkp.js      ← HET PASPOORTFORMAAT — bedoeld om gedeeld te worden met Kastscan
 components/wkb/mkp-bouw.js ← de vertaling app-gegevens → paspoort (app-specifiek)
 components/wkb/veilig.js   ← esc() en de import-sanering uit de security-audit
+components/wkb/fasebalans.js ← belasting PER FASE; werkt op de paspoort-grp[], dus deelbaar
 app/page.js                ← rendert landing
 app/landing/page.js        ← marketingpagina
 app/app/page.js            ← laadt WkbApp (client-only, ssr:false)
@@ -84,7 +85,7 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-npm test                  # normlogica (128) + paspoort (40) + ontsmetting (46)
+npm test                  # 255 tests: normlogica, paspoort, ontsmetting, fasebalans
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 

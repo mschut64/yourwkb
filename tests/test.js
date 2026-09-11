@@ -23,7 +23,7 @@
 import { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
          isGroteVerbruikerMkp, groepVermogenKw, belastingcheck,
          GELIJKTIJDIGHEID, GROOT_STANDAARD_KW,
-         RESERVE_KW, periodeLabel, basisbelastingKw } from "../components/wkb/model.js";
+         FASE_RESERVE_KW, periodeLabel, basisbelastingKw } from "../components/wkb/model.js";
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -386,7 +386,7 @@ eq(periodeLabel(null, null), null, "14.18 zonder periode geen periodelabel");
 
 // De reserve blijft staan: een week in september zegt niets over januari met
 // een warmtepomp.
-eq(RESERVE_KW, 1.0, "14.19 reserve blijft 1,0 kW");
+eq(FASE_RESERVE_KW, 1.0, "14.19 reserve blijft 1,0 kW");
 
 // En de doorwerking naar de check zelf: dezelfde kast, gemeten zwaarder dan
 // geschat, geeft een strenger oordeel.
