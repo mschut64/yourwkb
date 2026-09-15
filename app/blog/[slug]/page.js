@@ -80,7 +80,7 @@ export default function Artikel({ params }) {
       </div>
 
       <div className="b-ctablok">
-        <strong style={{ fontFamily: "'Syne',sans-serif", fontSize: 19 }}>Zelf de regie pakken?</strong>
+        <strong style={{ fontFamily: "'IBM Plex Sans',sans-serif", fontWeight: 700, fontSize: 19 }}>Zelf de regie pakken?</strong>
         <p style={{ margin: "6px 0 0" }}>Maak je eerstvolgende oplevering met YourWkb — gratis te proberen, geen account nodig.</p>
         <a href="/app">Probeer YourWkb →</a>
       </div>

@@ -4,7 +4,7 @@ export default function AvgPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
           --black: #0C0D10; --surface: #13151A; --card: #1A1D24; --border: #2A2E3A;
@@ -13,7 +13,7 @@ export default function AvgPage() {
         }
         body { background: var(--black); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
         nav { position: sticky; top: 0; z-index: 100; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; height: 64px; background: rgba(12,13,16,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
-        .logo { display: flex; align-items: center; gap: 10px; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; color: var(--white); text-decoration: none; }
+        .logo { display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 20px; color: var(--white); text-decoration: none; }
         .logo-bolt { width: 32px; height: 32px; border-radius: 8px; background: var(--yellow); display: flex; align-items: center; justify-content: center; font-size: 17px; }
         .nav-link { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
         .nav-link:hover { color: var(--text); }
@@ -21,13 +21,13 @@ export default function AvgPage() {
         .breadcrumb { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
         .breadcrumb a { color: var(--muted); text-decoration: none; }
         .breadcrumb a:hover { color: var(--text); }
-        h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(32px, 5vw, 44px); line-height: 1.1; letter-spacing: -1px; color: var(--white); margin-bottom: 12px; }
+        h1 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: clamp(32px, 5vw, 44px); line-height: 1.2; letter-spacing: -0.015em; color: var(--white); margin-bottom: 12px; }
         .subtitle { color: var(--muted); font-size: 16px; margin-bottom: 12px; }
         .updated { display: inline-block; color: var(--muted); font-size: 13px; padding: 4px 10px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border); margin-bottom: 40px; }
         .principe { background: linear-gradient(135deg, rgba(245,197,24,0.08), rgba(245,197,24,0.02)); border: 1px solid rgba(245,197,24,0.25); border-radius: 14px; padding: 24px 28px; margin-bottom: 48px; }
         .principe-titel { color: var(--yellow); font-weight: 700; font-size: 14px; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; }
         .principe-tekst { color: var(--white); font-size: 17px; line-height: 1.5; font-weight: 500; }
-        h2 { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; color: var(--white); margin: 40px 0 16px; letter-spacing: -0.3px; }
+        h2 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 22px; line-height: 1.3; color: var(--white); margin: 40px 0 16px; letter-spacing: -0.01em; }
         h3 { font-weight: 600; font-size: 16px; color: var(--white); margin: 24px 0 8px; }
         p { color: var(--text); margin-bottom: 14px; }
         ul { margin: 0 0 16px 20px; }

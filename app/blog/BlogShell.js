@@ -1,10 +1,10 @@
 // Gedeelde schil voor blogpagina's: nav + footer + stijl, conform design-spec
-// (Syne-koppen, IBM Plex Sans, tokenkleuren, ~72ch leesbreedte).
+// (IBM Plex Sans voor koppen én tekst, tokenkleuren, ~72ch leesbreedte).
 export default function BlogShell({ children }) {
   return (
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <style>{`
         :root { --bg:#111318; --card:#20242F; --border:#2E3347; --yellow:#F5C518;
                 --green:#27AE60; --text:#ECEEF5; --muted:#9BA3B8; --soft:#C2C8D8; }
@@ -17,9 +17,9 @@ export default function BlogShell({ children }) {
         .b-nav a.b-cta { background:var(--yellow); color:#000; font-weight:700; border-radius:12px;
                  padding:0 18px; min-height:48px; display:inline-flex; align-items:center; text-decoration:none; font-size:15px; }
         .b-main { max-width:72ch; margin:0 auto; padding:40px 20px 64px; }
-        .b-main h1 { font-family:'Syne',sans-serif; font-weight:800; font-size:clamp(28px,5vw,42px);
-                     line-height:1.15; letter-spacing:-0.5px; margin:10px 0 14px; }
-        .b-main h2 { font-family:'Syne',sans-serif; font-weight:700; font-size:clamp(20px,3vw,26px); margin:34px 0 10px; }
+        .b-main h1 { font-family:'IBM Plex Sans',sans-serif; font-weight:700; font-size:clamp(28px,5vw,42px);
+                     line-height:1.2; letter-spacing:-0.015em; margin:10px 0 14px; text-wrap:balance; }
+        .b-main h2 { font-family:'IBM Plex Sans',sans-serif; font-weight:700; font-size:clamp(20px,3vw,26px); line-height:1.25; margin:34px 0 10px; }
         .b-main h3 { font-size:18px; margin:26px 0 8px; }
         .b-main p, .b-main li { font-size:17px; line-height:1.75; color:var(--soft); }
         .b-main p strong { color:var(--text); }
@@ -34,7 +34,7 @@ export default function BlogShell({ children }) {
         .b-kaart { display:block; background:var(--card); border:1px solid var(--border); border-radius:14px;
                    padding:22px; margin-bottom:16px; text-decoration:none; color:var(--text); }
         .b-kaart:hover { border-color:var(--yellow); }
-        .b-kaart h2 { font-family:'Syne',sans-serif; font-size:22px; margin:6px 0 8px; }
+        .b-kaart h2 { font-family:'IBM Plex Sans',sans-serif; font-weight:700; font-size:22px; line-height:1.25; margin:6px 0 8px; }
         .b-kaart p { color:var(--soft); font-size:15px; line-height:1.6; margin:0 0 8px; }
         .b-tags { display:flex; gap:8px; flex-wrap:wrap; }
         .b-tag { font-size:12px; color:var(--yellow); background:#2A240A; border-radius:20px; padding:4px 11px; }

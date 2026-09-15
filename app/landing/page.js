@@ -76,7 +76,7 @@ a:hover { color: #FFD84D; }
 :focus-visible { outline: 3px solid var(--yellow); outline-offset: 3px; }
 
 nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 0 5vw; display: flex; align-items: center; justify-content: space-between; height: 64px; background: rgba(17,19,24,0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
-.logo { display: flex; align-items: center; gap: 10px; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; color: var(--white); text-decoration: none; }
+.logo { display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 20px; color: var(--white); text-decoration: none; }
 .logo-bolt { width: 32px; height: 32px; border-radius: 8px; background: var(--yellow); display: flex; align-items: center; justify-content: center; font-size: 17px; }
 .nav-right { display: flex; align-items: center; gap: 16px; }
 .nav-link { color: var(--text-soft); text-decoration: none; font-size: 15px; font-weight: 500; }
@@ -91,7 +91,8 @@ nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 0 5vw; 
 .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--yellow); animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-h1, .payoff { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(28px, 5.4vw, 48px); line-height: 1.08; letter-spacing: -0.02em; color: var(--white); margin-bottom: 24px; text-wrap: balance; word-break: keep-all; overflow-wrap: normal; hyphens: none; }
+/* Koppen in IBM Plex Sans (besluit 15-09-2026): Syne was slecht leesbaar en kapte bij regelhoogte 1,08 de onderstok van g/j/p af. */
+h1, .payoff { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: clamp(30px, 5.6vw, 52px); line-height: 1.15; letter-spacing: -0.02em; color: var(--white); margin-bottom: 24px; text-wrap: balance; word-break: keep-all; overflow-wrap: normal; hyphens: none; }
 h1 span, .payoff span { color: var(--yellow); }
 .hero-sub { font-size: clamp(17px, 2vw, 20px); color: var(--text-soft); max-width: 52ch; margin-bottom: 40px; line-height: 1.6; }
 .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
@@ -138,12 +139,12 @@ h1 span, .payoff span { color: var(--yellow); }
 
 section.steps { padding: 96px 5vw; }
 .section-label { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--yellow); margin-bottom: 12px; }
-h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(26px, 3.6vw, 40px); letter-spacing: -0.02em; color: var(--white); margin-bottom: 16px; line-height: 1.14; text-wrap: balance; }
+h2 { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: clamp(26px, 3.6vw, 40px); letter-spacing: -0.015em; color: var(--white); margin-bottom: 16px; line-height: 1.2; text-wrap: balance; }
 .section-sub { color: var(--text-soft); font-size: 18px; max-width: 56ch; line-height: 1.6; }
 .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 56px; }
 .step-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; transition: border-color .2s, transform .2s; }
 .step-card:hover { border-color: rgba(245,197,24,0.4); transform: translateY(-2px); }
-.step-num { width: 36px; height: 36px; border-radius: 10px; background: var(--yellow); color: #000; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.step-num { width: 36px; height: 36px; border-radius: 10px; background: var(--yellow); color: #000; font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
 .step-icon { font-size: 28px; margin-bottom: 12px; }
 .step-title { font-weight: 700; font-size: 17px; color: var(--white); margin-bottom: 6px; }
 .step-desc { font-size: 15px; color: var(--muted); line-height: 1.6; }
@@ -156,12 +157,16 @@ h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(26px, 3
 .check-text strong { color: var(--white); display: block; font-weight: 600; }
 
 .prijzen { padding: 0 5vw 96px; }
+/* Twee kolommen op breed, één op de telefoon. Stond inline, en een inline-stijl
+   wint van elke mediaquery: de prijskaart werd 462 px breed op een 375-px-scherm,
+   de pagina rekte mee en de vaste nav duwde "Gratis starten" buiten beeld. */
+.twee-kol { display: grid; grid-template-columns: 1fr 1fr; }
 .price-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 48px; }
 .price-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; display: flex; flex-direction: column; }
 .price-card.featured { border-color: var(--yellow); position: relative; background: linear-gradient(135deg, rgba(245,197,24,0.06), var(--card)); }
 .featured-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--yellow); color: #000; font-size: 12px; font-weight: 700; min-height: 26px; padding: 0 14px; border-radius: 20px; white-space: nowrap; display: inline-flex; align-items: center; }
 .price-name { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
-.price-amount { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 40px; color: var(--white); letter-spacing: -0.02em; margin-bottom: 4px; }
+.price-amount { font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 40px; color: var(--white); letter-spacing: -0.02em; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
 .price-amount span { font-size: 16px; color: var(--muted); font-weight: 400; font-family: 'IBM Plex Sans', sans-serif; }
 .price-desc { font-size: 15px; color: var(--text-soft); margin-bottom: 24px; }
 .price-features { list-style: none; margin-bottom: 28px; }
@@ -215,14 +220,18 @@ footer p { font-size: 14px; color: var(--muted); }
 @media (max-width: 600px) {
   .check-grid { grid-template-columns: 1fr; }
   .price-grid { grid-template-columns: 1fr; }
+  .twee-kol { grid-template-columns: 1fr; }
   .hero-trust { flex-direction: column; gap: 12px; }
   nav .nav-link { display: none; }
+  /* Blog blijft op de telefoon zichtbaar — daar zit de doelgroep. */
+  nav .nav-link.nav-blog { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; }
+  .nav-right { gap: 12px; }
+  .btn-nav { padding: 0 14px; }
   .btn-primary, .btn-ghost { width: 100%; }
 }
       `}</style>
 
-      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
       {/* NAV */}
       <nav>
@@ -232,6 +241,7 @@ footer p { font-size: 14px; color: var(--muted); }
         </a>
         <div className="nav-right">
           <a href="#stappen" className="nav-link">Hoe werkt het</a>
+          <a href="/blog" className="nav-link nav-blog">Blog</a>
           <a href="#prijzen" className="nav-link">Privacy &amp; kosten</a>
           <a href="/app" className="btn-nav">Gratis starten</a>
         </div>
@@ -425,7 +435,7 @@ footer p { font-size: 14px; color: var(--muted); }
         </div>
 
         {/* Twee kaarten */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, maxWidth:700, marginBottom:24 }}>
+        <div className="twee-kol" style={{ gap:16, maxWidth:700, marginBottom:24 }}>
           <div className="price-card">
             <div style={{ fontSize:32, marginBottom:12 }}>🆓</div>
             <div className="price-name">App gebruiken</div>
@@ -458,7 +468,7 @@ footer p { font-size: 14px; color: var(--muted); }
         {/* Binnenkort */}
         <div style={{ maxWidth:700, marginBottom:48 }}>
           <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase', marginBottom:12 }}>Binnenkort beschikbaar</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+          <div className="twee-kol" style={{ gap:12 }}>
             {[
               { icon:'🧮', title:'Meterkast-belastingcheck', desc:'Kan de kast het totaal aan? Hoofdaansluiting én railcapaciteit getoetst.' },
               { icon:'🏷️', title:'Eigen logo op rapport', desc:'Jouw huisstijl op elk rapport. Upload eenmalig je logo.' },
@@ -476,7 +486,7 @@ footer p { font-size: 14px; color: var(--muted); }
         {/* Belofte */}
         <div style={{ background:'#0A1A0A', border:'1px solid #22C55E33', borderRadius:16, padding:'28px 32px', maxWidth:700 }}>
           <div style={{ fontSize:13, fontWeight:700, color:'#22C55E', letterSpacing:1, textTransform:'uppercase', marginBottom:16 }}>Onze belofte</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+          <div className="twee-kol" style={{ gap:14 }}>
             {[
               { title:'Geen advertenties', desc:'Nooit. Nergens. Punt.' },
               { title:'Data wordt nooit verkocht', desc:'Jouw klantdata is van jou.' },
