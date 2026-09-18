@@ -14,7 +14,7 @@
 // Let op: expliciete .js-extensie. Webpack vindt het bestand ook zonder,
 // maar Node niet — en de tests draaien op Node.
 import { toNum, belastingcheck } from "./model.js";
-import { MKP_SPEC_VERSIE, eanValide } from "meterkastpaspoort";
+import { MKP_SPEC_VERSIE, eanValide, mkpSamenvoegen } from "meterkastpaspoort";
 
 // ─── Een thuisbatterij is twee dingen tegelijk ───────────────────────────────
 //
@@ -174,15 +174,28 @@ export function mkpBouw(data, discipline) {
   // (roadmap 2.1). Alleen meesturen als er iets te toetsen viel: zonder
   // hoofdaansluiting of zonder een enkele bekende belasting zou "groen" een
   // uitspraak zijn die nergens op steunt.
-  const chkUitkomst = belastingcheck(grp, p.ha, m.lbAan, p.d);
-  if (chkUitkomst) p.chk = chkUitkomst;
-  // Logboek: nieuwe regel bovenaan, geïmporteerde historie eronder, max 8 regels.
+  // Logboek: alleen de nieuwe regel. De historie komt hieronder uit de bron —
+  // byte-voor-byte, met erk, zeg en handtekeningen — en wordt niet meer op acht
+  // regels afgekapt. Afkappen gebeurt alleen als de QR te groot wordt
+  // (mkpAfkappen, hoofdstuk 6), en dan van onderen af.
   const nieuweRegel = {
     d: p.d,
     b: (data.instBedrijf || data.instNaam || "installateur").slice(0,40),
     w: (m.logOmschrijving || data.typeWerk || "werkzaamheden meterkast").slice(0,60),
   };
-  const oudeLog = Array.isArray(data.mkpImport?.log) ? data.mkpImport.log : [];
-  p.log = [nieuweRegel, ...oudeLog].slice(0,8);
-  return p;
+  p.log = [nieuweRegel];
+
+  // HERGEBRUIK: wat de app niet kent, geeft zij door (featurespec paspoortbehoud).
+  // Zonder deze regel verdwijnen bij de volgende QR stil de materiaallijst,
+  // grp[].fn en grp[].mat, de erkenning, de zegels en de handtekeningen van
+  // eerdere installateurs — en elk veld dat de standaard later nog toevoegt.
+  // data.mkpImport is het onbewerkte, gescande paspoort.
+  const uit = mkpSamenvoegen(data.mkpImport, p);
+
+  // De belastingcheck over het samengevoegde paspoort, zodat fasenummers uit de
+  // bron die de app zelf niet kent meetellen. Valt er niets te toetsen, dan blijft
+  // een eerdere uitkomst uit de bron staan, met haar eigen datum.
+  const chkUitkomst = belastingcheck(uit.grp || [], uit.ha, m.lbAan, uit.d);
+  if (chkUitkomst) uit.chk = chkUitkomst;
+  return uit;
 }

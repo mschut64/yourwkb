@@ -1,5 +1,21 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-18-A (meterkastpaspoort v0.3: velden van een ander blijven behouden):
+//   • GEDRAGSWIJZIGING bij hergebruik van een gescand paspoort. mkpBouw begon met
+//     een leeg object en schreef alleen de velden die de app kent. Wie een laadpaal
+//     bijplaatste op een kast met een paspoort, wiste daarmee stil de materiaallijst
+//     (mat[]), de koppeling groep → toestel, de erkenning, de zegels en de
+//     handtekeningen van eerdere installateurs. Nu voegt mkpBouw samen met het
+//     gescande paspoort (mkpSamenvoegen uit meterkastpaspoort v0.3.0): wat de app
+//     niet kent, geeft zij door.
+//   • Het logboek werd hard op acht regels afgekapt. Nu blijven alle regels staan
+//     en wordt er alleen afgekapt als de QR boven de 105 modules komt, in de vaste
+//     volgorde uit hoofdstuk 6 (mkpAfkappen). Gebeurt dat, dan staat in de stap
+//     Versturen één regel over wat er niet in de QR zit.
+//   • Anoniem delen met een collega gooide het gescande paspoort weg, vanwege het
+//     adres. De collega die het project overnam wiste daarna alsnog de geschiedenis.
+//     Nu gaan alleen postcode, huisnummer en de EAN-codes uit het paspoort.
+//
 // 2026-09-12-G (op één fase valt er niets te verdelen):
 //   • Op een eenfasige hoofdaansluiting gaf de Fasecheck nog "beste fase: L1" —
 //     een advies zonder inhoud, want er is er maar één. De verdeling vervalt
@@ -237,11 +253,11 @@ import {
 // github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
 import {
   MKP_BASIS, MKP_SPEC_VERSIE, eanValide, mkpEncode, mkpDecode,
-  mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
+  mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing, mkpAfkappen,
 } from "meterkastpaspoort";
 import { mkpBouw, eigenApparaatRegels } from "./wkb/mkp-bouw";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
-import { esc, saneerImport } from "./wkb/veilig";
+import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
 //   Nieuw: paspoort-stap in groepenkast-flow (hoofdaansluiting, kam 10/16mm²,
@@ -258,7 +274,7 @@ import { esc, saneerImport } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-12-G";
+const APP_VERSIE = "2026-09-18-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -3133,11 +3149,15 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   const volgende = async () => {
     setBezig(true); setFout("");
     try {
-      const paspoort = mkpBouw(data, discipline);
+      // Hoofdstuk 6: past het paspoort niet onder 105 modules, dan kapt mkpAfkappen
+      // af in de vaste volgorde en zegt in één regel wat er niet is meegenomen.
+      // Onbekende velden en ondertekende logboekregels worden daarbij nooit gewijzigd.
+      const { paspoort, melding } = await mkpAfkappen(mkpBouw(data, discipline));
       const url = MKP_BASIS + await mkpEncode(paspoort);
       const qr  = await QRCode.toDataURL(url, { errorCorrectionLevel:"M", margin:1, width:480, color:{ dark:"#000000", light:"#FFFFFF" } });
       onChange("mkpUrl", url);
       onChange("mkpQr", qr);
+      onChange("mkpMelding", melding);
       onNext();
     } catch(e) {
       setFout("QR-generatie mislukt: " + (e?.message||e));
@@ -4523,6 +4543,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </div>
         </div>
 
+        {/* Hoofdstuk 6: werd het paspoort ingekort om leesbaar te blijven, dan staat
+            hier in één regel wat er niet in de QR zit. */}
+        {data.mkpMelding && (
+          <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange}55`, fontSize:13, lineHeight:1.5, marginBottom:16}}>
+            ⚠ <strong>Meterkastpaspoort ingekort.</strong> {data.mkpMelding}
+          </div>
+        )}
+
         {/* Samenvatting */}
         <div style={S.card}>
           <div style={{fontWeight:600,fontSize:15,marginBottom:2}}>{data.naam}</div>
@@ -4683,16 +4711,7 @@ function KlaarScreen({ data, discipline, onDone }) {
 
 // ─── DISCIPLINE KIEZER ────────────────────────────────────────────────────────
 // ─── BACK-UP & DELEN ─────────────────────────────────────────────────────────
-const KLANT_VELDEN = ["naam","email","straat","plaats","postcode","huisnummer","toevoeging"];
-
-function anonimiseerJob(job) {
-  const schoon = { ...job };
-  KLANT_VELDEN.forEach(k => { delete schoon[k]; });
-  delete schoon.mkpUrl; delete schoon.mkpQr;      // bevatten adres — ontvanger genereert opnieuw
-  if (schoon.mkp) { const m = { ...schoon.mkp }; delete m.ean; delete m.ean2; schoon.mkp = m; }
-  delete schoon.mkpImport;
-  return schoon;
-}
+// anonimiseerJob staat in components/wkb/veilig.js — daar is hij getest.
 
 function downloadJson(naam, obj) {
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });

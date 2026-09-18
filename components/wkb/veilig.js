@@ -90,3 +90,29 @@ export function saneerImport(jsonText) {
   if (!inkomend.length) throw new Error("Geen geldige projecten in dit bestand");
   return inkomend;
 }
+
+// ─── Anoniem delen met een collega ───────────────────────────────────────────
+//
+// De klantgegevens gaan eruit, het gescande paspoort NIET in zijn geheel. Tot
+// 18-09-2026 verdween mkpImport hier volledig, vanwege het adres. Wie het project
+// overnam en een nieuwe QR maakte, wiste daarmee de materiaallijst, de erkenning,
+// de zegels en de handtekeningen van eerdere installateurs — het stille verlies
+// uit de featurespec paspoortbehoud. Alleen de velden die de kast aanwijzen gaan
+// er nu uit: postcode, huisnummer en de EAN-codes van de aansluiting.
+export const KLANT_VELDEN = ["naam","email","straat","plaats","postcode","huisnummer","toevoeging"];
+export const PASPOORT_ADRESVELDEN = ["pc", "nr", "ean", "ean2"];
+
+export function anonimiseerJob(job) {
+  const schoon = { ...job };
+  KLANT_VELDEN.forEach((k) => { delete schoon[k]; });
+  delete schoon.mkpUrl; delete schoon.mkpQr;      // bevatten adres — ontvanger genereert opnieuw
+  if (schoon.mkp) { const m = { ...schoon.mkp }; delete m.ean; delete m.ean2; schoon.mkp = m; }
+  if (schoon.mkpImport && typeof schoon.mkpImport === "object") {
+    const bron = JSON.parse(JSON.stringify(schoon.mkpImport));
+    PASPOORT_ADRESVELDEN.forEach((k) => { delete bron[k]; });
+    schoon.mkpImport = bron;
+  } else {
+    delete schoon.mkpImport;
+  }
+  return schoon;
+}

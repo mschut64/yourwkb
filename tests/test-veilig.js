@@ -11,7 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
-  esc, saneerWaarde, saneerProject, saneerImport,
+  esc, saneerWaarde, saneerProject, saneerImport, anonimiseerJob,
   MAX_STRING, MAX_DIEPTE, MAX_ARRAY, MAX_SLEUTELS, MAX_PROJECTEN, MAX_BESTAND_BYTES,
 } from "../components/wkb/veilig.js";
 
@@ -125,6 +125,25 @@ const vuil = JSON.stringify({ projecten: [{ id: "p1", job: {
 const schoon = saneerImport(vuil)[0];
 eq(schoon.job.naam.length, MAX_STRING, "5.10 te lange string afgekapt in plaats van geweigerd");
 eq(schoon.job.foto, undefined, "5.11 SVG uit het bestand verwijderd");
+
+console.log("▶ CATEGORIE 6: anoniem delen — het adres eruit, de geschiedenis van de kast niet");
+
+{
+  const job = { naam: "Klant", email: "k@x.nl", postcode: "2691JJ", huisnummer: "72", mkpUrl: "https://…", mkpQr: "data:…",
+    mkp: { ean: "871685920000000019", ean2: "871685920000000019", bj: "1995" },
+    mkpImport: { v: 2, pc: "2691JJ", nr: "72", ean: "871685920000000019", ean2: "871685920000000019", xyz: 1,
+      mat: [{ i: 1, fab: "Hager", art: "CDA440D" }], log: [{ d: "2026-05-02", b: "Jansen", sig: "abc" }] } };
+  const a = anonimiseerJob(job);
+  eq([a.naam, a.email, a.postcode, a.huisnummer, a.mkpUrl, a.mkpQr], [undefined, undefined, undefined, undefined, undefined, undefined],
+     "6.1 klantgegevens en de oude QR (die het adres draagt) gaan eruit");
+  eq([a.mkp.ean, a.mkp.ean2, a.mkp.bj], [undefined, undefined, "1995"], "6.2 de EAN-codes uit de app-velden");
+  eq([a.mkpImport.pc, a.mkpImport.nr, a.mkpImport.ean, a.mkpImport.ean2], [undefined, undefined, undefined, undefined],
+     "6.3 en ook uit het gescande paspoort");
+  eq([a.mkpImport.mat, a.mkpImport.log, a.mkpImport.xyz], [job.mkpImport.mat, job.mkpImport.log, 1],
+     "6.4 materiaallijst, ondertekend logboek en onbekende velden blijven — de collega wist ze anders");
+  eq([job.mkpImport.pc, job.naam], ["2691JJ", "Klant"], "6.5 het origineel op het eigen toestel wordt niet gewijzigd");
+  eq("mkpImport" in anonimiseerJob({ naam: "Klant" }), false, "6.6 zonder gescand paspoort wordt er niets toegevoegd");
+}
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);

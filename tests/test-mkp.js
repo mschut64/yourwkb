@@ -245,6 +245,34 @@ eq(eigenApparaatRegels({}, "groepenkast"), [],
 const gebouwdHeen = await mkpEncode(gebouwd);
 eq((await mkpDecode(gebouwdHeen)).grp[0].fn, [2], "6.9 fasenummer overleeft de QR-codering");
 
+console.log("▶ CATEGORIE 7: hergebruik — mkpBouw geeft door wat de app niet kent");
+
+// Featurespec paspoortbehoud. Een installateur die bijplaatst mag de
+// materiaallijst, de erkenning, de zegels en de handtekening van zijn voorganger
+// niet wissen. Tot 18-09-2026 deed mkpBouw precies dat, zonder foutmelding.
+{
+  const oudeRegel = { d: "2026-05-02", b: "Installatiebedrijf Jansen", w: "groepenkast vervangen",
+                      erk: "installq:14718", zeg: ["IQ-14718-004217"], sid: "jansen-2026-01", sig: "Q".repeat(86) };
+  const bronPp = { v: 2, d: "2026-05-02", pc: "2691JJ", nr: "72", xyz: 123, ha: { f: 3, a: 25 },
+    mat: [{ i: 1, fab: "Hager", typ: "CDA440D", art: "CDA440D", sn: "A12345" }],
+    grp: [{ t: "kook", rol: "af", f: 1, fn: [2], mat: 1, kw: 7.4, n: "Kookgroep" }],
+    log: [oudeRegel] };
+  const metBron = { ...appData, mkpImport: bronPp };
+  const her = mkpBouw(metBron, "groepenkast");
+  eq(her.mat, bronPp.mat, "7.1 de materiaallijst van de voorganger blijft staan");
+  eq(her.xyz, 123, "7.2 een verzonnen veld \"xyz\": 123 blijft staan");
+  eq(her.grp.find(g => g.t === "kook").mat, 1, "7.3 de koppeling kookgroep → toestel blijft staan (koppeling op t + n)");
+  eq(her.log.length, 2, "7.4 de nieuwe regel komt erbij, zonder dubbele");
+  eq(her.log[0].b !== oudeRegel.b, true, "7.5 de nieuwe regel staat bovenaan");
+  eq(JSON.stringify(her.log[1]), JSON.stringify(oudeRegel), "7.6 de oude regel is byte-voor-byte gelijk, met erk, zeg, sid en sig");
+  eq(mkpBouw({ ...metBron, mkpImport: { ...bronPp, v: 3 } }, "groepenkast").v, 3, "7.7 v gaat nooit omlaag");
+  // Voorheen: max. acht regels. Nu blijft het logboek heel tot de QR te groot wordt.
+  const lang = mkpBouw({ ...metBron, mkpImport: { ...bronPp, log: Array.from({ length: 12 }, (_, k) => ({ d: `2025-01-${String(k + 1).padStart(2, "0")}`, b: `Bedrijf ${k}`, w: "werk" })) } }, "groepenkast");
+  eq(lang.log.length, 13, "7.8 het logboek wordt niet meer blind op acht regels afgekapt");
+  const naRit = await mkpDecode(await mkpEncode(her));
+  eq(naRit.log[1].sig, oudeRegel.sig, "7.9 de handtekening overleeft de QR-codering");
+}
+
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);
 console.log("═══════════════════════════════════════════════");
