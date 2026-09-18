@@ -97,7 +97,7 @@ Nieuw binnengekomen en wél compleet: `docs/claude_p1-meting-featurespec.md` (11
 
 ## R2 — Controleerbaar vakmanschap + AI-meekijker (fotocheck stap 8) ⏸
 
-Erkenningsblok in bedrijfsprofiel (InstallQ-erkenningsnummer, CO/BRL 6000-25, F-gassen BRL 100/200 — elk optioneel, eenmalig; rapport toont per discipline het relevante nummer + controleregel via echteinstallateur.nl / tlokb.nl). AI-meekijker op werkfoto's: optionele knop per checkpoint, foto's naar de beveiligde `/api/rapport`-route, bevindingen als signaal (nooit keuring-taal), privacymelding, offline grijs.
+*Deels gedaan (`v2026-09-18-B`): de uitgever van de erkenning (InstallQ / TloKB) is optioneel te kiezen in het profiel en gaat als `log[].erk` mee het meterkastpaspoort in. CO- en F-gassencertificaat en de controleregel in het rapport volgen.* Erkenningsblok in bedrijfsprofiel (InstallQ-erkenningsnummer, CO/BRL 6000-25, F-gassen BRL 100/200 — elk optioneel, eenmalig; rapport toont per discipline het relevante nummer + controleregel via echteinstallateur.nl / tlokb.nl). AI-meekijker op werkfoto's: optionele knop per checkpoint, foto's naar de beveiligde `/api/rapport`-route, bevindingen als signaal (nooit keuring-taal), privacymelding, offline grijs.
 
 **Blokkeert op:** de systeemprompt uit de fototest-kalibratie (aparte chat). Prijsmodel: advies optie A (inbegrepen, ~€0,03/analyse, ~€0,09/rapport).
 

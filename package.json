@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "vercel-build": "next build",
-    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-fasebalans.js"
+    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-fasebalans.js && node tests/test-mkp-qr.js"
   },
   "dependencies": {
     "jsqr": "^1.4.0",
@@ -16,5 +16,8 @@
     "qrcode": "^1.5.4",
     "react": "18.3.1",
     "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "pngjs": "^5.0.0"
   }
 }

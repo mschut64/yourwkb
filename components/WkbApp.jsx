@@ -1,5 +1,15 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-18-B (erkenning in het paspoort, QR-opbouw getest):
+//   • Nieuw in het profiel, optioneel en eenmalig: de uitgever van de erkenning
+//     (InstallQ / TloKB). Met uitgever gaat de erkenning als log[].erk
+//     ("installq:14718", spec v0.2) mee in het meterkastpaspoort. Zonder uitgever
+//     niets: een nummer zonder register stuurt de lezer de verkeerde kant op.
+//   • De QR-opbouw (mkpBouw → mkpAfkappen → mkpEncode → PNG) staat nu in
+//     components/wkb/mkp-qr.js in plaats van in dit bestand, en tests/test-mkp-qr.js
+//     leest het plaatje terug met een QR-lezer en vergelijkt de JSON. Rapport, PDF
+//     en e-mail gebruiken dezelfde QR; in de e-mail gaat hij als cid-bijlage mee.
+//
 // 2026-09-18-A (meterkastpaspoort v0.3: velden van een ander blijven behouden):
 //   • GEDRAGSWIJZIGING bij hergebruik van een gescand paspoort. mkpBouw begon met
 //     een leeg object en schreef alleen de velden die de app kent. Wie een laadpaal
@@ -244,7 +254,6 @@
 //    per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import QRCode from "qrcode";
 import { trackEvent } from "./analytics";
 import {
   toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR, isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
@@ -252,10 +261,11 @@ import {
 // Het paspoortformaat komt uit de standaard zelf, niet uit een kopie hier:
 // github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
 import {
-  MKP_BASIS, MKP_SPEC_VERSIE, eanValide, mkpEncode, mkpDecode,
-  mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing, mkpAfkappen,
+  MKP_SPEC_VERSIE, eanValide, mkpDecode,
+  mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
 } from "meterkastpaspoort";
-import { mkpBouw, eigenApparaatRegels } from "./wkb/mkp-bouw";
+import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS } from "./wkb/mkp-bouw";
+import { mkpQrVoorRapport } from "./wkb/mkp-qr";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 
@@ -274,7 +284,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-18-A";
+const APP_VERSIE = "2026-09-18-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1385,6 +1395,7 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
         instTel:       data.instTel||"",
         instEmail:     data.instEmail||"",
         instErkenning: data.instErkenning||"",
+        instErkUitgever: data.instErkUitgever||"",
       };
       localStorage.setItem("ywkb_installateur", JSON.stringify(profiel));
       setOpgeslagen(true);
@@ -1436,6 +1447,28 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
               <input style={S.input} placeholder={ph} value={data[k]||""} onChange={e=>onChange(k,e.target.value)}/>
             </div>
           ))}
+          {/* Optioneel, eenmalig: met de uitgever erbij gaat de erkenning als
+              log[].erk ("installq:14718") mee het meterkastpaspoort in, zodat de
+              volgende monteur of de bewoner weet in wélk register hij kan kijken. */}
+          <label style={S.label}>Uitgever van de erkenning <span style={{ color:K.muted, fontWeight:400 }}>(optioneel)</span></label>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6 }}>
+            {[["", "Niet opgeven"], ...Object.entries(ERK_UITGEVERS).map(([id, naam]) => [id, naam.split(" ")[0]])].map(([id, naam]) => {
+              const actief = (data.instErkUitgever||"") === id;
+              return (
+                <button key={id||"geen"} type="button" onClick={()=>onChange("instErkUitgever", id)} style={{
+                  padding:"10px 4px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer",
+                  fontFamily:"'IBM Plex Sans',sans-serif",
+                  background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
+                  border:`1px solid ${actief ? K.yellow : K.border}`,
+                }}>{naam}</button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize:11, color:K.muted, marginTop:6 }}>
+            {erkVanProfiel(data)
+              ? <>In het meterkastpaspoort: <strong style={{ color:K.text }}>{erkVanProfiel(data)}</strong> — controleerbaar in het openbare register van de uitgever.</>
+              : "Kies de uitgever, dan gaat je erkenning controleerbaar mee in het meterkastpaspoort."}
+          </div>
         </div>
         <button style={{ ...S.btn, background:ok?K.yellow:K.border, color:ok?"#000":K.muted }}
           onClick={ok?onNext:undefined}>Volgende →</button>
@@ -3152,9 +3185,8 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
       // Hoofdstuk 6: past het paspoort niet onder 105 modules, dan kapt mkpAfkappen
       // af in de vaste volgorde en zegt in één regel wat er niet is meegenomen.
       // Onbekende velden en ondertekende logboekregels worden daarbij nooit gewijzigd.
-      const { paspoort, melding } = await mkpAfkappen(mkpBouw(data, discipline));
-      const url = MKP_BASIS + await mkpEncode(paspoort);
-      const qr  = await QRCode.toDataURL(url, { errorCorrectionLevel:"M", margin:1, width:480, color:{ dark:"#000000", light:"#FFFFFF" } });
+      // Dezelfde weg als rapport, PDF en e-mail — zie components/wkb/mkp-qr.js.
+      const { url, qr, melding } = await mkpQrVoorRapport(data, discipline);
       onChange("mkpUrl", url);
       onChange("mkpQr", qr);
       onChange("mkpMelding", melding);

@@ -55,6 +55,18 @@ function batterijRegels({ kwOntladen, kwLaden, naam, f, fn }) {
 // toen de accu hier twee regels kreeg en het scherm nog één regel van 3 kW liet
 // zien terwijl de belastingcheck eronder met 6,6 kW rekende. Eén definitie dus,
 // en de voorvertoning laat letterlijk zien wat er wordt weggeschreven.
+// log[].erk volgens spec v0.2: "uitgever:nummer", bijvoorbeeld "installq:14718".
+// Alleen als de installateur in zijn profiel de uitgever heeft gekozen. Het
+// nummer alleen zegt niet in wélk register je moet kijken, en een gegokte
+// uitgever stuurt de lezer naar het verkeerde register — erger dan geen erk.
+export const ERK_UITGEVERS = { installq: "InstallQ", tlokb: "TloKB (gasregister)" };
+export function erkVanProfiel(data) {
+  const u = String((data && data.instErkUitgever) || "").trim().toLowerCase();
+  const nr = String((data && data.instErkenning) || "").replace(/\s+/g, "").slice(0, 30);
+  if (!ERK_UITGEVERS[u] || !nr || nr.includes(":")) return null;
+  return `${u}:${nr}`;
+}
+
 // De uitkomst van de Fasecheck (optioneel blok in de apparaatstap) als `fn`
 // volgens spec v0.2 §4.4. Alleen schrijven wat de installateur daadwerkelijk
 // heeft gekozen — een gegokte fase is schadelijker dan een ontbrekende, want het
@@ -183,6 +195,8 @@ export function mkpBouw(data, discipline) {
     b: (data.instBedrijf || data.instNaam || "installateur").slice(0,40),
     w: (m.logOmschrijving || data.typeWerk || "werkzaamheden meterkast").slice(0,60),
   };
+  const erk = erkVanProfiel(data);
+  if (erk) nieuweRegel.erk = erk;
   p.log = [nieuweRegel];
 
   // HERGEBRUIK: wat de app niet kent, geeft zij door (featurespec paspoortbehoud).
