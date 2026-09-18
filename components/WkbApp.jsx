@@ -9,6 +9,11 @@
 //     components/wkb/mkp-qr.js in plaats van in dit bestand, en tests/test-mkp-qr.js
 //     leest het plaatje terug met een QR-lezer en vergelijkt de JSON. Rapport, PDF
 //     en e-mail gebruiken dezelfde QR; in de e-mail gaat hij als cid-bijlage mee.
+//   • FIX: wie een paspoort-QR scande zonder de app ooit eerder te hebben geopend,
+//     zag de paspoortweergave een tel en daarna een leeg startscherm. De nieuwe
+//     service worker nam de pagina over, controllerchange herlaadde haar, en het
+//     fragment was toen al uit de URL gehaald. Die herlaadactie slaat nu over na
+//     een scan, net als de andere al deed. Raakte juist de demo-QR en de kastdeur.
 //
 // 2026-09-18-A (meterkastpaspoort v0.3: velden van een ander blijven behouden):
 //   • GEDRAGSWIJZIGING bij hergebruik van een gescand paspoort. mkpBouw begon met
@@ -6181,9 +6186,14 @@ export default function App() {
         }
       });
     }).catch(()=>{});
+    // Ook hier niet herladen na een paspoort-scan. Bij een eerste bezoek neemt de
+    // nieuwe worker de pagina over (skipWaiting + clients.claim) en vuurt dit
+    // event; het fragment is dan al gelezen en uit de URL gehaald, dus herladen
+    // gaf een leeg startscherm — de viewer was weg bij iedereen die de app nog
+    // nooit had geopend. Precies de klant die de demo-QR of de kastdeur scant.
     let herladen = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (herladen) return; herladen = true; window.location.reload();
+      if (herladen || window.__mkpBinnengekomen) return; herladen = true; window.location.reload();
     });
   }, []);
   const activeerUpdate = () => { swUpdate?.postMessage("SKIP_WAITING"); };
