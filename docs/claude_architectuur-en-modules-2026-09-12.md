@@ -22,7 +22,7 @@ de situatie *vóór* de ontvlechting en stelde de normvragen; dit beschrijft de 
                     │   mkp.js · spec-site · referentielezer   │
                     │   /p → yourwkb.nl/app  (QR-redirect)     │
                     └────────────┬──────────────┬──────────────┘
-                                 │  npm-dependency, gepind op v0.2.0
+                                 │  npm-dependency, gepind op v0.3.0
                      ┌───────────┘              └───────────┐
                      ▼                                      ▼
         ┌────────────────────────┐              ┌────────────────────────┐
@@ -54,8 +54,8 @@ los van zijn gebruikers en is de architectuur stuk.
 | Repo | Wat het is | Hosting | Afhankelijk van |
 |---|---|---|---|
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, specificatie, referentielezer, QR-redirect. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
-| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel, auto-deploy op `main` | meterkastpaspoort `v0.2.0` |
-| **`~/projects/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | eigen Vercel-project | meterkastpaspoort `v0.2.0` |
+| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel, auto-deploy op `main` | meterkastpaspoort `v0.3.0` |
+| **`~/projects/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | eigen Vercel-project | meterkastpaspoort `v0.3.0` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
 `/p` en `/p/:rest*` → `yourwkb.nl/app` waar **elke QR-sticker in het veld** van afhangt.
@@ -65,7 +65,7 @@ dat `/p` nog 307 geeft.
 **Waarom de dependency op een tag staat en niet op een branch:**
 
 ```json
-"meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.2.0.tar.gz"
+"meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.0.tar.gz"
 ```
 
 Een push naar de spec-repo verandert daarmee niet stilzwijgend wat er in de apps zit; een
