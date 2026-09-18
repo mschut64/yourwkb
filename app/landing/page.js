@@ -102,6 +102,7 @@ h1 span, .payoff span { color: var(--yellow); }
 .btn-primary:active { background: var(--yellow2); }
 .btn-ghost { color: var(--text); background: transparent; border: 1px solid var(--border-strong); min-height: 56px; padding: 0 28px; border-radius: 10px; font-size: 17px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .btn-ghost:hover { background: var(--card); color: var(--text); border-color: #4A5164; }
+.rapport-knoppen { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 28px; }
 
 .hero-trust { margin-top: 56px; display: flex; gap: 28px; flex-wrap: wrap; }
 .trust-item { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-soft); }
@@ -293,40 +294,50 @@ footer p { font-size: 14px; color: var(--muted); }
         <h2 className="section-title">Zo ziet jouw oplevering eruit</h2>
         <p className="section-sub" style={{ maxWidth: 620, margin: '0 auto 32px' }}>
           Geen belofte maar een document: metingen getoetst aan de norm, groepenoverzicht, foto's,
-          conformiteitsverklaring — en de paspoort-sticker als uitknippagina.
+          belasting per fase, conformiteitsverklaring — en een meterkastpaspoort dat je echt kunt scannen.
         </p>
         <div style={{ maxWidth: 560, margin: '0 auto', background: '#fff', borderRadius: 12, padding: '22px 26px',
                       textAlign: 'left', boxShadow: '0 12px 40px rgba(0,0,0,0.5)', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%,-50%) rotate(-24deg)',
                         fontSize: 54, fontWeight: 900, color: 'rgba(200,60,60,0.10)', letterSpacing: 4, pointerEvents: 'none' }}>VOORBEELD</div>
           <p style={{ color: '#F5C518', fontWeight: 800, fontSize: 20, fontFamily: 'Arial, sans-serif' }}>Opleveringsrapport</p>
-          <p style={{ color: '#555', fontSize: 12, marginBottom: 14, fontFamily: 'Arial, sans-serif' }}>Groepenkastvervanging · NEN 1010 · 06-08-2026</p>
+          <p style={{ color: '#555', fontSize: 12, marginBottom: 14, fontFamily: 'Arial, sans-serif' }}>Groepenkast vervangen · NEN 1010 · 18-09-2026</p>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif' }}>
             <tbody>
               <tr>
-                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Isolatieweerstand (per groep)</td>
-                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>≥ 12 MΩ <span style={{ color: '#888' }}>(norm ≥ 0,23)</span></td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Isolatieweerstand fase → aarde</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>&gt; 999 MΩ <span style={{ color: '#888' }}>(norm ≥ 0,23)</span></td>
                 <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet</td>
               </tr>
               <tr>
                 <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>Aardlektest 30 mA</td>
-                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>22–26 ms <span style={{ color: '#888' }}>(≤ 300)</span></td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>22–27 ms <span style={{ color: '#888' }}>(≤ 300)</span></td>
                 <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet</td>
               </tr>
               <tr>
-                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Veldmeting verste groep (Z L-PE)</td>
-                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>0,89 Ω</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>Impedantie Z L-PE (B16)</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222' }}>0,42 Ω <span style={{ color: '#888' }}>(≤ 2,88)</span></td>
                 <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#166534', background: '#dcfce7' }}>voldoet ✓</td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>Belasting per fase</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, color: '#222', background: '#f9f9f9' }}>L1 24% · L2 45% · L3 80%</td>
+                <td style={{ border: '1px solid #ddd', padding: '5px 8px', fontSize: 12, fontWeight: 700, color: '#92400e', background: '#fef3c7' }}>let op L3</td>
               </tr>
             </tbody>
           </table>
-          <p style={{ color: '#999', fontSize: 11, marginTop: 10, fontFamily: 'Arial, sans-serif' }}>… + groepenoverzicht, foto's, conformiteitsverklaring en paspoort-sticker</p>
+          <p style={{ color: '#999', fontSize: 11, marginTop: 10, fontFamily: 'Arial, sans-serif' }}>… + aardlektest, advies bij uitbreiding, conformiteitsverklaring en een werkende paspoort-QR</p>
         </div>
-        <a href="/voorbeeld-opleverrapport.html" target="_blank" rel="noopener" className="btn-primary"
-           style={{ display: 'inline-block', marginTop: 28 }}
-           onClick={() => { try { window.posthog?.capture('voorbeeldrapport_bekeken') } catch {} }}>
-          Open het volledige voorbeeldrapport →
-        </a>
+        <div className="rapport-knoppen">
+          <a href="/voorbeeld-opleverrapport.html" target="_blank" rel="noopener" className="btn-primary"
+             onClick={() => { try { window.posthog?.capture('voorbeeldrapport_bekeken') } catch {} }}>
+            Open het volledige voorbeeldrapport →
+          </a>
+          <a href="/voorbeeld-opleverrapport.pdf" target="_blank" rel="noopener" className="btn-ghost"
+             onClick={() => { try { window.posthog?.capture('voorbeeldrapport_pdf') } catch {} }}>
+            Download als pdf
+          </a>
+        </div>
       </section>
 
       <section id="meterkastpaspoort" style={{ padding: '72px 24px', maxWidth: 1060, margin: '0 auto', textAlign: 'center' }}>

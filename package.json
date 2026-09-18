@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "vercel-build": "next build",
-    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-fasebalans.js && node tests/test-mkp-qr.js"
+    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-fasebalans.js && node tests/test-mkp-qr.js",
+    "demo-rapport": "node scripts/demo-opleverrapport.mjs"
   },
   "dependencies": {
     "jsqr": "^1.4.0",
