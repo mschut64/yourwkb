@@ -19,7 +19,7 @@ export async function POST(request) {
     return fout(400, "Aanvraag te groot of onleesbaar — zonder foto's proberen te versturen");
   }
 
-  const { to, html, replyTo, subject, qr } = body || {};
+  const { to, html, replyTo, subject, qr, tekst } = body || {};
   if (typeof to !== "string" || !MAIL_RE.test(to.trim()))
     return fout(400, "Geen geldig e-mailadres opgegeven");
   if (replyTo != null && (typeof replyTo !== "string" || !MAIL_RE.test(replyTo.trim())))
@@ -32,6 +32,14 @@ export async function POST(request) {
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*')/gi, "")
     .replace(/javascript:/gi, "");
+
+  // Platte-tekstversie. Zonder deze maakt Resend er zelf een uit het hele rapport —
+  // een lange lijst tabellen en getallen, en dat weegt bij spamfilters (Outlook
+  // zette de rapportmail op SCL 5 terwijl SPF, DKIM en DMARC klopten). Alleen
+  // gewone tekst, begrensd; geen HTML, geen stuurtekens behalve regeleinden.
+  const platteTekst = (typeof tekst === "string" && tekst.trim().length >= 20)
+    ? tekst.replace(/<[^>]*>/g, "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "").slice(0, 3000)
+    : undefined;
 
   // Meterkastpaspoort-QR als inline-bijlage (cid) — strikt gevalideerd:
   // alleen een base64-PNG van beperkte omvang.
@@ -66,6 +74,7 @@ export async function POST(request) {
                  ? subject
                  : "Je opleverrapport van YourWkb",
         html: schoon,
+        text: platteTekst,
         attachments: qrBijlage ? [{
           filename: "meterkastpaspoort-qr.png",
           content: qrBijlage,

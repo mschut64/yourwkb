@@ -1,0 +1,6 @@
+# Beveiligingsmeldingen voor yourwkb.nl — zie https://securitytxt.org (RFC 9116).
+# Vond je een kwetsbaarheid? Mail ons; we reageren binnen vijf werkdagen.
+Contact: mailto:info@yourwkb.nl
+Expires: 2027-09-19T00:00:00.000Z
+Preferred-Languages: nl, en
+Canonical: https://yourwkb.nl/.well-known/security.txt

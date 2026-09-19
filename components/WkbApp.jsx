@@ -1,5 +1,13 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-19-D (rapportmail minder spamgevoelig):
+//   • Outlook zette de rapportmail in Ongewenst (SCL 5, SFV:SPM) terwijl SPF, DKIM
+//     en DMARC klopten — een inhoudsoordeel, geen authenticatieprobleem. Nu gaat
+//     er een eigen platte-tekstversie mee (Resend maakte die anders uit het hele
+//     rapport), en zegt de aanhef wie het werk deed, waar, en namens wie de mail
+//     komt. GEDRAGSWIJZIGING: de aanhef zei "Dit rapport voldoet aan de geldende
+//     normen" — ook bij een rapport met afwijkingen. Die zin is weg.
+//
 // 2026-09-19-C (erkenningsnummer optioneel voor cv-monteurs):
 //   • GEDRAGSWIJZIGING in het profiel, alleen in de cv-flow. Het erkenningsnummer
 //     was altijd verplicht, maar een cv-monteur zonder InstallQ-erkenning heeft
@@ -324,7 +332,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-19-C";
+const APP_VERSIE = "2026-09-19-D";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -4690,14 +4698,35 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         ? htmlZonderFotos.split(qrPng).join("cid:mkpqr")
         : htmlZonderFotos;
 
-      // Persoonlijke aanhef toevoegen vóór de inhoud van het rapport
+      // Persoonlijke aanhef vóór het rapport. Zegt wie het werk deed, waar, en
+      // waarom de ontvanger deze mail krijgt — een ontvanger die de afzender niet
+      // herkent markeert hem als ongewenst, en dat telt bij Outlook zwaar mee.
+      // Géén uitspraak over de norm hier: het rapport zelf zegt of alles voldoet
+      // (bevindingHtml), en een aanhef die "voldoet" zegt bij een rapport met
+      // afwijkingen spreekt het rapport tegen.
+      const installateur = String(data.instNaam || "").trim() || "uw installateur";
+      const adres = [[data.straat, data.huisnummer].filter(Boolean).join(" "), [data.postcode, data.plaats].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+      const contact = [data.instTel, data.instEmail].map(x => String(x || "").trim()).filter(Boolean).join(" · ");
       const introHtml = htmlMetQr.replace(
         "<body>",
-        `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:13px;color:#333;line-height:1.6">
+        `<body><div style="max-width:680px;margin:0 auto 20px;font-family:Arial,sans-serif;font-size:14px;color:#333;line-height:1.6">
           <p>Beste ${esc(data.naam||"")},</p>
-          <p>Hierbij ontvangt u het opleverrapport van de werkzaamheden uitgevoerd door ${data.instNaam||"uw installateur"}. Dit rapport voldoet aan de geldende normen en is automatisch gegenereerd via YourWkb.</p>
+          <p>${esc(installateur)} heeft werkzaamheden uitgevoerd${adres ? ` aan ${esc(adres)}` : ""}. Hieronder vindt u het opleverrapport daarvan${data.projectId ? ` (projectnummer ${esc(data.projectId)})` : ""}.</p>
+          <p>Bewaar deze e-mail bij de papieren van uw woning. Vragen over het werk stelt u aan ${esc(installateur)}${contact ? ` (${esc(contact)})` : ""}.</p>
+          <p style="font-size:12px;color:#777">Dit bericht is verstuurd via YourWkb namens ${esc(installateur)}.</p>
         </div>`
       );
+      const tekst = [
+        `Beste ${String(data.naam || "").trim()},`.replace(/ ,$/, ","),
+        "",
+        `${installateur} heeft werkzaamheden uitgevoerd${adres ? ` aan ${adres}` : ""}. In deze e-mail vindt u het opleverrapport daarvan${data.projectId ? ` (projectnummer ${data.projectId})` : ""}.`,
+        "",
+        "Het volledige rapport, met metingen en het meterkastpaspoort, staat in de opgemaakte versie van deze e-mail. Ziet u alleen deze tekst? Vraag het rapport dan als pdf op bij de installateur.",
+        "",
+        `Vragen over het werk stelt u aan ${installateur}${contact ? ` (${contact})` : ""}.`,
+        "",
+        `Dit bericht is verstuurd via YourWkb (yourwkb.nl) namens ${installateur}.`,
+      ].join("\n");
       // Simpele e-mailvalidatie voor reply_to — Resend wijst het hele verzoek af met
       // "Invalid 'reply_to' field" als hier iets staat dat geen geldig e-mailadres is
       // (bijv. een spatie, tikfout, of auto-fill dat niet volledig is ingevuld).
@@ -4713,6 +4742,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           subject: `Opleverrapport ${data.projectId||""} – ${data.straat||""} ${data.huisnummer||""}`.trim(),
           qr: qrPng || undefined,
           html: introHtml,
+          tekst,
         }),
       });
 
