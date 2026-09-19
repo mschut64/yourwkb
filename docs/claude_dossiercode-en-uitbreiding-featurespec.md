@@ -2,6 +2,11 @@
 
 *19-09-2026. Concept, nog niets gebouwd. Normatieve basis aangeleverd door Martin (NEN 1010:2020 deel 6).*
 
+> **Reikwijdte (Martin, 19-09-2026):** een **uitbreiding op een bestaande oplevering**, ingelezen
+> uit de dossiercode. De nieuwe of gewijzigde groep, en de aardlek waar die op komt, worden gemeten
+> met **dezelfde velden die de app per groep en per aardlek al kent** — de eerder vastgelegde
+> metingen en velden van die groep of aardlek. Geen nieuwe meetsoorten.
+
 ## 1 · Waarom
 
 Een installateur die een bestaande kast uitbreidt, begint in YourWkb nu met een lege kast: het
@@ -105,10 +110,16 @@ inline-bijlage (`cid:`), net als de paspoort-QR (valkuil 3).
 3. De metingen van de voorganger staan erbij **als referentie, alleen-lezen**, met bron en datum.
    **Ze tellen nooit als metingen van deze klus** en komen niet in de meetkolommen van het nieuwe
    rapport.
-4. De installateur voegt de nieuwe groep toe (of wijzigt een bestaande) en meet **de minimumset van
-   §2** voor het nieuwe/gewijzigde deel, plus:
-   - de **aardlek** waar de nieuwe groep op komt (beproeven);
+4. De installateur voegt de nieuwe groep toe (of wijzigt een bestaande) en vult daarvoor **de
+   bestaande velden** in:
+   - **voor de groep:** dezelfde meetvelden als elke eindgroep in de app (o.a. isolatie, Z L-PE,
+     Z L-N — waarmee ook PE-continuïteit en polariteit zijn aangetoond, zie §2);
+   - **voor de aardlek waar de groep op komt:** de velden die de app per aardlek al kent (ΔT, ΔI,
+     testknop, Z L-PE, Z L-N);
    - de **belasting per fase** op de hoofdaansluiting (Fasecheck — gaat al vanzelf).
+
+   De eerder vastgelegde waarden van die groep of aardlek staan ernaast als referentie, zodat een
+   afwijking ten opzichte van de vorige oplevering direct zichtbaar is.
 5. Is er ook een meterkastpaspoort gescand en is dat **nieuwer** dan het dossier, dan meldt de app
    dat: er is sinds dit dossier nog aan de kast gewerkt.
 
@@ -158,12 +169,12 @@ heeft, heeft de code — geen nieuw lek. Geen centrale opslag; het fragment bere
 3. Andere disciplines nameten en aansluiten.
 4. Later: ondertekening; YourWkb schrijft de hele kast in het paspoort.
 
-## 10 · Open vragen voor Martin
+## 10 · Vragen — beantwoord door de reikwijdte
 
-1. **Spanningsverlies:** als vast veld (meting of berekening) bij elke nieuwe groep, of alleen als de
-   installateur het relevant vindt (bv. lange kabel naar schuur of laadpaal)?
-2. **Functionele beproeving:** één vinkje per nieuwe groep volstaat, of per onderdeel (automaat,
-   aardlek, schakelaar)?
-3. **Wijziging zonder nieuwe groep** (bv. automaat vervangen, groep verlegd): zelfde minimumset voor de
-   gewijzigde groep?
-4. **Aardlek waar de nieuwe groep op komt:** alleen beproeven, of ook Z L-PE op die aardlek opnieuw?
+| Vraag | Antwoord |
+|---|---|
+| Aparte velden voor PE-continuïteit en polariteit? | **Nee** — zitten in Z L-PE/Z L-N (besluit 19-09). |
+| Wat meet je bij de aardlek waar de nieuwe groep op komt? | **De bestaande aardlekvelden** (ΔT, ΔI, testknop, Z L-PE, Z L-N). |
+| Functionele beproeving: per groep of per onderdeel? | **Zoals nu** — de testknop per aardlek en de bestaande velden. |
+| Wijziging zonder nieuwe groep (automaat vervangen, groep verlegd)? | **Dezelfde velden** voor de gewijzigde groep en zijn aardlek. |
+| Spanningsverlies als vast veld? | **Buiten deze feature** — geen bestaand veld; blijft "indien relevant". |
