@@ -191,7 +191,7 @@ niet dat de sticker op de juiste kast zit. *Wij verifiëren niets; wij maken con
 | `components/wkb/mkp-qr.js` | 30 | **Eén weg naar de QR** voor app, rapport, PDF en e-mail: `mkpBouw` → `mkpAfkappen` → `mkpEncode` → PNG-data-URI. | `tests/test-mkp-qr.js` (27) — leest de PNG terug met jsQR; ook erk/CO |
 | `components/wkb/mkp-bronnen.js` | 53 | Index + feeds ophalen (rechtstreeks van www), offline de laatst bewaarde versie. | `tests/test-mkp-bronnen.js` (6) |
 | `components/wkb/veilig.js` | 118 | `esc`, sanering bij import, `anonimiseerJob`. | `tests/test-veilig.js` (52) |
-| `components/WkbApp.jsx` | 6661 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
+| `components/WkbApp.jsx` | 6691 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
 | `scripts/demo-opleverrapport.mjs` | 412 | Maakt `public/voorbeeld-opleverrapport.html` + `.pdf` door de echte code (`npm run demo-rapport`). | leest de QR terug vóór het wegschrijven |
 
 **Totaal: 381 tests, `npm test`.**
@@ -355,7 +355,7 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 
 | | Versie | Tests |
 |---|---|---|
-| YourWkb | **`v2026-09-19-C`**, live | 381 |
+| YourWkb | **`v2026-09-19-D`**, live | 381 |
 | Kastscan | **`v2026-09-19-B`**, live | 1275 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
@@ -371,6 +371,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | YourWkb `-19-A` en Kastscan `-19-A`: **de paspoortweergave** — terugroepmeldingen, materiaal, erkenning, zegels, handtekeningen |
 | 19-09 | **Pakket v0.3.2**: materiaal per toestel samenvoegen, verwijzingen opruimen na afkappen. **Kastscan `-19-B` schrijft zelf `mat[]`** |
 | 19-09 | Vooronderzoek **Techniek Nederland** (Sticker Gecontroleerd, landschap, AVIC t.o.v. Wkb en BW) + demo-sticker 2027 met QR |
+| 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
 | 19-09 | YourWkb `-19-B`: **TloKB weg als uitgever**; CO-certificaat (Kiwa/andere) als eigen profielveld, bij cv in de logregel en in het rapport. Specvoorbeeld `tlokb:…` → `kiwa:K0213477` |
 
@@ -390,6 +391,7 @@ Sinds de vorige stand (12-09):
 | Erkenning zonder uitgever? | **Niet schrijven.** | `erkVanProfiel` |
 | Beheerderssleutel | **Vast in de code, vervangen 19-09, alleen Martin tekent.** | `MKP_WORTEL_SLEUTEL`, `onderteken-index.mjs` |
 | Welke erk in de logregel? | **Per klus:** cv → CO-certificaat (wettelijke bevoegdheid), anders de erkenning. Eén `erk` per regel. | `erkVoorKlus` |
+| Mail van kastscan.nl? | **Geen.** Kastscan verstuurt en ontvangt niets (contact is info@yourwkb.nl). DNS: null-MX `0 .`, `v=spf1 -all`, DMARC `p=reject` — door Martin in te stellen bij TransIP. | DNS kastscan.nl |
 | Verplicht nummer in het profiel | **Cv: erkenningsnummer óf CO-certificaat.** Overige disciplines: erkenningsnummer. Zonder enig nummer geen cv-rapport. | `StapInstallateur` (`discipline="cv"`) |
 | Materiaal zonder fabrikant én type? | **Niet schrijven** — kan nergens op treffen en maakt de QR groter. | `mkpMateriaal` (Kastscan) |
 | Ander toestel op dezelfde plaats bij hergebruik? | **Oude regel vervalt**; een toestel dat de app niet ziet blijft staan. | `mkpSamenvoegen` |
@@ -411,7 +413,7 @@ Dezelfde kast kan daardoor in Kastscan een ander oordeel geven dan in YourWkb.
 Kastscans `model.js` declareert hem zelf, omdat dat bestand geen imports mag hebben; een
 test bewaakt dat hij gelijk blijft aan het pakket. Geen actie nodig zolang die test bestaat.
 
-### 10c · `WkbApp.jsx` groeit: 6661 regels
+### 10c · `WkbApp.jsx` groeit: 6691 regels
 
 `genereerRapport` (~900 regels HTML) en `MkpViewer` zitten er nog in en zijn ongetest.
 Kandidaten voor `components/wkb/rapport.js` en een eigen viewercomponent.
@@ -460,6 +462,22 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
   demo's op hetzelfde adres (2801 AB 12) met andere installaties.
 
 ---
+
+### 10i · Mail en DNS *(deels bij Martin)*
+
+- **YourWkb-rapportmail in Ongewenst bij Outlook** (18-09, ontvanger op Exchange): SPF, DKIM en
+  DMARC waren in orde (`compauth=pass`); het oordeel was inhoudelijk (`SFV:SPM`, SCL 5,
+  `OFR:SpamFilterAuthJ`, `BCL:0`). Aangepakt in `-19-D` (tekstversie, aanhef). Nog te doen:
+  opnieuw testen met een echte verzending; DMARC van yourwkb.nl van `p=none` naar
+  `p=quarantine` na een paar weken rapporten — eerst nagaan of `dmarc@yourwkb.nl` bestaat.
+  Reputatie van een nieuw afzenderdomein bouwt alleen op met tijd en "Geen ongewenste e-mail".
+- **kastscan.nl mailtest (internet.nl, 54%)**: MX wees naar de webserver op Vercel, geen SPF,
+  geen DMARC. De drie records staan klaar bij Martin (zie §9). Daarna opnieuw testen.
+- **IPv6 voor de websites** kan niet zolang ze op Vercel draaien (geen AAAA voor eigen domeinen).
+- De CSP van **YourWkb** staat nog in Report-Only; internet.nl en andere scanners rekenen dat
+  niet als CSP. Kastscan dwingt hem al af.
+- MxToolbox' "body hash did not verify" op geplakte headers is een artefact: de tool ziet de
+  oorspronkelijke tekst niet. Kijk naar `Authentication-Results` van de ontvanger zelf.
 
 ## 11 · Waar je verder kunt
 
