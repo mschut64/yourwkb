@@ -33,9 +33,9 @@ van de bestaande installatie die daardoor relevant worden**, niet op de hele bes
 | Controle | Nodig | Norm | In de app nu? |
 |---|---|---|---|
 | **Visueel:** juiste beveiliging, aderdoorsnede, PE aangesloten, verbindingen, scheiding/markering, aardlek aanwezig waar vereist | ✅ | 6.4.2 | deels (checklist) |
-| **PE-continuïteit** tot het laatste aansluitpunt | ✅ | 6.4.3.2 | ❌ **ontbreekt** |
+| **PE-continuïteit** tot het laatste aansluitpunt | ✅ | 6.4.3.2 | ✅ aangetoond met de **Z L-PE**-meting per eindgroep |
 | **Isolatieweerstand** L/N onderling en actieve geleiders ↔ PE | ✅ | 6.4.3.3 | ✅ (≥ 0,23 MΩ naar aarde) |
-| **Polariteit** L, N, PE | ✅ | 6.4.3.6 | ❌ **ontbreekt** |
+| **Polariteit** L, N, PE | ✅ | 6.4.3.6 | ✅ aangetoond met de **Z L-N/Z L-PE**-meting (installatietester) |
 | **Automatische uitschakeling** — TN: lus-/circuitimpedantie; TT: Ra + aardlek + uitschakelvoorwaarden | ✅ | 6.4.3.7 | ✅ Z L-PE, Z L-N; Ra bij TT |
 | **Aardlek beproeven** (uitschakeltijd, -stroom) — van de aardlek waar de nieuwe groep op komt | ✅ indien aanwezig/vereist | 6.4.3.7 | ✅ ΔT, ΔI, testknop |
 | **Functionele beproeving** (automaten, aardlek, schakelaars) | ✅ waar relevant | 6.4.3.10 | deels |
@@ -51,10 +51,9 @@ van de aardlek onder 6.4.3.7 (automatische uitschakeling) of 6.4.3.8 (aanvullend
 **Rapport (6.4.4):** een eerste rapport met **de omvang van het geverifieerde deel**, de visuele
 controle en de resultaten van metingen en beproevingen.
 
-> **Bevinding buiten deze feature, voor R4:** PE-continuïteit en polariteit staan in de minimumset
-> voor élke nieuwe eindgroep, maar de app legt ze nu nergens vast — ook niet in de gewone
-> groepenkast-flow. Dat is een normgat, los van de dossiercode. Vier lagen bijwerken (berekening,
-> invoer, rapport + voetnoot, AI-prompt).
+> **Besluit Martin (19-09-2026):** PE-continuïteit en polariteit krijgen **geen eigen meetvelden**.
+> Een geslaagde Z L-PE-meting tot het eindpunt toont de continuïteit van de PE aan, en de meting van
+> Z L-N/Z L-PE met de installatietester de polariteit. Aparte velden zouden dubbel meten zijn.
 
 *Taalregel:* in gebruikersteksten "visuele controle" en "verificatie", niet "inspectie" of "keuring"
 (zuiverheidsregel), ook al gebruikt de norm "inspectie".
@@ -154,12 +153,10 @@ heeft, heeft de code — geen nieuw lek. Geen centrale opslag; het fragment bere
 
 ## 9 · Fasering
 
-1. **R4-gat eerst:** PE-continuïteit en polariteit als meetvelden (vier lagen). Zonder die velden kan
-   de uitbreidingsmodus de minimumset niet vastleggen.
-2. Dossiercode schrijven (rapport + e-mail), met round-trip-test.
-3. Uitbreidingsmodus: inlezen, markeren, minimumset, rapport "uitbreiding".
-4. Andere disciplines nameten en aansluiten.
-5. Later: ondertekening; YourWkb schrijft de hele kast in het paspoort.
+1. Dossiercode schrijven (rapport + e-mail), met round-trip-test.
+2. Uitbreidingsmodus: inlezen, markeren, minimumset, rapport "uitbreiding".
+3. Andere disciplines nameten en aansluiten.
+4. Later: ondertekening; YourWkb schrijft de hele kast in het paspoort.
 
 ## 10 · Open vragen voor Martin
 
