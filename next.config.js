@@ -11,7 +11,10 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https://eu.i.posthog.com https://eu-assets.i.posthog.com https://api.pdok.nl",
+  // meterkastpaspoort.nl: index en demo-feed bij het lezen van een paspoort. Feeds
+  // van échte uitgevers staan op hun eigen domein (/.well-known/…); die moeten
+  // hier bij, of via een vaste lijst, vóórdat de CSP van Report-Only af gaat.
+  "connect-src 'self' https://eu.i.posthog.com https://eu-assets.i.posthog.com https://api.pdok.nl https://www.meterkastpaspoort.nl",
   "frame-ancestors 'self'",
   "base-uri 'self'",
   "form-action 'self'",

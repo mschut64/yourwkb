@@ -1,5 +1,18 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-19-A (het gescande paspoort laat zien wat het draagt):
+//   • De paspoortweergave na een scan toonde adres, aansluiting, groepen en load
+//     balancing, maar niets van v0.2/v0.3: geen materiaal, erkenning, zegels,
+//     handtekeningen of terugroepmeldingen. Die stonden alleen in lezer.html op
+//     meterkastpaspoort.nl, en daar komt een camerascan nooit langs.
+//   • Nu: veldnotities bovenaan (vergeleken met mat[] op het toestel), de
+//     materiaallijst, per groep het toestel dat hem beveiligt, en in het logboek
+//     de erkenning met de controleplek, de zegels en of de handtekening klopt.
+//     De controle zelf staat in het pakket (mkpControleer, meterkastpaspoort
+//     v0.3.1), zodat Kastscan en de lezer hetzelfde vaststellen.
+//   • Index en feeds zijn openbaar; ophalen verraadt niets over het paspoort.
+//     Offline de laatst opgehaalde versie (components/wkb/mkp-bronnen.js).
+//
 // 2026-09-18-B (erkenning in het paspoort, QR-opbouw getest):
 //   • Nieuw in het profiel, optioneel en eenmalig: de uitgever van de erkenning
 //     (InstallQ / TloKB). Met uitgever gaat de erkenning als log[].erk
@@ -268,9 +281,11 @@ import {
 import {
   MKP_SPEC_VERSIE, eanValide, mkpDecode,
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
+  mkpControleer,
 } from "meterkastpaspoort";
 import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS } from "./wkb/mkp-bouw";
 import { mkpQrVoorRapport } from "./wkb/mkp-qr";
+import { haalMkpBronnen } from "./wkb/mkp-bronnen";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 
@@ -289,7 +304,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-18-B";
+const APP_VERSIE = "2026-09-19-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -3036,6 +3051,32 @@ function MkpScanner({ onResult, onSluit }) {
 // ─── MKP VIEWER: gescand paspoort direct tonen (inzien zonder project) ───────
 function MkpViewer({ p, onNieuw, onSluit }) {
   const TYPE_LABEL = { alg:"Algemene groep", kook:"Koken", wp:"Warmtepomp", lp:"Laadpaal", pv:"PV-omvormer", bat:"Thuisbatterij", ov:"Overig" };
+  const SOORT_LABEL = { hs:"Hoofdschakelaar", als:"Aardlekschakelaar", ala:"Aardlekautomaat", aut:"Installatieautomaat", kam:"Kamrail", tr:"Transformator", ov:"Overig" };
+
+  // Handtekeningen, erkenning en veldnotities (spec §8–10). De index en de feeds
+  // zijn openbaar; de vergelijking met de materiaallijst gebeurt hier op het
+  // toestel — er gaat niets uit dit paspoort naar buiten.
+  const [controle, setControle] = useState(null);
+  const [bronnen,  setBronnen]  = useState(null);
+  useEffect(() => {
+    let weg = false;
+    (async () => {
+      const b = await haalMkpBronnen();
+      const c = await mkpControleer(p, { index: b.index, feeds: b.feeds });
+      if (!weg) { setBronnen(b); setControle(c); }
+    })().catch(() => {});
+    return () => { weg = true; };
+  }, [p]);
+  const alleenHttps = (u) => (typeof u === "string" && /^https:\/\//.test(u)) ? u : null;
+  const matVan = (i) => Array.isArray(p.mat) ? p.mat.find(m => m && m.i === i) : null;
+  const HANDTEKENING = {
+    geldig:   { kleur:K.green,  tekst:"✓ handtekening klopt" },
+    ongeldig: { kleur:K.red,    tekst:"✗ handtekening klopt niet — gewijzigd of niet echt" },
+    onbekend: { kleur:K.orange, tekst:"ondertekend, nu niet te controleren" },
+    geen:     { kleur:K.muted,  tekst:"niet ondertekend" },
+  };
+  const Vlag = ({ st, na }) => { const h = HANDTEKENING[st] || HANDTEKENING.geen;
+    return <div style={{fontSize:11, fontWeight:600, color:h.kleur, marginTop:3}}>{h.tekst}{st==="geldig" && na ? ` · sleutel van ${na}` : ""}</div>; };
   const rij = (label, waarde) => waarde ? (
     <div style={{display:"flex", justifyContent:"space-between", padding:"7px 0", borderBottom:`1px solid ${K.border}`}}>
       <span style={{fontSize:12, color:K.muted}}>{label}</span>
@@ -3049,6 +3090,33 @@ function MkpViewer({ p, onNieuw, onSluit }) {
         <h2 style={{...S.h2, marginBottom:2}}>Meterkastpaspoort</h2>
         <div style={{fontSize:12, color:K.muted}}>Opgave vorige installateur — controleer bij twijfel · open standaard meterkastpaspoort.nl</div>
       </div>
+
+      {controle?.notities?.map((t, i) => {
+        const n = t.notitie, m = t.toestel, bron = alleenHttps(n.bron_url);
+        const actie = n.ernst === "actie_vereist";
+        return (
+          <div key={i} style={{...S.card, marginBottom:10, borderLeft:`4px solid ${actie ? K.red : K.orange}`}}>
+            <div style={{fontSize:10, fontWeight:700, letterSpacing:".06em", textTransform:"uppercase", color: actie ? K.red : K.orange}}>
+              ⚠ Veldnotitie · {String(n.ernst||"").replace("_"," ")} · {t.treffer === "artikelnummer" ? "treffer op artikelnummer" : "mogelijk van toepassing"}
+            </div>
+            <div style={{fontWeight:700, fontSize:14, margin:"4px 0"}}>{n.titel}</div>
+            <div style={{fontSize:12, lineHeight:1.5}}>{n.tekst}</div>
+            <div style={{fontSize:12, marginTop:6}}>
+              <strong>In deze kast:</strong> {m.fab} {m.typ}{m.pos ? ` · positie ${m.pos}` : ""}{m.pd ? ` · code ${m.pd}` : ""}
+            </div>
+            {t.product?.identificatie && (
+              <div style={{fontSize:11, color:K.muted, marginTop:6, lineHeight:1.5}}>
+                <strong style={{color:K.text}}>Zelf vaststellen of dit exemplaar geraakt is:</strong> {t.product.identificatie.waar} {t.product.identificatie.formaat} {t.product.identificatie.toelichting}
+              </div>
+            )}
+            {n.handeling && <div style={{fontSize:12, marginTop:6}}><strong>Handeling:</strong> {n.handeling}</div>}
+            <div style={{fontSize:11, color:K.muted, marginTop:6}}>
+              Uitgegeven door {t.uitgever}{bron ? <> · <a href={bron} target="_blank" rel="noopener noreferrer" style={{color:K.yellow}}>bron</a></> : null}
+            </div>
+            <Vlag st={t.feedStatus}/>
+          </div>
+        );
+      })}
 
       <div style={{...S.card, marginBottom:10}}>
         {rij("Adres", [p.pc, p.nr].filter(Boolean).join(" "))}
@@ -3065,11 +3133,27 @@ function MkpViewer({ p, onNieuw, onSluit }) {
           <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Op de kast</div>
           {p.grp.map((g,i)=>(
             <div key={i} style={{display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${K.border}`, fontSize:13}}>
-              <span>{g.rol==="voed"?"↩︎ ":"→ "}{TYPE_LABEL[g.t]||g.t}{g.n?` — ${g.n}`:""}</span>
-              <span style={{color:K.muted}}>{g.kw?`${g.kw} kW`:""}{g.f?` · ${g.f}F`:""}</span>
+              <span>{g.rol==="voed"?"↩︎ ":"→ "}{TYPE_LABEL[g.t]||g.t}{g.n?` — ${g.n}`:""}
+                {matVan(g.mat) && <span style={{display:"block", fontSize:11, color:K.muted}}>beveiligd door {matVan(g.mat).fab} {matVan(g.mat).typ}</span>}
+              </span>
+              <span style={{color:K.muted, whiteSpace:"nowrap"}}>{g.kw?`${g.kw} kW`:""}{Array.isArray(g.fn) && g.fn.length
+                ? ` · ${g.fn.length === 3 ? "3F" : g.fn.map(n => "L" + n).join("+")}` : g.f ? ` · ${g.f}F` : ""}</span>
             </div>
           ))}
           <div style={{fontSize:10, color:K.muted, marginTop:6}}>↩︎ = voedend (levert aan de kam) · → = afgaand</div>
+        </div>
+      )}
+
+      {Array.isArray(p.mat) && p.mat.length>0 && (
+        <div style={{...S.card, marginBottom:10}}>
+          <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Materiaal</div>
+          {p.mat.filter(Boolean).map((m,i)=>(
+            <div key={i} style={{padding:"6px 0", borderBottom:`1px solid ${K.border}`, fontSize:12}}>
+              <span style={{color:K.muted}}>{SOORT_LABEL[m.s]||m.s||"Toestel"}{m.pos?` · ${m.pos}`:""}</span><br/>
+              <strong>{m.fab} {m.typ}</strong>
+              {(m.art||m.sn||m.pd) && <span style={{color:K.muted}}>{m.art?` · art. ${m.art}`:""}{m.sn?` · sn ${m.sn}`:""}{m.pd?` · code ${m.pd}`:""}</span>}
+            </div>
+          ))}
         </div>
       )}
 
@@ -3095,11 +3179,34 @@ function MkpViewer({ p, onNieuw, onSluit }) {
       {Array.isArray(p.log) && p.log.length>0 && (
         <div style={{...S.card, marginBottom:16}}>
           <div style={{fontWeight:700, fontSize:13, marginBottom:6}}>Logboek</div>
-          {p.log.map((r,i)=>(
+          {p.log.map((r,i)=>{
+            const c = controle?.log?.[i];
+            const erk = c?.erkenning, opzoek = alleenHttps(erk?.opzoek);
+            return (
             <div key={i} style={{padding:"6px 0", borderBottom:`1px solid ${K.border}`, fontSize:12}}>
               <span style={{color:K.muted}}>{r.d}</span> — <strong>{r.b}</strong><br/>{r.w}{r.c?<span style={{color:K.muted}}> · {r.c}</span>:null}
+              {erk && (
+                <div style={{fontSize:11, color:K.muted, marginTop:2}}>
+                  Erkenning {erk.naam} {erk.nummer}{opzoek
+                    ? <> — <a href={opzoek} target="_blank" rel="noopener noreferrer" style={{color:K.yellow}}>controleer bij {erk.naam}</a></>
+                    : ` — controleer in het openbare register van ${erk.naam}`}
+                </div>
+              )}
+              {c?.zegels?.length > 0 && <div style={{fontSize:11, color:K.muted, marginTop:2}}>Zegel{c.zegels.length>1?"s":""} geplaatst: {c.zegels.join(", ")}</div>}
+              {c && <Vlag st={c.handtekening} na={c.ondertekenaar}/>}
             </div>
-          ))}
+            );
+          })}
+          {controle && p.log.some(r => r && r.sig) && (
+            <div style={{fontSize:10, color:K.muted, marginTop:8, lineHeight:1.5}}>
+              {!bronnen?.index
+                ? "Offline: handtekeningen zijn nu niet te controleren. Het paspoort zelf is volledig leesbaar."
+                : controle.indexStatus !== "geldig"
+                  ? "Let op: de sleutellijst van meterkastpaspoort.nl is niet bevestigd door de beheerder van de standaard. Een kloppende handtekening zegt daarom alleen dat de regel past bij de sleutel in die lijst."
+                  : `Sleutels uit de lijst van meterkastpaspoort.nl${bronnen.uitCache ? `, opgehaald op ${bronnen.opgehaald} (offline)` : ""}.`}
+              {" "}Een handtekening toont aan dat de regel onveranderd is en van de houder van die sleutel komt — niet dat de installatie deugt, en niet dat de sticker op de juiste kast zit.
+            </div>
+          )}
         </div>
       )}
 
@@ -3112,7 +3219,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
         </button>
       </div>
       <div style={{fontSize:10, color:K.muted, textAlign:"center", marginTop:10}}>
-        Er is niets opgeslagen of verzonden — dit paspoort komt uit de QR-code zelf.
+        Er is niets opgeslagen of verzonden — dit paspoort komt uit de QR-code zelf. Terugroepmeldingen en sleutels worden opgehaald en hier op het toestel vergeleken.
       </div>
     </div>
   );
