@@ -371,6 +371,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | YourWkb `-19-A` en Kastscan `-19-A`: **de paspoortweergave** — terugroepmeldingen, materiaal, erkenning, zegels, handtekeningen |
 | 19-09 | **Pakket v0.3.2**: materiaal per toestel samenvoegen, verwijzingen opruimen na afkappen. **Kastscan `-19-B` schrijft zelf `mat[]`** |
 | 19-09 | Vooronderzoek **Techniek Nederland** (Sticker Gecontroleerd, landschap, AVIC t.o.v. Wkb en BW) + demo-sticker 2027 met QR |
+| 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
 | 19-09 | YourWkb `-19-B`: **TloKB weg als uitgever**; CO-certificaat (Kiwa/andere) als eigen profielveld, bij cv in de logregel en in het rapport. Specvoorbeeld `tlokb:…` → `kiwa:K0213477` |
@@ -391,6 +392,9 @@ Sinds de vorige stand (12-09):
 | Erkenning zonder uitgever? | **Niet schrijven.** | `erkVanProfiel` |
 | Beheerderssleutel | **Vast in de code, vervangen 19-09, alleen Martin tekent.** | `MKP_WORTEL_SLEUTEL`, `onderteken-index.mjs` |
 | Welke erk in de logregel? | **Per klus:** cv → CO-certificaat (wettelijke bevoegdheid), anders de erkenning. Eén `erk` per regel. | `erkVoorKlus` |
+| Het complete dossier met metingen in een QR? | **Ja, als tweede code in het rapport** (`yourwkb.nl/app#d=…`), eigen formaat `yourwkb-dossier`. Het paspoort blijft de smalle open standaard (kast, componenten, terugroepacties). | featurespec dossiercode |
+| Uitbreiding op een bestaande oplevering | **Zelfde velden** als de app per groep en aardlek al kent, voor de nieuwe/gewijzigde groep en zijn aardlek; eerdere waarden als referentie, nooit als eigen meting. Rapport noemt de omvang (NEN 1010 6.4.4). | featurespec dossiercode |
+| Aparte velden PE-continuïteit en polariteit? | **Nee** — aangetoond met Z L-PE en Z L-N. | featurespec, §2 |
 | Mail van kastscan.nl? | **Geen.** Kastscan verstuurt en ontvangt niets (contact is info@yourwkb.nl). DNS: null-MX `0 .`, `v=spf1 -all`, DMARC `p=reject` — door Martin in te stellen bij TransIP. | DNS kastscan.nl |
 | Verplicht nummer in het profiel | **Cv: erkenningsnummer óf CO-certificaat.** Overige disciplines: erkenningsnummer. Zonder enig nummer geen cv-rapport. | `StapInstallateur` (`discipline="cv"`) |
 | Materiaal zonder fabrikant én type? | **Niet schrijven** — kan nergens op treffen en maakt de QR groter. | `mkpMateriaal` (Kastscan) |
@@ -480,6 +484,14 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
   oorspronkelijke tekst niet. Kijk naar `Authentication-Results` van de ontvanger zelf.
 
 ## 11 · Waar je verder kunt
+
+**⓪ Dossiercode en uitbreidingsmodus** *(spec ligt klaar)*
+`docs/claude_dossiercode-en-uitbreiding-featurespec.md`. Een tweede QR in het rapport met het
+complete dossier (zonder foto's en klantgegevens): een groepenkast tot 36 groepen past in één code
+(versie 37 bij M, 7–9 cm). Scannen → "Verder met dit dossier" → de kast staat klaar; de nieuwe groep
+en zijn aardlek met de bestaande velden meten; het rapport beperkt zich tot het geverifieerde deel.
+Fasering: dossiercode schrijven (met terugleestest) → inlezen/uitbreidingsmodus → andere disciplines
+nameten.
 
 **① Artikelnummer en productiecode van het typeplaatje** *(maakt terugroepmeldingen scherp)*
 `mat[]` schrijven is gedaan (Kastscan, 19-09). Wat ontbreekt is `art` en `pd`: de
