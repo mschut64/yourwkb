@@ -56,7 +56,7 @@ Gebruik bij nieuw werk de namen van Kastscan, niet je eigen.
 ```
 components/WkbApp.jsx      ← de schermen (~5900 regels)
 components/wkb/model.js    ← de rekenkern: grenswaarden, cross-checks, belastingcheck, belastingPerFase
-   ↑ het paspoortformaat zelf zit in de dependency `meterkastpaspoort` (eigen repo, tag v0.3.1)
+   ↑ het paspoortformaat zelf zit in de dependency `meterkastpaspoort` (eigen repo, tag v0.3.2)
 components/wkb/mkp-bouw.js ← de vertaling app-gegevens → paspoort (app-specifiek), incl. log[].erk
 components/wkb/mkp-qr.js   ← opleverdata → paspoort-QR (PNG-data-URI) voor app, rapport, PDF en e-mail
 components/wkb/veilig.js   ← esc() en de import-sanering uit de security-audit
@@ -92,7 +92,7 @@ npm test                  # 372 tests: normlogica, paspoort, ontsmetting, faseba
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 
-**Het paspoortformaat is een dependency, `mkp-bouw.js` is van deze app.** Coderen, decoderen, EAN-controle en QR-grens staan sinds 11-09-2026 in de repo `github.com/mschut64/meterkastpaspoort` (waar ook de specificatie staat) en komen binnen als `import { mkpEncode, ... } from "meterkastpaspoort"`, gepind op tag `v0.3.1` (Kastscan: `v0.3.0` — mag mee, hoeft niet: v0.3.1 voegt alleen de controlefuncties toe). De vertaling van app-gegevens naar een paspoort verschilt per app en blijft hier, in `mkp-bouw.js`. Zet niets app-specifieks in het pakket, en bump de tag bewust — een push naar de spec-repo verandert de apps niet vanzelf.
+**Het paspoortformaat is een dependency, `mkp-bouw.js` is van deze app.** Coderen, decoderen, EAN-controle en QR-grens staan sinds 11-09-2026 in de repo `github.com/mschut64/meterkastpaspoort` (waar ook de specificatie staat) en komen binnen als `import { mkpEncode, ... } from "meterkastpaspoort"`, gepind op tag `v0.3.2` — Kastscan staat op dezelfde tag. De vertaling van app-gegevens naar een paspoort verschilt per app en blijft hier, in `mkp-bouw.js`. Zet niets app-specifieks in het pakket, en bump de tag bewust — een push naar de spec-repo verandert de apps niet vanzelf.
 
 **Let op bij imports binnen `components/wkb/`:** gebruik expliciete `.js`-extensies. Webpack vindt het bestand ook zonder, Node niet — en de tests draaien op Node.
 

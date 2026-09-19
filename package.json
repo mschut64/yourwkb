@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "jsqr": "^1.4.0",
-    "meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.1.tar.gz",
+    "meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.2.tar.gz",
     "next": "14.2.35",
     "qrcode": "^1.5.4",
     "react": "18.3.1",
