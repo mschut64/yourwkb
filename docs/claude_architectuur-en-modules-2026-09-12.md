@@ -1,6 +1,6 @@
 # YourWkb · Kastscan · Meterkastpaspoort — architectuur, modules en waar je verder kunt
 
-*Stand 19-09-2026 (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
+*Stand 19-09-2026, eind van de dag (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
 
 **Lees dit ná `CLAUDE.md`.** CLAUDE.md zegt wát er moet gebeuren en volgens welke regels;
 dit document zegt **wat waar staat, waarom het daar staat, en waar de scheuren zitten**.
@@ -15,7 +15,10 @@ de situatie *vóór* de ontvlechting; dit beschrijft de situatie *erna*.
 behouden), afkappen (≤ 105 modules) én controleren (handtekeningen, erkenning,
 terugroepmeldingen). Beide apps en de lezer op meterkastpaspoort.nl gebruiken diezelfde
 code, dus ze komen over hetzelfde paspoort tot hetzelfde oordeel. De sleutel van de
-beheerder is vervangen en staat vast in de code. Zie §2, §2b en §5D.
+beheerder is vervangen en staat vast in de code. **Kastscan schrijft nu zelf de
+materiaallijst** (`mat[]`), zodat terugroepmeldingen iets hebben om op te treffen. En het
+erkenningslandschap is uitgezocht (Techniek Nederland, Kiwa, TloKB): TloKB is geen uitgever,
+het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
 
 ---
 
@@ -28,7 +31,7 @@ beheerder is vervangen en staat vast in de code. Zie §2, §2b en §5D.
                     │  mkp.js · spec-site · lezer.html · /p-redirect │
                     │  veldnotities/index.json (door Martin getekend)│
                     └──────────┬───────────────────────┬─────────────┘
-                               │ npm-dependency, gepind op v0.3.1
+                               │ npm-dependency, gepind op v0.3.2
                    ┌───────────┘                       └───────────┐
                    ▼                                               ▼
     ┌──────────────────────────────┐              ┌──────────────────────────────┐
@@ -41,12 +44,12 @@ beheerder is vervangen en staat vast in de code. Zie §2, §2b en §5D.
     │  WkbApp.jsx (schermen)       │              │    PaspoortScanner/-Weergave │
     │                              │              │  KastscanApp.jsx (schermen)  │
     └──────────────────────────────┘              └──────────────────────────────┘
-          372 tests groen                                1262 tests groen
+          381 tests groen                                1275 tests groen
                    │                                               │
                    └───────────────────┬───────────────────────────┘
                                        ▼
                          dezelfde QR op dezelfde kastdeur
-                     (pakket zelf: 97 tests, `npm test` daar)
+                     (pakket zelf: 109 tests, `npm test` daar)
 ```
 
 **De pijlrichting is de kern.** Beide apps hangen aan het paspoort; het paspoort hangt
@@ -60,8 +63,8 @@ los van zijn gebruikers en is de architectuur stuk.
 | Repo | Wat het is | Hosting | Afhankelijk van |
 |---|---|---|---|
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, controle, specificatie, referentielezer, QR-redirect, de index van sleutels. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
-| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | meterkastpaspoort `v0.3.1` |
-| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | meterkastpaspoort `v0.3.1` |
+| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | meterkastpaspoort `v0.3.2` |
+| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | meterkastpaspoort `v0.3.2` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
 `/p` en `/p/:rest*` → `yourwkb.nl/app` waar **elke QR-sticker in het veld** van afhangt.
@@ -71,7 +74,7 @@ dat `/p` nog doorstuurt (kaal domein 308 → www, dan 307 naar yourwkb.nl/app).
 **Waarom de dependency op een tag staat en niet op een branch:**
 
 ```json
-"meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.1.tar.gz"
+"meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.2.tar.gz"
 ```
 
 Een push naar de spec-repo verandert daarmee niet stilzwijgend wat er in de apps zit; een
@@ -84,20 +87,20 @@ Vercel-build op een ontbrekende export. (Lokaal ontwikkelen vóór de tag: `mkp.
 tijdelijk naar `node_modules/meterkastpaspoort/` kopiëren en de webpack-cache legen.)
 
 **Drie versienummers, bewust niet gelijk:** documentversie van de spec (**0.3**),
-datamodel `v` in elk paspoort (**2**), pakketversie (**0.3.1** — patch = aanvulling in de
+datamodel `v` in elk paspoort (**2**), pakketversie (**0.3.2** — patch = aanvulling in de
 implementatie zonder formaatwijziging).
 
 ---
 
 ## 2 · Het gedeelde hart: `meterkastpaspoort/mkp.js`
 
-451 regels, geen imports, draait in browser én Node 18+.
+511 regels, geen imports, draait in browser én Node 18+.
 
 | Groep | Exports | Sinds |
 |---|---|---|
 | **Formaat** | `MKP_BASIS`, `MKP_SPEC_VERSIE` (2), `eanValide`, `mkpEncode`, `mkpDecode`, `mkpUrl`, `mkpSamenvatting` | v0.2.0 |
 | **Omvang** | `QR_TEKENS_GRENS`, `qrWaarschuwing`, `QR_MODULES_GRENS` (105), `QR_NIVEAU` ("M"), `qrModules`, `mkpAfkappen` | v0.3.0 |
-| **Hergebruik** | `mkpSamenvoegen` (velden van een ander blijven staan), `mkpZegels` | v0.3.0 |
+| **Hergebruik** | `mkpSamenvoegen` (velden van een ander blijven staan; sinds v0.3.2 ook per toestel in `mat[]`), `mkpZegels` | v0.3.0 / v0.3.2 |
 | **Controle** | `mkpCanon`, `mkpVerifieer`, `mkpVerifieerIndex`, `mkpErkenning`, `mkpVeldnotities`, `mkpControleer` | v0.3.1 |
 | **Vindplaatsen** | `MKP_INDEX_URL`, `MKP_DEMO_FEED_URL` (beide op **www** — zie §10e), `MKP_WORTEL_SLEUTEL` | v0.3.1 |
 
@@ -120,10 +123,24 @@ nooit herschreven (oude regels byte-identiek, zodat hun handtekening blijft klop
 gaat nooit omlaag. Tot 18-09 wisten beide apps bij elke nieuwe QR stil de materiaallijst,
 erkenning, zegels en handtekeningen van de voorganger.
 
+**Materiaal samenvoegen (v0.3.2).** Levert de app zelf een `mat[]` (Kastscan), dan wordt die
+per toestel gekoppeld aan de bron op **plaats (`pos`) + soort (`s`)**, en alleen als fabrikant
+en type niet botsen. Bij een koppeling blijven de velden van de bron staan die de app niet
+kent — **artikelnummer, serienummer, productiecode**, onbekende velden. Een ánder toestel op
+dezelfde plaats vervangt de oude regel; een toestel dat de app niet ziet blijft staan (een
+gemiste terugroepactie is erger dan een melding die ter plekke wordt nagekeken). Daarna worden
+de volgnummers `i` opnieuw uitgedeeld en alle `grp[].mat` mee omgezet. `mkpAfkappen` ruimt
+bovendien `grp[].mat`-verwijzingen op naar een toestel dat het weghaalt.
+
 **Het veld dat het vaakst misgaat — `fn`.** `f` = **aantal** fasen (1/3), `fn` = **lijst
 fasenummers** ([1]/[2]/[3]/[1,2,3]). Een veld `fase` per apparaat bestaat **niet**, en ook
 geen apart veld voor de belasting per fase: een lezer rekent die uit `grp[].fn` + `kw`.
 **Regel: baseer je op de gepubliceerde spec, niet op wat de zusterapp schrijft.**
+
+**`log[].erk` — wie is de uitgever?** Wie het nummer **afgeeft**, niet wie een register
+bijhoudt: `installq:14718` (erkenning), `kiwa:K0213477` (CO-certificaat van de certificerende
+instelling). Het specvoorbeeld zei tot 19-09 `"tlokb:…"`; TloKB beheert alleen het CO-register,
+en dat toont het certificaatnummer niet.
 
 ### 2b · Vertrouwen: drie handtekeningen, drie sleutelhouders
 
@@ -152,6 +169,11 @@ geen apart veld voor de belasting per fase: een lezer rekent die uit `grp[].fn` 
   `*.pem`/`*.key` als vangnet.
 - **Demo-sleutels** (Installatiebedrijf Jansen, Voorbeeld Elektro B.V., de demo-erkenner) zijn
   in chats gemaakt en dus alleen voor de demo. Echte uitgevers maken en bewaren hun eigen sleutel.
+- **Kandidaat-uitgevers van verklaringen** (§10 van de spec): InstallQ (staat in de index,
+  nog zonder sleutel), **Techniek Nederland** (lidmaatschap en het recht op de Sticker
+  Gecontroleerd — niet het CO-certificaat), **Kiwa** en andere certificerende instellingen
+  (CO-certificaat, F-gassen). Een QR draagt één verklaring van één uitgever; de route is
+  herbruikbaar, de handtekening niet. Uitgewerkt in `docs/claude_techniek-nederland-vooronderzoek-2026-09-19.md`.
 
 **Wat een handtekening wel en niet zegt** (staat ook in beide viewers): dat de regel
 onveranderd is en van de houder van die sleutel komt — niet dat de installatie deugt, en
@@ -165,14 +187,14 @@ niet dat de sticker op de juiste kast zit. *Wij verifiëren niets; wij maken con
 |---|---:|---|---|
 | `components/wkb/model.js` | 515 | **De rekenkern.** Grenswaarden, cross-checks, belastingcheck, belasting per fase. | `tests/test.js` (151) |
 | `components/wkb/fasebalans.js` | 186 | Belasting per fase + `faseAdvies`. Gevormd op de paspoort-`grp[]`. | `tests/test-fasebalans.js` (75) |
-| `components/wkb/mkp-bouw.js` | 215 | App-gegevens → paspoort, incl. `log[].erk` (`erkVanProfiel`) en samenvoegen met `data.mkpImport`. | `tests/test-mkp.js` (70) |
-| `components/wkb/mkp-qr.js` | 30 | **Eén weg naar de QR** voor app, rapport, PDF en e-mail: `mkpBouw` → `mkpAfkappen` → `mkpEncode` → PNG-data-URI. | `tests/test-mkp-qr.js` (18) — leest de PNG terug met jsQR |
+| `components/wkb/mkp-bouw.js` | 240 | App-gegevens → paspoort, incl. `log[].erk` per klus (`erkVoorKlus`: cv → CO-certificaat `kiwa:…`, anders erkenning `installq:…`) en samenvoegen met `data.mkpImport`. | `tests/test-mkp.js` (70), `tests/test-mkp-qr.js` |
+| `components/wkb/mkp-qr.js` | 30 | **Eén weg naar de QR** voor app, rapport, PDF en e-mail: `mkpBouw` → `mkpAfkappen` → `mkpEncode` → PNG-data-URI. | `tests/test-mkp-qr.js` (27) — leest de PNG terug met jsQR; ook erk/CO |
 | `components/wkb/mkp-bronnen.js` | 53 | Index + feeds ophalen (rechtstreeks van www), offline de laatst bewaarde versie. | `tests/test-mkp-bronnen.js` (6) |
 | `components/wkb/veilig.js` | 118 | `esc`, sanering bij import, `anonimiseerJob`. | `tests/test-veilig.js` (52) |
-| `components/WkbApp.jsx` | 6599 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
+| `components/WkbApp.jsx` | 6644 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
 | `scripts/demo-opleverrapport.mjs` | 412 | Maakt `public/voorbeeld-opleverrapport.html` + `.pdf` door de echte code (`npm run demo-rapport`). | leest de QR terug vóór het wegschrijven |
 
-**Totaal: 372 tests, `npm test`.**
+**Totaal: 381 tests, `npm test`.**
 
 ### De lagenregel
 
@@ -199,7 +221,7 @@ bestand ook zonder, **Node niet** — en de tests draaien op Node.
 
 | Bestand | Regels | Wat |
 |---|---:|---|
-| `components/kastscan/model.js` | 2566 | Het complete fase-apparaat, indeling, controles, `mkpBouw`. **Pure functies, géén imports.** |
+| `components/kastscan/model.js` | 2632 | Het complete fase-apparaat, indeling, controles, `mkpBouw`, en sinds 19-09 `mkpMateriaal`/`mkpPlaatsen` (toestellen als `mat[]`, plaats als `R1-5`). **Pure functies, géén imports.** |
 | `components/kastscan/labels.js` | 925 | Labelgeneratie |
 | `components/kastscan/documenten.js` | 651 | Groepenoverzicht en stickers op papier |
 | `components/kastscan/render.js` | 570 | Tekenen van de kast |
@@ -211,7 +233,7 @@ bestand ook zonder, **Node niet** — en de tests draaien op Node.
 | `components/kastscan/mkp-bronnen.js` | 46 | Index + demo-feed ophalen **via het eigen domein** (`/mkp/…`) |
 | `components/KastscanApp.jsx` | 3567 | Schermen |
 
-**1262 tests groen** (`node tests/test.js`). Kastscan is modulair het volwassenst: ESM,
+**1275 tests groen** (`node tests/test.js`). Kastscan is modulair het volwassenst: ESM,
 kleine bestanden, alles importeerbaar.
 
 **De CSP van Kastscan wordt afgedwongen, met `connect-src 'self'`** — de belofte dat data
@@ -233,6 +255,11 @@ app-gegevens ──▶ mkpBouw (per app) ──▶ mkpSamenvoegen ──▶ mkpA
 ```
 
 YourWkb: `mkp-qr.js`. Kastscan: `mkpVoorKast` + `mkpQrDataUrl`/`mkpQrRaster`.
+
+Kastscan schrijft daarbij de toestellen op de rail als `mat[]` — alleen met gelezen of
+ingevulde fabrikant of type, hoofdschakelaar en aardlekken vóór automaten (die vallen bij een
+te grote QR als eerste weg) — en elke groep wijst met `grp[].mat` naar zijn eigen automaat.
+YourWkb schrijft nog geen `mat[]`; het geeft die alleen door uit een gescand paspoort.
 
 ### B · Een paspoort lezen
 
@@ -305,6 +332,8 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 9. **Privésleutels nooit in een chat, repo of e-mail.** Alleen de publieke helft reist.
 10. **Test een scan ook als eerste bezoek** (service worker weg, caches leeg). Een
     herlaadactie bij het eerste bezoek wiste de paspoortweergave; wie de app al had, zag dat nooit.
+11. **De uitgever is wie het nummer afgeeft**, niet wie een register bijhoudt — en controleer
+    of het register dat nummer ook tóónt voordat je het als controleplek noemt (TloKB doet dat niet).
 
 ---
 
@@ -312,7 +341,7 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 
 | | Wat | Waarom |
 |---|---|---|
-| **Gedeeld (nu)** | formaat, samenvoegen, afkappen, **controle** (pakket); `FASE_KLEUR`; design-tokens (Kastscan `tokens.js` = kopie van YourWkb) | één standaard, één oordeel, één uitstraling |
+| **Gedeeld (nu)** | formaat, samenvoegen (ook `mat[]`), afkappen, **controle** (pakket); `FASE_KLEUR`; design-tokens (Kastscan `tokens.js` = kopie van YourWkb) | één standaard, één oordeel, één uitstraling |
 | **Deelbaar (klaar, wacht op afnemer)** | `fasebalans.js`, `veilig.js` | gevormd op de paspoort-`grp[]` resp. generiek |
 | **Twee kopieën (scheur)** | `mkp-bronnen.js` in beide apps | zie §10f |
 | **Van één app** | `mkp-bouw.js` / Kastscans `mkpBouw`, alle schermen, `labels.js`/`render.js`/`schema.js` | hangen aan het interne datamodel |
@@ -326,9 +355,9 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 
 | | Versie | Tests |
 |---|---|---|
-| YourWkb | **`v2026-09-19-A`**, live | 372 |
-| Kastscan | **`v2026-09-19-A`**, live | 1262 |
-| meterkastpaspoort | pakket **`v0.3.1`**, spec 0.3, live | 97 |
+| YourWkb | **`v2026-09-19-B`**, live | 381 |
+| Kastscan | **`v2026-09-19-B`**, live | 1275 |
+| meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
 Sinds de vorige stand (12-09):
 
@@ -340,6 +369,9 @@ Sinds de vorige stand (12-09):
 | 18-09 | YourWkb `-18-B`: **`log[].erk`** via de uitgever in het profiel; QR-opbouw naar `mkp-qr.js` met terugleestest; **fix: eerste scan viel terug naar het startscherm**; **nieuw voorbeeldrapport** (html + pdf) met werkende QR op de landing |
 | 19-09 | **Pakket v0.3.1**: controlefuncties, vaste beheerderssleutel, lijsten op www; **nieuwe sleutel, index opnieuw getekend**; lezer rekent met `mkp.js` |
 | 19-09 | YourWkb `-19-A` en Kastscan `-19-A`: **de paspoortweergave** — terugroepmeldingen, materiaal, erkenning, zegels, handtekeningen |
+| 19-09 | **Pakket v0.3.2**: materiaal per toestel samenvoegen, verwijzingen opruimen na afkappen. **Kastscan `-19-B` schrijft zelf `mat[]`** |
+| 19-09 | Vooronderzoek **Techniek Nederland** (Sticker Gecontroleerd, landschap, AVIC t.o.v. Wkb en BW) + demo-sticker 2027 met QR |
+| 19-09 | YourWkb `-19-B`: **TloKB weg als uitgever**; CO-certificaat (Kiwa/andere) als eigen profielveld, bij cv in de logregel en in het rapport. Specvoorbeeld `tlokb:…` → `kiwa:K0213477` |
 
 ---
 
@@ -356,6 +388,9 @@ Sinds de vorige stand (12-09):
 | Grens van de QR | **Maximaal 105 modules** (18-09). | `QR_MODULES_GRENS` |
 | Erkenning zonder uitgever? | **Niet schrijven.** | `erkVanProfiel` |
 | Beheerderssleutel | **Vast in de code, vervangen 19-09, alleen Martin tekent.** | `MKP_WORTEL_SLEUTEL`, `onderteken-index.mjs` |
+| Welke erk in de logregel? | **Per klus:** cv → CO-certificaat (wettelijke bevoegdheid), anders de erkenning. Eén `erk` per regel. | `erkVoorKlus` |
+| Materiaal zonder fabrikant én type? | **Niet schrijven** — kan nergens op treffen en maakt de QR groter. | `mkpMateriaal` (Kastscan) |
+| Ander toestel op dezelfde plaats bij hergebruik? | **Oude regel vervalt**; een toestel dat de app niet ziet blijft staan. | `mkpSamenvoegen` |
 
 ---
 
@@ -374,7 +409,7 @@ Dezelfde kast kan daardoor in Kastscan een ander oordeel geven dan in YourWkb.
 Kastscans `model.js` declareert hem zelf, omdat dat bestand geen imports mag hebben; een
 test bewaakt dat hij gelijk blijft aan het pakket. Geen actie nodig zolang die test bestaat.
 
-### 10c · `WkbApp.jsx` groeit: 6599 regels
+### 10c · `WkbApp.jsx` groeit: 6644 regels
 
 `genereerRapport` (~900 regels HTML) en `MkpViewer` zitten er nog in en zijn ongetest.
 Kandidaten voor `components/wkb/rapport.js` en een eigen viewercomponent.
@@ -401,15 +436,20 @@ Klein en bijna gelijk, maar met andere adressen (www vs `/mkp/…`) en een ander
 opslagsleutel. Kandidaat voor het pakket als `mkpHaalBronnen({ urls, opslag })` — het is
 geen normkeuze en geen app-datamodel.
 
-### 10g · De terugroepfunctie heeft nog geen materiaal om op te vergelijken ⚠️
+### 10g · Terugroepmeldingen treffen alleen op fabrikant + type *(deels opgelost)*
 
-`mkpVeldnotities` vergelijkt met `mat[]`. **Geen van beide apps schrijft `mat[]` zelf** — ze
-geven het alleen door uit een gescand paspoort. In het veld treft een terugroepactie dus
-alleen kasten waarvan een eerder paspoort (van een andere toepassing) al een materiaallijst
-had. Zie draad ① in §11.
+**Opgelost 19-09:** Kastscan schrijft zelf `mat[]`. **Nog open:** Kastscan leest geen
+artikelnummer of productiecode van het typeplaatje. Een melding treft dan alleen op
+fabrikant + type ("mogelijk van toepassing"), en het type moet exact gelezen zijn. YourWkb
+schrijft nog geen `mat[]`. Zie draad ① in §11.
 
 ### 10h · Kleinere punten
 
+- In YourWkb is **"Erkenningsnummer" verplicht**, terwijl een cv-monteur zonder InstallQ-erkenning
+  alleen een CO-certificaat heeft. Het nieuwe CO-veld is optioneel; het verplichte veld dwingt
+  dan nog een nummer af dat er niet is.
+- Van certificerende instellingen naast Kiwa kennen we geen code; "Andere CI" schrijft daarom
+  niets in het paspoort. Het cv-rapport met CO-certificaat is nog niet in de browser gezien.
 - InstallQ's `opzoek` in de index is de voorpagina van echteinstallateur.nl, niet het nummer.
 - De landing heeft een al langer bestaande hydration-fout in de console.
 - Open normvragen voor Martin: isolatieweerstand bij een **nieuwe** installatie (≥ 1,0 MΩ bij
@@ -422,12 +462,10 @@ had. Zie draad ① in §11.
 
 ## 11 · Waar je verder kunt
 
-**① Materiaal in het paspoort schrijven** *(maakt de terugroepfunctie echt)*
-Kastscan kent de modules op de rail al (fabrikant, type, positie) — de beeldherkenning vult ze
-vóór, de installateur bevestigt. Die als `mat[]` schrijven, met `grp[].mat` naar het
-beveiligende toestel, en optioneel `art`/`pd` van het typeplaatje. Let op de 105-modulegrens:
-`mkpAfkappen` laat materiaal zonder `art` als eerste vallen. Flow-regel: vooringevuld, niet
-verplicht.
+**① Artikelnummer en productiecode van het typeplaatje** *(maakt terugroepmeldingen scherp)*
+`mat[]` schrijven is gedaan (Kastscan, 19-09). Wat ontbreekt is `art` en `pd`: de
+beeldherkenning laten uitlezen wat op het typeplaatje staat, vooral bij aardlekschakelaars.
+Raakt de prompt van R3a. Let op de 105-modulegrens; flow-regel: vooringevuld, niet verplicht.
 
 **② Kastscan gelijktrekken** — 10a oplossen; beter nog: `fasebalans.js` gebruiken in plaats
 van een eigen `faseBalans`.
@@ -447,6 +485,12 @@ privacyteksten, Upstash in de EU, Vercel van hobby af.
 **⑥ Veldtest** — langs Maurits en Herman: de fasetoets, de conformverklaring, de Fasecheck,
 en nu ook het inlezen van een bestaande sticker en de paspoortweergave.
 
+**⑦ Techniek Nederland** — pitch klaar: vooronderzoek (pdf) en demo-sticker 2027 in Drive ›
+Meterkastpaspoort › Partijen › TechniekNederland. Sterkste punten: een ondertekende QR op de
+jaarsticker, en dat de AVIC (2016) niet is bijgewerkt na de Wkb — YourWkb levert het dossier
+(7:757a) en de schriftelijke waarschuwing (7:754 lid 2) die de voorwaarden niet regelen. Open:
+controleert TN het certificaatnummer; wat dekt de ventilatie/koelingssticker; aanspreekpunt.
+
 **Geblokkeerd:** R2 (systeemprompt fototest-kalibratie) en R3a (Kastscan-featurespec).
 
 ---
@@ -454,9 +498,9 @@ en nu ook het inlezen van een bestaande sticker en de paspoortweergave.
 ## 12 · Startritueel voor een volgende sessie
 
 ```bash
-cd ~/projects/yourwkb && git pull origin main && npm test          # 372 groen
-cd ~/projects/kastscan && git pull origin main && node tests/test.js # 1262 groen
-cd ~/projects/meterkastpaspoort && git pull origin main && npm test  # 97 groen
+cd ~/projects/yourwkb && git pull origin main && npm test          # 381 groen
+cd ~/projects/kastscan && git pull origin main && node tests/test.js # 1275 groen
+cd ~/projects/meterkastpaspoort && git pull origin main && npm test  # 109 groen
 ```
 
 Lees `CLAUDE.md` → dit document → `docs/YourWkb-releaseplan-checklist.md`.
@@ -474,3 +518,21 @@ de QR op `demo-qr-sticker-lezer.png` (Drive › Meterkastpaspoort). Het fragment
 ⚠️ De service worker op `localhost` serveert hardnekkig een oude `/app`. Ziet het scherm er
 onveranderd uit terwijl de code iets anders zegt: service worker unregistreren en caches legen
 vóór je je eigen code gaat verdenken. En test een scan altijd ook als **eerste bezoek**.
+
+---
+
+## 13 · Het erkenningslandschap in één tabel
+
+| Wat | Uitgever (tekent / geeft nummer) | Openbaar te controleren via | In het paspoort |
+|---|---|---|---|
+| Erkenning (elektro, warmtepomp, PV …) | **InstallQ** | echteinstallateur.nl, CentraalRegisterTechniek.nl | `log[].erk = installq:<nr>` |
+| CO-bedrijfscertificaat (Gasketelwet) | **certificerende instelling**, bv. Kiwa (BRL 6000-25 / BRL K25000 / NHK) | **TloKB-register** (co-vrijregister.nl → register.tlokb.nl/co) — op bedrijfsnaam/KVK; toont het nummer **niet** | bij cv-klussen `kiwa:<nr>` |
+| Bewijs van Vakmanschap CO (persoon) | examen | Vakpaspoort (Centraal Register Techniek), persoonsgebonden QR | — |
+| Lidmaatschap + Sticker Gecontroleerd | **Techniek Nederland** | ledenzoeker; de sticker zelf is papier, zonder QR | — (kandidaat voor een eigen verklaring) |
+| Zegelrecht (meterkast) | erkenner, met nummerreeks | de ondertekende erkenningsverklaring | `log[].zeg` |
+| Terugroepmeldingen | **fabrikant** (feed, ondertekend) | index op meterkastpaspoort.nl | vergeleken met `mat[]` |
+
+Consumentenbescherming zit **niet** in de erkenning maar in het lidmaatschap: AVIC-voorwaarden,
+Geschillencommissie en de nakomingsgarantie van Techniek Nederland (€ 5.500 per bindend advies).
+De AVIC dateert van 1 maart 2016 en regelt het opleverdossier (7:757a) en de schriftelijke
+waarschuwing (7:754 lid 2) van de Wkb niet — details in het TN-vooronderzoek, §8.
