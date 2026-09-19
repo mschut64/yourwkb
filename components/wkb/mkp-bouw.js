@@ -59,12 +59,37 @@ function batterijRegels({ kwOntladen, kwLaden, naam, f, fn }) {
 // Alleen als de installateur in zijn profiel de uitgever heeft gekozen. Het
 // nummer alleen zegt niet in wélk register je moet kijken, en een gegokte
 // uitgever stuurt de lezer naar het verkeerde register — erger dan geen erk.
-export const ERK_UITGEVERS = { installq: "InstallQ", tlokb: "TloKB (gasregister)" };
+//
+// Twee soorten nummers, van twee soorten uitgevers:
+//   · de ERKENNING (InstallQ) — elektrotechniek, warmtepomp, zonnestroom …;
+//   · het CO-CERTIFICAAT (Gasketelwet, verplicht sinds 1-4-2023) — uitgegeven
+//     door de certificerende instelling, bv. Kiwa ("K0213477").
+// TloKB is GEEN uitgever. Het beheert het openbare CO-register, en dat toont
+// het certificaatnummer niet: zoeken gaat op bedrijfsnaam, plaats of KVK. Tot
+// 19-09-2026 stond TloKB hier als keuze ("tlokb:<nummer>"), naar het voorbeeld
+// in de spec — een lezer kon dat nummer nergens terugvinden.
+export const ERK_UITGEVERS = { installq: "InstallQ" };
+export const CO_UITGEVERS = { kiwa: "Kiwa" };
+export const CO_REGISTER = "https://register.tlokb.nl/co/certificaathouder";
 export function erkVanProfiel(data) {
   const u = String((data && data.instErkUitgever) || "").trim().toLowerCase();
   const nr = String((data && data.instErkenning) || "").replace(/\s+/g, "").slice(0, 30);
   if (!ERK_UITGEVERS[u] || !nr || nr.includes(":")) return null;
   return `${u}:${nr}`;
+}
+// "kiwa:K0213477". Bij "andere" certificerende instelling niets: het nummer staat
+// dan wel in het rapport, maar een uitgever-code verzinnen doen we niet.
+export function coVanProfiel(data) {
+  const u = String((data && data.instCoCi) || "").trim().toLowerCase();
+  const nr = String((data && data.instCoCertificaat) || "").replace(/\s+/g, "").toUpperCase().slice(0, 30);
+  if (!CO_UITGEVERS[u] || !nr || nr.includes(":")) return null;
+  return `${u}:${nr}`;
+}
+// Welke van de twee in de logregel van déze klus hoort. Eén erk per regel (spec):
+// bij werk aan een gasverbrandingstoestel is het CO-certificaat de wettelijke
+// bevoegdheid, dus dat eerst; elders de erkenning.
+export function erkVoorKlus(data, discipline) {
+  return discipline === "cv" ? (coVanProfiel(data) || erkVanProfiel(data)) : erkVanProfiel(data);
 }
 
 // De uitkomst van de Fasecheck (optioneel blok in de apparaatstap) als `fn`
@@ -195,7 +220,7 @@ export function mkpBouw(data, discipline) {
     b: (data.instBedrijf || data.instNaam || "installateur").slice(0,40),
     w: (m.logOmschrijving || data.typeWerk || "werkzaamheden meterkast").slice(0,60),
   };
-  const erk = erkVanProfiel(data);
+  const erk = erkVoorKlus(data, discipline);
   if (erk) nieuweRegel.erk = erk;
   p.log = [nieuweRegel];
 

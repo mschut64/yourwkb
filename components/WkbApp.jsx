@@ -1,5 +1,17 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-19-B (TloKB is geen uitgever; CO-certificaat apart):
+//   • GEDRAGSWIJZIGING in het profiel. TloKB stond als uitgever van de erkenning,
+//     naar het voorbeeld in de spec ("tlokb:…"). Maar TloKB geeft geen nummers
+//     uit — het beheert het CO-register, en dat toont het certificaatnummer niet.
+//     Een lezer met "tlokb:<nummer>" kon het nergens terugvinden. Een eerder
+//     bewaarde tlokb-keuze telt nu als "niet opgeven".
+//   • Nieuw, optioneel: CO-certificaat (gas) met de certificerende instelling
+//     (Kiwa / andere). Bij cv-ketelklussen gaat het als "kiwa:K0213477" in de
+//     logregel van het paspoort (erkVoorKlus); elders blijft het de erkenning.
+//     Het cv-rapport toont het certificaat met de controleplek: het CO-register
+//     van TloKB, op bedrijfsnaam of KVK. Erkenningsnummer in het rapport nu met esc().
+//
 // 2026-09-19-A (het gescande paspoort laat zien wat het draagt):
 //   • De paspoortweergave na een scan toonde adres, aansluiting, groepen en load
 //     balancing, maar niets van v0.2/v0.3: geen materiaal, erkenning, zegels,
@@ -283,7 +295,7 @@ import {
   mkpUrl, mkpSamenvatting, QR_TEKENS_GRENS, qrWaarschuwing,
   mkpControleer,
 } from "meterkastpaspoort";
-import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS } from "./wkb/mkp-bouw";
+import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS, coVanProfiel, CO_UITGEVERS, CO_REGISTER } from "./wkb/mkp-bouw";
 import { mkpQrVoorRapport } from "./wkb/mkp-qr";
 import { haalMkpBronnen } from "./wkb/mkp-bronnen";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
@@ -304,7 +316,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-19-A";
+const APP_VERSIE = "2026-09-19-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1416,6 +1428,8 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
         instEmail:     data.instEmail||"",
         instErkenning: data.instErkenning||"",
         instErkUitgever: data.instErkUitgever||"",
+        instCoCertificaat: data.instCoCertificaat||"",
+        instCoCi: data.instCoCi||"",
       };
       localStorage.setItem("ywkb_installateur", JSON.stringify(profiel));
       setOpgeslagen(true);
@@ -1469,26 +1483,55 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
           ))}
           {/* Optioneel, eenmalig: met de uitgever erbij gaat de erkenning als
               log[].erk ("installq:14718") mee het meterkastpaspoort in, zodat de
-              volgende monteur of de bewoner weet in wélk register hij kan kijken. */}
-          <label style={S.label}>Uitgever van de erkenning <span style={{ color:K.muted, fontWeight:400 }}>(optioneel)</span></label>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6 }}>
-            {[["", "Niet opgeven"], ...Object.entries(ERK_UITGEVERS).map(([id, naam]) => [id, naam.split(" ")[0]])].map(([id, naam]) => {
-              const actief = (data.instErkUitgever||"") === id;
-              return (
-                <button key={id||"geen"} type="button" onClick={()=>onChange("instErkUitgever", id)} style={{
-                  padding:"10px 4px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer",
-                  fontFamily:"'IBM Plex Sans',sans-serif",
-                  background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
-                  border:`1px solid ${actief ? K.yellow : K.border}`,
-                }}>{naam}</button>
-              );
-            })}
-          </div>
-          <div style={{ fontSize:11, color:K.muted, marginTop:6 }}>
-            {erkVanProfiel(data)
-              ? <>In het meterkastpaspoort: <strong style={{ color:K.text }}>{erkVanProfiel(data)}</strong> — controleerbaar in het openbare register van de uitgever.</>
-              : "Kies de uitgever, dan gaat je erkenning controleerbaar mee in het meterkastpaspoort."}
-          </div>
+              volgende monteur of de bewoner weet in wélk register hij kan kijken.
+              TloKB staat hier niet meer tussen (19-09-2026): dat beheert het
+              CO-register maar geeft geen nummers uit — zie het CO-certificaat hieronder. */}
+          {(() => {
+            const keuze = (veld, opties, huidig) => (
+              <div style={{ display:"grid", gridTemplateColumns:`repeat(${opties.length}, 1fr)`, gap:6 }}>
+                {opties.map(([id, naam]) => {
+                  const actief = huidig === id;
+                  return (
+                    <button key={id||"geen"} type="button" onClick={()=>onChange(veld, id)} style={{
+                      padding:"10px 4px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer",
+                      fontFamily:"'IBM Plex Sans',sans-serif",
+                      background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
+                      border:`1px solid ${actief ? K.yellow : K.border}`,
+                    }}>{naam}</button>
+                  );
+                })}
+              </div>
+            );
+            // Een eerder bewaarde keuze die niet meer bestaat (tlokb) telt als "niet opgeven".
+            const erkU = ERK_UITGEVERS[data.instErkUitgever] ? data.instErkUitgever : "";
+            const coU = CO_UITGEVERS[data.instCoCi] || data.instCoCi === "anders" ? data.instCoCi : "";
+            return (<>
+              <label style={S.label}>Uitgever van de erkenning <span style={{ color:K.muted, fontWeight:400 }}>(optioneel)</span></label>
+              {keuze("instErkUitgever", [["", "Niet opgeven"], ...Object.entries(ERK_UITGEVERS)], erkU)}
+              <div style={{ fontSize:11, color:K.muted, marginTop:6 }}>
+                {erkVanProfiel(data)
+                  ? <>In het meterkastpaspoort: <strong style={{ color:K.text }}>{erkVanProfiel(data)}</strong> — controleerbaar in het openbare register van de uitgever.</>
+                  : "Kies de uitgever, dan gaat je erkenning controleerbaar mee in het meterkastpaspoort."}
+              </div>
+
+              <div style={{ marginTop:16 }}>
+                <label style={S.label}>CO-certificaat (gas) <span style={{ color:K.muted, fontWeight:400 }}>(optioneel)</span></label>
+                <input style={S.input} placeholder="K0213477" value={data.instCoCertificaat||""}
+                  onChange={e=>onChange("instCoCertificaat", e.target.value)}/>
+                <div style={{ marginTop:8 }}>
+                  {keuze("instCoCi", [["", "Niet opgeven"], ...Object.entries(CO_UITGEVERS), ["anders", "Andere CI"]], coU)}
+                </div>
+                <div style={{ fontSize:11, color:K.muted, marginTop:6, lineHeight:1.45 }}>
+                  {coVanProfiel(data)
+                    ? <>Bij cv-ketelklussen in het meterkastpaspoort: <strong style={{ color:K.text }}>{coVanProfiel(data)}</strong>. </>
+                    : data.instCoCertificaat
+                      ? "Staat bij cv-ketelklussen in het rapport. "
+                      : "Het certificaatnummer van je certificerende instelling (Gasketelwet). "}
+                  Controleren kan de klant in het CO-register van TloKB, op bedrijfsnaam of KVK — dat register toont het nummer zelf niet.
+                </div>
+              </div>
+            </>);
+          })()}
         </div>
         <button style={{ ...S.btn, background:ok?K.yellow:K.border, color:ok?"#000":K.muted }}
           onClick={ok?onNext:undefined}>Volgende →</button>
@@ -3704,7 +3747,8 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <p>${data.instAdres||""}</p>
           <p>${data.instPlaats||""}</p>
           <p>${data.instTel||""} | ${data.instEmail||""}</p>
-          <p>Erkenning: <strong>${data.instErkenning||"—"}</strong></p>
+          <p>Erkenning: <strong>${esc(data.instErkenning||"—")}</strong>${ERK_UITGEVERS[data.instErkUitgever] ? ` (${esc(ERK_UITGEVERS[data.instErkUitgever])})` : ""}</p>
+          ${discipline==="cv" && data.instCoCertificaat ? `<p>CO-certificaat: <strong>${esc(String(data.instCoCertificaat).replace(/\s+/g,"").toUpperCase())}</strong>${CO_UITGEVERS[data.instCoCi] ? ` (${esc(CO_UITGEVERS[data.instCoCi])})` : ""}</p>` : ""}
         </div>
       </div>
       <table>
@@ -3992,7 +4036,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table style="border:none;margin-bottom:0">
           <tr>
             <td style="border:none;padding:2px 0;width:33%"><strong>Naam installateur</strong><br>${data.instNaam||"—"}</td>
-            <td style="border:none;padding:2px 0;width:33%"><strong>Erkenningsnummer</strong><br>${data.instErkenning||"—"}</td>
+            <td style="border:none;padding:2px 0;width:33%"><strong>Erkenningsnummer</strong><br>${esc(data.instErkenning||"—")}${discipline==="cv" && data.instCoCertificaat ? `<br><strong>CO-certificaat</strong><br>${esc(String(data.instCoCertificaat).replace(/\s+/g,"").toUpperCase())}` : ""}</td>
             <td style="border:none;padding:2px 0;width:33%"><strong>Datum ondertekening</strong><br>${datum}</td>
           </tr>
         </table>
@@ -4000,6 +4044,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       <div class="sign" style="margin-top:16px">
         <span>Handtekening (optioneel): <span class="sign-line" style="width:250px"></span></span>
       </div>
+      ${discipline==="cv" && data.instCoCertificaat ? `<p style="font-size:8px;color:#666;margin-top:10px">Het CO-certificaat (Gasketelwet) is te controleren in het openbare CO-register van TloKB (${CO_REGISTER.replace("https://","")}), op bedrijfsnaam of KVK-nummer. Dat register toont het certificaatnummer zelf niet.</p>` : ""}
       <p style="font-size:8px;color:#666;margin-top:10px">${NORM_EDITIE_VOETNOOT}</p>
       <p style="font-size:8px;color:#666;margin-top:4px">${SCOPE_VOETNOOT}</p>
       ${stickerHtml()}`;

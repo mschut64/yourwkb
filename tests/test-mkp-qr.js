@@ -14,7 +14,7 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { MKP_BASIS, mkpDecode, QR_MODULES_GRENS } from "meterkastpaspoort";
 import { mkpQrVoorRapport } from "../components/wkb/mkp-qr.js";
-import { erkVanProfiel } from "../components/wkb/mkp-bouw.js";
+import { erkVanProfiel, coVanProfiel, erkVoorKlus, ERK_UITGEVERS, mkpBouw } from "../components/wkb/mkp-bouw.js";
 import { faseBalans } from "../components/wkb/fasebalans.js";
 
 let passed = 0, failed = 0;
@@ -87,6 +87,22 @@ eq(erkVanProfiel({ instErkenning: "installq:14718", instErkUitgever: "installq" 
 {
   const { paspoort } = await mkpQrVoorRapport({ ...klus, instErkUitgever: "" }, "groepenkast");
   eq("erk" in paspoort.log[0], false, "2.7 zonder uitgever staat er geen erk in de logregel");
+}
+
+console.log("▶ CATEGORIE 2b: CO-certificaat apart van de erkenning; TloKB is geen uitgever");
+// TloKB beheert het CO-register maar geeft geen nummers uit, en het register toont
+// het certificaatnummer niet. "tlokb:<nummer>" wees de lezer dus nergens heen.
+eq("tlokb" in ERK_UITGEVERS, false, "2b.1 TloKB is geen keuze meer als uitgever");
+eq(erkVanProfiel({ instErkenning: "14718", instErkUitgever: "tlokb" }), null, "2b.2 een eerder bewaarde tlokb-keuze schrijft niets meer");
+eq(coVanProfiel({ instCoCertificaat: " k0213477 ", instCoCi: "kiwa" }), "kiwa:K0213477", "2b.3 CO-certificaat van Kiwa, genormaliseerd");
+eq(coVanProfiel({ instCoCertificaat: "X-123", instCoCi: "anders" }), null, "2b.4 andere CI: geen verzonnen uitgever-code");
+eq(coVanProfiel({ instCoCertificaat: "", instCoCi: "kiwa" }), null, "2b.5 zonder nummer niets");
+{
+  const beide = { instErkenning: "14718", instErkUitgever: "installq", instCoCertificaat: "K0213477", instCoCi: "kiwa" };
+  eq(erkVoorKlus(beide, "cv"), "kiwa:K0213477", "2b.6 cv-ketel: het CO-certificaat (de wettelijke bevoegdheid) gaat voor");
+  eq(erkVoorKlus({ ...beide, instCoCi: "" }, "cv"), "installq:14718", "2b.7 cv zonder CO-uitgever: dan de erkenning");
+  eq(erkVoorKlus(beide, "groepenkast"), "installq:14718", "2b.8 meterkastwerk: de erkenning, niet het CO-certificaat");
+  eq(mkpBouw({ ...beide, postcode: "2801 AB", huisnummer: "12" }, "cv").log[0].erk, "kiwa:K0213477", "2b.9 en zo komt het in de logregel van het paspoort");
 }
 
 console.log("▶ CATEGORIE 3: een eerder paspoort overleeft de nieuwe QR");

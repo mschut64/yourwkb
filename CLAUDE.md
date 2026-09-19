@@ -88,7 +88,7 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-npm test                  # 372 tests: normlogica, paspoort, ontsmetting, fasebalans, QR terugleestest, bronnen
+npm test                  # 381 tests: normlogica, paspoort, ontsmetting, fasebalans, QR terugleestest, bronnen
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 
@@ -121,7 +121,7 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ## 4. Actuele stand (11-09-2026)
 
-**Live:** app `v2026-09-18-B` (lokaal klaar: `v2026-09-19-A`) + security-release + landing + blog (2 artikelen). Testsuite **372 tests** (`npm test`). Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
+**Live:** app `v2026-09-19-A` (lokaal klaar: `v2026-09-19-B`) + security-release + landing + blog (2 artikelen). Testsuite **381 tests** (`npm test`). Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
 
 Recent afgerond:
 - **R1 — design fase 2 (`v2026-08-29-A`, 29-08-2026), volledig afgerond en veldbevestigd.** Meetwaarden overal 20px/700 met tabular-nums en de eenheid via `S.eenheid` in alle zes disciplines; normvlak per meetblok via het nieuwe `StatusVlak` (uitspraak in woorden + grenswaarde, zodat je bij afkeur niet terugscrollt); stapteller "Stap i van n" + voortgangsbalk centraal boven het scherm; schermtitels 15 → 20px; startscherm op `S.rij` met disciplinetegels met kleurvlak; één gele knop per scherm (elf handgemaakte grijze knoppen naar `S.btnGhost`); komma-weergave in app én rapport. Vier fouten meegefixt: `@babel/core` ontbrak in `package.json` (extract-logica faalde op een verse checkout), de toevoeging viel uit het projectnummer (`2691JJ-72` i.p.v. `2691JJ-72a`), de paspoort-import zette `projectId` nooit (rapport toonde "—"), en 15 hardgecodeerde stapnummers waren fout zodra een scherm door meerdere disciplines wordt gebruikt. **Afwijkingen van de design-spec staan onderbouwd in de checklist** — met name: géén `S.inputMeting` (32px) op de meetvelden en géén statuspil in de projectenlijst, beide omdat ze op 375px de meetrasters respectievelijk het projectnummer kapotmaken.
@@ -178,7 +178,7 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 - **Gelijktijdigheidsfactor** zonder gezamenlijke load balancer: 0,6 (richtlijn NEN-EN-IEC 61439). Alleen over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij) en alleen op de afnemende kant.
 - **Een thuisbatterij is twee dingen tegelijk:** laden is afname (grote verbruiker, factor 0,6), ontladen levert aan de kam (geen factor). Het paspoort draagt daarom twee `grp`-regels met dezelfde fase. Vraag laad- en ontlaadvermogen alleen apart waar de accu zélf de klus is; in een groepenkast is één veld per eindgroep genoeg.
 - **Teruglevering belast de hoofdzekering** net zo goed als afname — de stroom loopt er doorheen, richting daargelaten. **Maar eigengebruik niet:** wat de PV levert en een groep tegelijk opneemt, loopt over de kam van de ene groep naar de andere en passeert de hoofdzekering nooit. Reken daarom per fase met de *zwaarste van twee richtingen*, nooit met hun som. (Besluit Martin, 12-09-2026.)
-- **Erkenningslandschap:** InstallQ erkent/certificeert (registers echteinstallateur.nl, CentraalRegisterTechniek.nl) maar wettelijke certificaten (CO/BRL 6000-25, F-gassen BRL 100/200) worden uitgegeven door CI's (Kiwa, Dekra) met eigen nummers; gasregister staat bij TloKB (tlokb.nl). Drie uitgevers, drie registers, geen koppeling — daarom toont het rapport per discipline het juiste nummer mét de juiste controleplek.
+- **Erkenningslandschap:** InstallQ erkent/certificeert (registers echteinstallateur.nl, CentraalRegisterTechniek.nl) maar wettelijke certificaten (CO/BRL 6000-25, F-gassen BRL 100/200) worden uitgegeven door CI's (Kiwa, Dekra) met eigen nummers; gasregister staat bij TloKB (tlokb.nl). Drie uitgevers, drie registers, geen koppeling — daarom toont het rapport per discipline het juiste nummer mét de juiste controleplek. **TloKB is geen uitgever:** het beheert het CO-register (co-vrijregister.nl → register.tlokb.nl/co), dat per bedrijf KVK, CI, schema en "geldig tot" toont maar **niet het certificaatnummer** — controleren gaat op bedrijfsnaam of KVK. In het paspoort: `installq:<nr>` voor de erkenning, `kiwa:<nr>` voor het CO-certificaat (bij cv-klussen, `erkVoorKlus`). Zie `docs/claude_techniek-nederland-vooronderzoek-2026-09-19.md`.
 - **Meterkastpaspoort-formaat:** JSON → `deflate-raw` → base64url in het **URL-fragment** achter `meterkastpaspoort.nl/p#`, dat redirect naar `yourwkb.nl/app` (fragment reist mee). Spec v0.2 voegt `log[].erk` (`uitgever:nummer`, bv. `installq:14718`) en `grp[].fn` (de fasenummers, [1]/[2]/[3]/[1,2,3]) toe — er bestaat **geen** veld `fase` per apparaat, en ook geen apart veld voor de belasting per fase: een lezer rekent die uit `grp[].fn` + `kw`. `erk` wordt alleen geschreven als de installateur in zijn profiel de uitgever kiest (`instErkUitgever`); een nummer zonder register wordt niet gegokt. Licentie CC BY 4.0.
 
 ---
@@ -203,7 +203,7 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 ## 8. Werkafspraken met Martin
 
 - Werk in **afgebakende releases** met expliciete scope; vraag niet om toestemming voor stappen die in het releaseplan staan — voer ze uit.
-- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 372), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
+- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 381), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
 - Werk `YourWkb-releaseplan-checklist.md` bij (vinkjes zetten) en dit bestand wanneer de stand verandert.
 - Nieuwe features toetsen aan de flow-regel **voordat** je bouwt; als de flow langer wordt, herontwerp.
 - Bij normvragen of twijfel over grenswaarden: leg de vraag voor aan Martin (hij is de expert) in plaats van te gokken.
