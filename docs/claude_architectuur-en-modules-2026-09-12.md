@@ -445,9 +445,8 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
 
 ### 10h · Kleinere punten
 
-- In YourWkb is **"Erkenningsnummer" verplicht**, terwijl een cv-monteur zonder InstallQ-erkenning
-  alleen een CO-certificaat heeft. Het nieuwe CO-veld is optioneel; het verplichte veld dwingt
-  dan nog een nummer af dat er niet is.
+- ~~Erkenningsnummer verplicht voor een cv-monteur zonder InstallQ-erkenning~~ — **opgelost
+  `v2026-09-19-C`**: in de cv-flow volstaat het erkenningsnummer óf het CO-certificaat.
 - Van certificerende instellingen naast Kiwa kennen we geen code; "Andere CI" schrijft daarom
   niets in het paspoort. Het cv-rapport met CO-certificaat is nog niet in de browser gezien.
 - InstallQ's `opzoek` in de index is de voorpagina van echteinstallateur.nl, niet het nummer.

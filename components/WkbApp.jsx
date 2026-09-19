@@ -1,5 +1,13 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-19-C (erkenningsnummer optioneel voor cv-monteurs):
+//   • GEDRAGSWIJZIGING in het profiel, alleen in de cv-flow. Het erkenningsnummer
+//     was altijd verplicht, maar een cv-monteur zonder InstallQ-erkenning heeft
+//     wel een CO-certificaat (Gasketelwet). Bij cv volstaat nu één van de twee;
+//     zonder allebei blijft "Volgende" dicht, met een regel die zegt waarom.
+//     Andere disciplines: ongewijzigd verplicht.
+//   • Het cv-rapport laat "Erkenning: —" weg als er alleen een CO-certificaat is.
+//
 // 2026-09-19-B (TloKB is geen uitgever; CO-certificaat apart):
 //   • GEDRAGSWIJZIGING in het profiel. TloKB stond als uitgever van de erkenning,
 //     naar het voorbeeld in de spec ("tlokb:…"). Maar TloKB geeft geen nummers
@@ -316,7 +324,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-19-B";
+const APP_VERSIE = "2026-09-19-C";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1405,7 +1413,10 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
   );
 }
 
-function StapInstallateur({ data, onChange, onNext, onBack }) {
+function StapInstallateur({ data, onChange, onNext, onBack, discipline }) {
+  // Een cv-monteur zonder InstallQ-erkenning heeft wel een CO-certificaat
+  // (Gasketelwet): bij cv volstaat één van de twee nummers.
+  const cv = discipline === "cv";
   const [opgeslagen, setOpgeslagen] = useState(false);
 
   // Laad profiel uit localStorage bij eerste render
@@ -1437,7 +1448,8 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
     } catch {}
   };
 
-  const ok = data.instNaam && data.instErkenning;
+  const heeftNummer = cv ? !!(String(data.instErkenning||"").trim() || String(data.instCoCertificaat||"").trim()) : !!data.instErkenning;
+  const ok = data.instNaam && heeftNummer;
 
   return (
     <div>
@@ -1472,7 +1484,7 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
             {k:"instPlaats",    l:"Plaats",                ph:"Amsterdam",        required:false },
             {k:"instTel",       l:"Telefoon",              ph:"06-12345678",      required:false },
             {k:"instEmail",     l:"E-mail",                ph:"kevin@elektro.nl", required:false },
-            {k:"instErkenning", l:"Erkenningsnummer",      ph:"E-12345",          required:true  },
+            {k:"instErkenning", l:cv ? "Erkenningsnummer (of CO-certificaat hieronder)" : "Erkenningsnummer", ph:"E-12345", required:!cv },
           ].map(({k,l,ph,required})=>(
             <div key={k} style={{ marginBottom:12 }}>
               <label style={S.label}>
@@ -1529,6 +1541,11 @@ function StapInstallateur({ data, onChange, onNext, onBack }) {
                       : "Het certificaatnummer van je certificerende instelling (Gasketelwet). "}
                   Controleren kan de klant in het CO-register van TloKB, op bedrijfsnaam of KVK — dat register toont het nummer zelf niet.
                 </div>
+                {cv && !heeftNummer && (
+                  <div style={{ fontSize:12, color:K.orange, marginTop:8 }}>
+                    Vul je erkenningsnummer of je CO-certificaat in — voor cv-klussen volstaat één van de twee.
+                  </div>
+                )}
               </div>
             </>);
           })()}
@@ -3747,7 +3764,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           <p>${data.instAdres||""}</p>
           <p>${data.instPlaats||""}</p>
           <p>${data.instTel||""} | ${data.instEmail||""}</p>
-          <p>Erkenning: <strong>${esc(data.instErkenning||"—")}</strong>${ERK_UITGEVERS[data.instErkUitgever] ? ` (${esc(ERK_UITGEVERS[data.instErkUitgever])})` : ""}</p>
+          ${data.instErkenning || !(discipline==="cv" && data.instCoCertificaat) ? `<p>Erkenning: <strong>${esc(data.instErkenning||"—")}</strong>${ERK_UITGEVERS[data.instErkUitgever] ? ` (${esc(ERK_UITGEVERS[data.instErkUitgever])})` : ""}</p>` : ""}
           ${discipline==="cv" && data.instCoCertificaat ? `<p>CO-certificaat: <strong>${esc(String(data.instCoCertificaat).replace(/\s+/g,"").toUpperCase())}</strong>${CO_UITGEVERS[data.instCoCi] ? ` (${esc(CO_UITGEVERS[data.instCoCi])})` : ""}</p>` : ""}
         </div>
       </div>
@@ -4036,7 +4053,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
         <table style="border:none;margin-bottom:0">
           <tr>
             <td style="border:none;padding:2px 0;width:33%"><strong>Naam installateur</strong><br>${data.instNaam||"—"}</td>
-            <td style="border:none;padding:2px 0;width:33%"><strong>Erkenningsnummer</strong><br>${esc(data.instErkenning||"—")}${discipline==="cv" && data.instCoCertificaat ? `<br><strong>CO-certificaat</strong><br>${esc(String(data.instCoCertificaat).replace(/\s+/g,"").toUpperCase())}` : ""}</td>
+            <td style="border:none;padding:2px 0;width:33%">${data.instErkenning || !(discipline==="cv" && data.instCoCertificaat) ? `<strong>Erkenningsnummer</strong><br>${esc(data.instErkenning||"—")}` : ""}${discipline==="cv" && data.instCoCertificaat ? `${data.instErkenning ? "<br>" : ""}<strong>CO-certificaat</strong><br>${esc(String(data.instCoCertificaat).replace(/\s+/g,"").toUpperCase())}` : ""}</td>
             <td style="border:none;padding:2px 0;width:33%"><strong>Datum ondertekening</strong><br>${datum}</td>
           </tr>
         </table>
@@ -6543,7 +6560,7 @@ export default function App() {
 
   const cvScreens = [
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="cv" onNext={next} onBack={()=>setScreen("home")}/>,
-    <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
+    <StapInstallateur   key="inst"       data={job} onChange={upd} discipline="cv" onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="cv" onNext={next} onBack={prev}/>,
     <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={CV_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
     <CV_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
