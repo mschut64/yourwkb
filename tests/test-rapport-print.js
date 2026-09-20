@@ -9,7 +9,7 @@
 // Voer uit met:  node tests/test-rapport-print.js
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { printDocumentHtml } from "../components/wkb/rapport-print.js";
+import { printDocumentHtml, schoonRapport, rapportBestandsnaam } from "../components/wkb/rapport-print.js";
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -65,6 +65,25 @@ console.log("▶ CATEGORIE 4: geen actieve content (audit BEV-03)");
   // De knop van de printbalk is van ons en moet juist blijven werken.
   eq(d.includes('onclick="window.print()"'), true, "4.7 de printknop van de balk blijft werken");
 }
+
+console.log("▶ CATEGORIE 5: het rapport als deelbaar bestand");
+{
+  const d = schoonRapport(rapport, { titel: "2671SB-30-groepenkast" });
+  eq(d.includes("ywkb-printbalk"), false, "5.1 geen printbalk — een gedeeld bestand hoort geen knop van onze app te bevatten");
+  eq(d.includes("<h1>Opleveringsrapport</h1>"), true, "5.2 het rapport zelf is compleet");
+  eq(/<title>2671SB-30-groepenkast<\/title>/.test(d), true, "5.3 met de titel als bestandsnaam voor het deelmenu");
+  eq(printDocumentHtml(rapport, { titel: "x" }).replace(/<style>@media print[\s\S]*?<\/div>/, ""), schoonRapport(rapport, { titel: "x" }),
+     "5.4 print- en deelversie verschillen alleen in de balk");
+  const vies = schoonRapport(`<body><script>alert(1)</script><p onclick=alert(2)>x</p></body>`, {});
+  eq([/script/i.test(vies), /onclick/i.test(vies)], [false, false], "5.5 ook hier geen actieve content");
+}
+
+console.log("▶ CATEGORIE 6: bestandsnaam");
+eq(rapportBestandsnaam("2671SB-30", "groepenkast"), "2671SB-30-groepenkast.html", "6.1 projectnummer en discipline");
+eq(rapportBestandsnaam("2691JJ-72 a", "cv", "html"), "2691JJ-72-a-cv.html", "6.2 spaties worden streepjes");
+eq(rapportBestandsnaam("", ""), "rapport-opleverrapport.html", "6.3 zonder gegevens een bruikbare naam");
+eq(rapportBestandsnaam("../../etc/passwd", "groepenkast"), "etc-passwd-groepenkast.html", "6.4 geen padtekens in de naam");
+eq(rapportBestandsnaam("2671SB-30", "groepenkast", ""), "2671SB-30-groepenkast", "6.5 zonder extensie ook geen losse punt");
 
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);

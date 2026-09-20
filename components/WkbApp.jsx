@@ -12,6 +12,11 @@
 //   • De titel bepaalt op iOS de bestandsnaam: nu "<projectnummer>-<discipline>".
 //   • De bijlageknop ging dezelfde weg: geen document-in-document meer, en een
 //     melding als de browser het tabblad blokkeert in plaats van stil niets doen.
+//   • NIEUW: "Rapport delen of opslaan" — het rapport als één zelfstandig bestand
+//     (metingen, foto's en de paspoort-QR zitten er als data in) via het deel-menu
+//     van het toestel: AirDrop, Mail, WhatsApp, Bestanden, Dropbox. Kan het toestel
+//     geen bestanden delen (meeste desktopbrowsers), dan wordt het een download met
+//     hetzelfde bestand. Printen blijft gewoon staan.
 //
 // 2026-09-19-D (rapportmail minder spamgevoelig):
 //   • Outlook zette de rapportmail in Ongewenst (SCL 5, SFV:SPM) terwijl SPF, DKIM
@@ -326,7 +331,7 @@ import {
 } from "meterkastpaspoort";
 import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS, coVanProfiel, CO_UITGEVERS, CO_REGISTER } from "./wkb/mkp-bouw";
 import { mkpQrVoorRapport } from "./wkb/mkp-qr";
-import { printDocumentHtml } from "./wkb/rapport-print";
+import { printDocumentHtml, schoonRapport, rapportBestandsnaam } from "./wkb/rapport-print";
 import { haalMkpBronnen } from "./wkb/mkp-bronnen";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
@@ -4697,6 +4702,46 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
     document.body.appendChild(frame);
   };
 
+  // Delen via het deel-menu van het toestel (AirDrop, Mail, WhatsApp, Bestanden,
+  // Dropbox). Voor de installateur vaak handiger dan printen: het rapport gaat in
+  // één keer naar zijn eigen archief of naar de laptop.
+  //
+  // Wat we delen is het rapport als ÉÉN zelfstandig bestand — met de metingen, de
+  // foto's en de paspoort-QR erin, want die zitten als data in het document zelf.
+  // Een pdf kunnen we niet meegeven: die maakt het toestel pas bij het printen.
+  // Kan het toestel geen bestanden delen (de meeste desktopbrowsers), dan wordt
+  // het een gewone download; dat levert hetzelfde bestand op.
+  const [deelStatus, setDeelStatus] = useState("");
+  const deelRapport = async () => {
+    const naam = rapportBestandsnaam(data.projectId, discipline, "html");
+    const doc = schoonRapport(pdfHtml, { titel: `${data.projectId || "rapport"}-${discipline}` });
+    const titel = `Opleverrapport ${data.projectId || ""}`.trim();
+    try {
+      const bestand = typeof File !== "undefined" ? new File([doc], naam, { type: "text/html" }) : null;
+      if (bestand && navigator.canShare && navigator.canShare({ files: [bestand] })) {
+        await navigator.share({ files: [bestand], title: titel });
+        setDeelStatus("Gedeeld.");
+        trackEvent("rapport_gedeeld", { discipline, manier: "deelmenu" });
+        return;
+      }
+    } catch (e) {
+      // De gebruiker die het deelmenu wegtikt is geen fout.
+      if (e && (e.name === "AbortError" || e.name === "NotAllowedError")) return;
+      // Alles anders: doorvallen naar de download hieronder.
+    }
+    try {
+      const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = naam; a.rel = "noopener";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      setDeelStatus(`Opgeslagen als ${naam}.`);
+      trackEvent("rapport_gedeeld", { discipline, manier: "download" });
+    } catch {
+      setDeelStatus("Delen lukte niet — gebruik ‘Openen & opslaan als PDF’.");
+    }
+  };
+
   const verstuurEmail = async () => {
     if (!data.email) {
       setMailStatus("error");
@@ -4889,6 +4934,11 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             <button style={{...S.btn,background:K.green,color:"#fff"}} onClick={download}>
               🖨️ Openen &amp; opslaan als PDF
             </button>
+
+            <button style={S.btnGhost} onClick={deelRapport}>
+              📤 Rapport delen of opslaan
+            </button>
+            {deelStatus && <div style={{fontSize:12,color:K.muted,textAlign:"center",marginTop:-4,marginBottom:10}}>{deelStatus}</div>}
 
             {/* Bijlage met groepenschema + uitknipbare labels (alleen GK) */}
             {bijlageHtml && (

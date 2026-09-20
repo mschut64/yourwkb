@@ -24,21 +24,33 @@ const PRINTBALK = `<style>@media print{.ywkb-printbalk{display:none!important}bo
 const veiligeTitel = (t) =>
   String(t || "rapport").replace(/[<>&"']/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "rapport";
 
-export function printDocumentHtml(pdfHtml, { titel } = {}) {
+// Het rapport als zelfstandig bestand: ontsmet, met een titel, zonder printbalk.
+// Dit is wat er gedeeld of gedownload wordt — een document dat jaren later nog
+// opengaat, zonder knop van onze app erin.
+export function schoonRapport(pdfHtml, { titel } = {}) {
   const schoon = String(pdfHtml || "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<script[^>]*>/gi, "")
     .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
     .replace(/javascript:/gi, "");
 
-  // De printbalk hoort ín de body, niet ervoor: anders staat hij buiten het
-  // document en print Safari hem alsnog mee.
-  const metBalk = /<body[^>]*>/i.test(schoon)
-    ? schoon.replace(/<body[^>]*>/i, (m) => m + PRINTBALK)
-    : PRINTBALK + schoon;
-
   const t = veiligeTitel(titel);
-  if (/<title>[\s\S]*?<\/title>/i.test(metBalk)) return metBalk.replace(/<title>[\s\S]*?<\/title>/i, `<title>${t}</title>`);
-  if (/<head[^>]*>/i.test(metBalk)) return metBalk.replace(/<head[^>]*>/i, (m) => `${m}<title>${t}</title>`);
-  return metBalk;
+  if (/<title>[\s\S]*?<\/title>/i.test(schoon)) return schoon.replace(/<title>[\s\S]*?<\/title>/i, `<title>${t}</title>`);
+  if (/<head[^>]*>/i.test(schoon)) return schoon.replace(/<head[^>]*>/i, (m) => `${m}<title>${t}</title>`);
+  return schoon;
+}
+
+// Hetzelfde document, met de printbalk erin. De balk hoort ín de body, niet
+// ervoor: anders staat hij buiten het document en print Safari hem alsnog mee.
+export function printDocumentHtml(pdfHtml, opties) {
+  const doc = schoonRapport(pdfHtml, opties);
+  return /<body[^>]*>/i.test(doc) ? doc.replace(/<body[^>]*>/i, (m) => m + PRINTBALK) : PRINTBALK + doc;
+}
+
+// Bestandsnaam voor delen en downloaden: alleen tekens die elk besturingssysteem
+// en elke deel-app accepteert.
+export function rapportBestandsnaam(projectId, discipline, ext = "html") {
+  const deel = (x, terug) => String(x || "").replace(/[^A-Za-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || terug;
+  const e = String(ext || "").replace(/[^A-Za-z0-9]/g, "");
+  return `${deel(projectId, "rapport")}-${deel(discipline, "opleverrapport")}${e ? "." + e : ""}`;
 }
