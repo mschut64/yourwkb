@@ -1,6 +1,6 @@
 # YourWkb · Kastscan · Meterkastpaspoort — architectuur, modules en waar je verder kunt
 
-*Stand 19-09-2026, eind van de dag (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
+*Stand 20-09-2026 (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
 
 **Lees dit ná `CLAUDE.md`.** CLAUDE.md zegt wát er moet gebeuren en volgens welke regels;
 dit document zegt **wat waar staat, waarom het daar staat, en waar de scheuren zitten**.
@@ -44,7 +44,7 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
     │  WkbApp.jsx (schermen)       │              │    PaspoortScanner/-Weergave │
     │                              │              │  KastscanApp.jsx (schermen)  │
     └──────────────────────────────┘              └──────────────────────────────┘
-          381 tests groen                                1275 tests groen
+          410 tests groen                                1275 tests groen
                    │                                               │
                    └───────────────────┬───────────────────────────┘
                                        ▼
@@ -191,10 +191,11 @@ niet dat de sticker op de juiste kast zit. *Wij verifiëren niets; wij maken con
 | `components/wkb/mkp-qr.js` | 30 | **Eén weg naar de QR** voor app, rapport, PDF en e-mail: `mkpBouw` → `mkpAfkappen` → `mkpEncode` → PNG-data-URI. | `tests/test-mkp-qr.js` (27) — leest de PNG terug met jsQR; ook erk/CO |
 | `components/wkb/mkp-bronnen.js` | 53 | Index + feeds ophalen (rechtstreeks van www), offline de laatst bewaarde versie. | `tests/test-mkp-bronnen.js` (6) |
 | `components/wkb/veilig.js` | 118 | `esc`, sanering bij import, `anonimiseerJob`. | `tests/test-veilig.js` (52) |
-| `components/WkbApp.jsx` | 6691 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
+| `components/wkb/rapport-print.js` | 56 | **Het rapport als zelfstandig document**: ontsmetten (BEV-03), titel zetten, printbalk erin (`printDocumentHtml`) of juist niet (`schoonRapport`, voor delen), bestandsnaam. | `tests/test-rapport-print.js` (29) |
+| `components/WkbApp.jsx` | 6779 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
 | `scripts/demo-opleverrapport.mjs` | 412 | Maakt `public/voorbeeld-opleverrapport.html` + `.pdf` door de echte code (`npm run demo-rapport`). | leest de QR terug vóór het wegschrijven |
 
-**Totaal: 381 tests, `npm test`.**
+**Totaal: 410 tests, `npm test`.**
 
 ### De lagenregel
 
@@ -355,7 +356,7 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 
 | | Versie | Tests |
 |---|---|---|
-| YourWkb | **`v2026-09-19-D`**, live | 381 |
+| YourWkb | **`v2026-09-20-A`**, live | 410 |
 | Kastscan | **`v2026-09-19-B`**, live | 1275 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
@@ -374,6 +375,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
+| 20-09 | YourWkb `-20-A`: **printen op iPhone en iPad** — het rapport ging via een verborgen iframe van 0×0, en WebKit printte daaruit het app-scherm plus een half rapport (melding Maurits). Nu een echt tabblad, met een printknop erin; opbouw en ontsmetting in `components/wkb/rapport-print.js`, met tests. **Nieuw: "Rapport delen of opslaan"** — het rapport als één zelfstandig bestand via het deel-menu van het toestel (AirDrop, Mail, WhatsApp, Bestanden), met een download als terugval. Knop met het Apple-deelteken als SVG. |
 | 19-09 | YourWkb `-19-B`: **TloKB weg als uitgever**; CO-certificaat (Kiwa/andere) als eigen profielveld, bij cv in de logregel en in het rapport. Specvoorbeeld `tlokb:…` → `kiwa:K0213477` |
 
 ---
@@ -514,7 +516,9 @@ neemt nog één totale piek. Vier randvoorwaarden vóór een serverkant: verwerk
 privacyteksten, Upstash in de EU, Vercel van hobby af.
 
 **⑥ Veldtest** — langs Maurits en Herman: de fasetoets, de conformverklaring, de Fasecheck,
-en nu ook het inlezen van een bestaande sticker en de paspoortweergave.
+en nu ook het inlezen van een bestaande sticker en de paspoortweergave. **Openstaand sinds
+20-09: Maurits opnieuw laten printen en delen op de iPad.** WebKit is hier niet na te bootsen
+— de printfix is op de logica getest (`tests/test-rapport-print.js`), niet op het toestel.
 
 **⑦ Techniek Nederland** — pitch klaar: vooronderzoek (pdf) en demo-sticker 2027 in Drive ›
 Meterkastpaspoort › Partijen › TechniekNederland. Sterkste punten: een ondertekende QR op de
