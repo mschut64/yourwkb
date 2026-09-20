@@ -1115,6 +1115,22 @@ const TesterIcoon = ({ info }) => {
   );
 };
 
+// Het deel-teken zoals Apple het tekent: een vierkant met een pijl die eruit
+// omhoog wijst. Op een iPhone is dít het icoon waar de deelknop achter zit, dus
+// wie het ziet weet meteen dat het deelmenu opengaat. Bewust een getekende SVG
+// en geen emoji: 📤 is een postvakje en bestaat op elk toestel in een andere
+// tekening. Android kent een ander deel-teken (drie verbonden punten), maar de
+// doelgroep werkt op iPhone en één herkenbaar icoon is beter dan een vaag.
+const DeelIcoon = ({ size=18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+       style={{ verticalAlign:"-3px", marginRight:2 }}>
+    <path d="M12 3v12"/>
+    <path d="M8 7l4-4 4 4"/>
+    <path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/>
+  </svg>
+);
+
 // MiniInput draagt vrijwel elke meetwaarde in de app. De waarde stond op 13px —
 // even groot als het label ernaast — in een vak dat sinds de design-fundamentlaag
 // 52px hoog is: een klein cijfer in veel lege ruimte. Nu 20px/700 met
@@ -4936,7 +4952,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             </button>
 
             <button style={S.btnGhost} onClick={deelRapport}>
-              📤 Rapport delen of opslaan
+              <DeelIcoon/> Rapport delen of opslaan
             </button>
             {deelStatus && <div style={{fontSize:12,color:K.muted,textAlign:"center",marginTop:-4,marginBottom:10}}>{deelStatus}</div>}
 
