@@ -1,5 +1,18 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-09-20-A (printen werkte niet op iPhone en iPad):
+//   • Melding Maurits: "Openen & opslaan als PDF" gaf een pdf met het app-scherm
+//     op pagina 1 en een half rapport op pagina 2. Oorzaak: we printten vanuit een
+//     verborgen iframe van 0×0. WebKit print vanuit een frame het BOVENLIGGENDE
+//     document, en van een frame zonder afmetingen komt hooguit één pagina mee.
+//   • Het rapport gaat nu naar een echt tabblad, met een printknop erin voor als
+//     de printdialoog niet vanzelf opent. Wordt het tabblad geblokkeerd, dan alsnog
+//     via het frame — op de desktop werkt dat wél. De opbouw van dat document staat
+//     in components/wkb/rapport-print.js, met tests (ontsmetting, printbalk, titel).
+//   • De titel bepaalt op iOS de bestandsnaam: nu "<projectnummer>-<discipline>".
+//   • De bijlageknop ging dezelfde weg: geen document-in-document meer, en een
+//     melding als de browser het tabblad blokkeert in plaats van stil niets doen.
+//
 // 2026-09-19-D (rapportmail minder spamgevoelig):
 //   • Outlook zette de rapportmail in Ongewenst (SCL 5, SFV:SPM) terwijl SPF, DKIM
 //     en DMARC klopten — een inhoudsoordeel, geen authenticatieprobleem. Nu gaat
@@ -313,6 +326,7 @@ import {
 } from "meterkastpaspoort";
 import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS, coVanProfiel, CO_UITGEVERS, CO_REGISTER } from "./wkb/mkp-bouw";
 import { mkpQrVoorRapport } from "./wkb/mkp-qr";
+import { printDocumentHtml } from "./wkb/rapport-print";
 import { haalMkpBronnen } from "./wkb/mkp-bronnen";
 import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
@@ -332,7 +346,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-19-D";
+const APP_VERSIE = "2026-09-20-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -4654,18 +4668,31 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
   };
 
   const download = () => {
-    // Print via een verborgen sandboxed iframe (audit BEV-03): het rapport kan
-    // printen (allow-same-origin + allow-modals) maar script erin draait niet.
+    // Zie components/wkb/rapport-print.js voor het waarom: op iPhone en iPad
+    // printte het verborgen iframe het app-scherm in plaats van het rapport.
+    const doc = printDocumentHtml(pdfHtml, { titel: `${data.projectId || "rapport"}-${discipline}` });
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(doc);
+      win.document.close();
+      // iOS opent de printdialoog soms pas na een tik; de knop in het tabblad
+      // blijft daarom staan (en verdwijnt vanzelf bij het printen).
+      setTimeout(() => { try { win.focus(); win.print(); } catch {} }, 600);
+      return;
+    }
+    // Nieuw tabblad geblokkeerd (desktopbrowser met strenge instellingen): dan
+    // alsnog via een frame. Dat werkt daar wél — het is juist WebKit dat er
+    // het bovenliggende document mee print.
     const oud = document.getElementById("ywkb-print-frame");
     if (oud) oud.remove();
     const frame = document.createElement("iframe");
     frame.id = "ywkb-print-frame";
     frame.setAttribute("sandbox", "allow-same-origin allow-modals");
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
-    frame.srcdoc = `<!DOCTYPE html><html><head><title>${esc(data.projectId||"rapport")}-${esc(discipline)}</title><style>@media print{body{margin:0}}</style></head><body>${pdfHtml}</body></html>`;
+    frame.srcdoc = doc;
     frame.onload = () => {
       try { frame.contentWindow.focus(); frame.contentWindow.print(); }
-      catch { alert("Printen lukte niet — gebruik het voorbeeld en je browser-printfunctie."); }
+      catch { alert("Printen lukte niet — sta nieuwe tabbladen toe voor yourwkb.nl en probeer het opnieuw."); }
     };
     document.body.appendChild(frame);
   };
@@ -4866,19 +4893,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             {/* Bijlage met groepenschema + uitknipbare labels (alleen GK) */}
             {bijlageHtml && (
               <button style={S.btnGhost} onClick={() => {
+                // Zelfde route als het rapport: een echt tabblad met printbalk.
+                // Stond hier een eigen wikkel omheen die een compleet document
+                // in een ánder document schreef, en zonder controle of het
+                // tabblad openging (dan brak de knop stil).
+                const doc = printDocumentHtml(bijlageHtml, { titel: `${data.projectId || "rapport"}-bijlage` });
                 const win = window.open("", "_blank");
-                win.document.write(`
-                  <!DOCTYPE html><html><head>
-                    <title>${esc(data.projectId||"rapport")}-bijlage</title>
-                    <style>@media print { .print-btn { display:none !important; } body { margin:0; } }</style>
-                  </head><body>
-                    <div class="print-btn" style="position:fixed;top:12px;right:12px;z-index:999;display:flex;gap:8px;">
-                      <button onclick="window.print()" style="background:#F5C518;color:#000;border:none;padding:10px 20px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">🖨️ Opslaan als PDF</button>
-                      <button onclick="window.close()" style="background:#2E3347;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer;">✕ Sluiten</button>
-                    </div>
-                    ${bijlageHtml}
-                  </body></html>
-                `);
+                if (!win) { alert("Je browser blokkeerde het nieuwe tabblad. Sta nieuwe tabbladen toe voor yourwkb.nl en probeer het opnieuw."); return; }
+                win.document.write(doc);
                 win.document.close();
               }}>
                 📎 Bijlage openen (groepenschema &amp; labels)
