@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "vercel-build": "next build",
-    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-fasebalans.js && node tests/test-mkp-qr.js && node tests/test-mkp-bronnen.js && node tests/test-rapport-print.js",
+    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-mkp-qr.js && node tests/test-mkp-bronnen.js && node tests/test-rapport-print.js",
     "demo-rapport": "node scripts/demo-opleverrapport.mjs"
   },
   "dependencies": {
@@ -16,7 +16,8 @@
     "next": "14.2.35",
     "qrcode": "^1.5.4",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "yourwkb-core": "file:../yourwkb-core"
   },
   "devDependencies": {
     "pngjs": "^5.0.0"

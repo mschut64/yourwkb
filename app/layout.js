@@ -83,9 +83,9 @@ export default function RootLayout({ children }) {
         "url": "https://yourwkb.nl",
         "offers": {
           "@type": "Offer",
-          "price": "7.50",
+          "price": "9.50",
           "priceCurrency": "EUR",
-          "description": "Per definitief rapport na de gratis testfase; voordeelbundel 10 rapporten voor €55"
+          "description": "Per definitief rapport na de gratis testfase; voordeelbundel 20 rapporten voor €170"
         }
       },
       {
@@ -96,7 +96,7 @@ export default function RootLayout({ children }) {
           { "@type": "Question", "name": "Hoe lang worden mijn dossiers bewaard?", "acceptedAnswer": { "@type": "Answer", "text": "Wij bewaren niets op onze servers — de PDF en al je projectdata staan op je eigen toestel. Gebruik de ingebouwde back-up-functie om je dossiers zelf voor de lange termijn te bewaren, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn." } },
           { "@type": "Question", "name": "Worden er advertenties getoond of wordt mijn data verkocht?", "acceptedAnswer": { "@type": "Answer", "text": "Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels." } },
           { "@type": "Question", "name": "Werkt het ook voor andere disciplines?", "acceptedAnswer": { "@type": "Answer", "text": "Ja — groepenkast, zonnepanelen, combiketel en warmtepomp zijn nu beschikbaar. Laadpaal en thuisbatterij volgen binnenkort. Specifieke wensen? Mail naar info@yourwkb.nl." } },
-          { "@type": "Question", "name": "Wat kost het na de testperiode?", "acceptedAnswer": { "@type": "Answer", "text": "De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €7,50 per definitief rapport, of je kiest de voordeelbundel: 10 rapporten voor €55 (€5,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen." } }
+          { "@type": "Question", "name": "Wat kost het na de testperiode?", "acceptedAnswer": { "@type": "Answer", "text": "De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €9,50 per definitief rapport, of je kiest de voordeelbundel: 20 rapporten voor €170 (€8,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen." } }
         ]
       }
     ]

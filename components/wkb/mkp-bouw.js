@@ -13,7 +13,7 @@
 
 // Let op: expliciete .js-extensie. Webpack vindt het bestand ook zonder,
 // maar Node niet — en de tests draaien op Node.
-import { toNum, belastingcheck } from "./model.js";
+import { toNum, belastingcheck } from "yourwkb-core";
 import { MKP_SPEC_VERSIE, eanValide, mkpSamenvoegen } from "meterkastpaspoort";
 
 // ─── Een thuisbatterij is twee dingen tegelijk ───────────────────────────────

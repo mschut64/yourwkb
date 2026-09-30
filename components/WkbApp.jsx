@@ -245,7 +245,7 @@
 //   • Groepen zonder vastgelegde fase worden apart geteld in kW en getoond met
 //     de verwijzing naar de groepen-stap. Ze stilzwijgend overslaan zou een half
 //     ingevulde kast te licht belast laten lijken — de verkeerde conclusie.
-//   • Rekenkern in components/wkb/fasebalans.js (41 tests), gevormd op de
+//   • Rekenkern in de motor yourwkb-core (fasebalans.js), gevormd op de
 //     paspoort-groepenlijst zodat Kastscan hem ongewijzigd kan gebruiken en een
 //     P1-meting er zonder vertaling in past.
 //
@@ -319,9 +319,16 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
+// De rekenkern is sinds 30-09-2026 een gedeelde motor: dezelfde belasting- en
+// fasenregels draaien onder Kastscan en straks onder de bedrijfs- en
+// onderwijsapp. Eén installatie, één norm, één optelling.
 import {
-  toNum, GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR, isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel, basisbelastingKw, belastingcheck, gkCrossChecks, pvCrossChecks,
-} from "./wkb/model";
+  toNum, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR,
+  isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel,
+  basisbelastingKw, belastingcheck, faseBalans, faseAdvies,
+} from "yourwkb-core";
+// Wat alleen deze app doet: de gG-kromme en de cross-checks over de meetwaarden.
+import { GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks } from "./wkb/model";
 // Het paspoortformaat komt uit de standaard zelf, niet uit een kopie hier:
 // github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
 import {
@@ -333,7 +340,6 @@ import { mkpBouw, eigenApparaatRegels, erkVanProfiel, ERK_UITGEVERS, coVanProfie
 import { mkpQrVoorRapport } from "./wkb/mkp-qr";
 import { printDocumentHtml, schoonRapport, rapportBestandsnaam } from "./wkb/rapport-print";
 import { haalMkpBronnen } from "./wkb/mkp-bronnen";
-import { faseBalans, faseAdvies } from "./wkb/fasebalans";
 import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 
 // 2026-08-06 (MKP blok 1): Open Meterkastpaspoort — spec v0.1 (meterkastpaspoort.nl).
@@ -566,7 +572,7 @@ const StatusVlak = ({ level="ok", titel, sub, style }) => {
 // toevallig allemaal op L2 zitten passen prima binnen 3×25 A en laten toch de
 // zekering van L2 komen. Alleen deze weergave laat dat zien.
 //
-// De rekenkant staat in components/wkb/fasebalans.js — gedeeld, getest en
+// De rekenkant staat in de motor yourwkb-core (fasebalans.js) — gedeeld, getest en
 // gevormd op de paspoort-groepenlijst, zodat Kastscan hem ongewijzigd kan
 // gebruiken en een P1-meting er straks zonder vertaling in past. Hier staat
 // alléén de weergave, want die is per app verschillend: de rekenregels zijn

@@ -15,7 +15,7 @@ import { PNG } from "pngjs";
 import { MKP_BASIS, mkpDecode, QR_MODULES_GRENS } from "meterkastpaspoort";
 import { mkpQrVoorRapport } from "../components/wkb/mkp-qr.js";
 import { erkVanProfiel, coVanProfiel, erkVoorKlus, ERK_UITGEVERS, mkpBouw } from "../components/wkb/mkp-bouw.js";
-import { faseBalans } from "../components/wkb/fasebalans.js";
+import { faseBalans } from "yourwkb-core";
 
 let passed = 0, failed = 0;
 const failures = [];

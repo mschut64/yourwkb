@@ -54,7 +54,7 @@ export default function LandingPage() {
     { q: 'Hoe lang worden mijn dossiers bewaard?', a: 'Al je projectdata en PDF\u2019s staan op je eigen toestel; wij hebben geen database met jouw dossiers. Alleen als je een rapport mailt of de AI-analyse gebruikt, verwerken onze e-mail- en AI-leverancier die gegevens kortstondig (zie de privacyverklaring). Maak een back-up via het Back-up & delen-scherm en bewaar je dossiers zelf, bijvoorbeeld conform de Wkb-aansprakelijkheidstermijn.' },
     { q: 'Worden er advertenties getoond of wordt mijn data verkocht?', a: 'Nee. YourWkb toont geen advertenties en verkoopt nooit data aan derden. Jouw klantgegevens, meetwaarden en projectdata zijn en blijven van jou. We verdienen aan definitieve rapporten en bundels.' },
     { q: 'Werkt het ook voor andere disciplines?', a: 'Ja — groepenkast, zonnepanelen, combiketel, warmtepomp, laadpaal en thuisbatterij zijn allemaal beschikbaar, elk met eigen checkpunten, metingen en rapport. Specifieke wensen? Mail naar info@yourwkb.nl.' },
-    { q: 'Wat kost het na de testperiode?', a: 'De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €7,50 per definitief rapport, of je kiest de voordeelbundel: 10 rapporten voor €55 (€5,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
+    { q: 'Wat kost het na de testperiode?', a: 'De app is gratis te gebruiken. Rapporten zijn nu gratis tijdens de testfase. Daarna betaal je €9,50 per definitief rapport, of je kiest de voordeelbundel: 20 rapporten voor €170 (€8,50 per stuk). Je wordt van tevoren op de hoogte gesteld — geen verrassingen.' },
   ]
 
   return (
@@ -441,7 +441,7 @@ footer p { font-size: 14px; color: var(--muted); }
           <span style={{ fontSize:22 }}>🎁</span>
           <div>
             <div style={{ fontWeight:700, fontSize:15, color:'var(--yellow)' }}>Tijdens de testfase: alles gratis</div>
-            <div style={{ fontSize:13, color:'var(--muted)' }}>Rapporten zijn nu gratis. Na de testfase: €7,50 per rapport, of 10 voor €55 met de bundel. Je wordt van tevoren op de hoogte gesteld.</div>
+            <div style={{ fontSize:13, color:'var(--muted)' }}>Rapporten zijn nu gratis. Na de testfase: €9,50 per rapport, of 20 voor €170 met de bundel. Je wordt van tevoren op de hoogte gesteld.</div>
           </div>
         </div>
 
@@ -463,10 +463,10 @@ footer p { font-size: 14px; color: var(--muted); }
             <div style={{ fontSize:32, marginBottom:12 }}>📄</div>
             <div className="price-name">Definitief opleverrapport</div>
             <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:4 }}>
-              <div className="price-amount" style={{ textDecoration:'line-through', opacity:0.4 }}>€7<span style={{ fontSize:24 }}>,50</span></div>
+              <div className="price-amount" style={{ textDecoration:'line-through', opacity:0.4 }}>€9<span style={{ fontSize:24 }}>,50</span></div>
               <div style={{ background:'var(--yellow)', color:'#000', fontWeight:800, fontSize:13, padding:'3px 10px', borderRadius:20 }}>Nu gratis</div>
             </div>
-            <div className="price-desc">Los €7,50 · bundel 10 voor €55 (€5,50/st). Gratis tijdens testfase.</div>
+            <div className="price-desc">Los €9,50 · bundel 20 voor €170 (€8,50/st). Gratis tijdens testfase.</div>
             <ul className="price-features">
               {[['✓','PDF zonder watermerk'],['✓','Conform NEN 1010 / BRL'],['✓','Klaar voor oplevering'],['✓','Jouw naam & erkenningsnummer'],['✓','Eigen logo op het rapport'],['✓','Direct naar klant']].map(([i,l])=>(
                 <li key={l}><span className="feat-check">{i}</span>{l}</li>
@@ -536,7 +536,7 @@ footer p { font-size: 14px; color: var(--muted); }
       <div className="cta-bottom" id="aanmelden">
         <h2>Klaar om te beginnen?</h2>
         <p>De app is gratis te gebruiken. Tijdens de testfase zijn ook rapporten gratis.<br />
-        <span style={{ fontSize:14 }}>Daarna €7,50 per rapport of 10 voor €55 — je wordt van tevoren op de hoogte gesteld.</span></p>
+        <span style={{ fontSize:14 }}>Daarna €9,50 per rapport of 20 voor €170 — je wordt van tevoren op de hoogte gesteld.</span></p>
         <div style={{ maxWidth: 400, margin: '0 auto' }}>
           <a href="/app" className="btn-primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', marginBottom: 12 }}>
             Gratis beginnen →

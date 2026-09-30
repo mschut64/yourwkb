@@ -63,7 +63,7 @@ export default function AvgPage() {
           <div className="principe-tekst">
             YourWkb slaat <strong>geen projectdata, foto's of meetwaarden</strong> op onze servers op.
             Alles blijft op het toestel van de installateur. We verdienen niets aan jouw data — alleen
-            aan rapporten (€2,50 per stuk).
+            aan rapporten (€9,50 per stuk).
           </div>
         </div>
 

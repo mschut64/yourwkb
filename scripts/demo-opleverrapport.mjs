@@ -20,8 +20,7 @@ import jsQR from "jsqr";
 import { PNG } from "pngjs";
 import { MKP_BASIS, mkpDecode } from "meterkastpaspoort";
 import { mkpQrVoorRapport } from "../components/wkb/mkp-qr.js";
-import { faseBalans } from "../components/wkb/fasebalans.js";
-import { GELIJKTIJDIGHEID, FASE_RESERVE_KW } from "../components/wkb/model.js";
+import { faseBalans, GELIJKTIJDIGHEID, FASE_RESERVE_KW } from "yourwkb-core";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const UIT_HTML = path.join(ROOT, "public/voorbeeld-opleverrapport.html");
