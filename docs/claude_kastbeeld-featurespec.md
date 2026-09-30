@@ -317,6 +317,18 @@ reden — een strook die niemand kan lezen helpt niet:
 Een onvolledige tegel krijgt een **stippellijn en een geel vraagteken** in plaats van een rode
 rand: er is niets fout, er ontbreekt iets. `tokens.js` in Kastscan is nog steeds een kopie.
 
+**De tegels zijn bewerkbaar** (vraag van Martin, 30-09): tik op de aardlekschakelaar en je zet
+type, mA, aantal fasen en de fase; tik op een groep en je zet naam, karakteristiek, nominale
+stroom en soort. De aangetikte tegel licht geel op. Eén tegel tegelijk open — op een telefoon
+zijn twee kaarten onder elkaar al meer dan er past. Dat is Kastscans `Modulekaart`, met de
+velden die in een opleverrapport tellen.
+
+⚓ **Eén bewerkpad per gegeven.** Het paneel schrijft via dezelfde `updAG`/`updEind` als de
+kaarten eronder. Een tweede bewerkpad op hetzelfde gegeven is precies hoe twee weergaven uit
+elkaar gaan lopen — dezelfde fout die `faseBalans` tussen de twee apps maakte. De kaarten
+blijven staan voor wat er niet in een tegel past: de zwaarst belaste groep aanwijzen en de
+veldmetingkeuze.
+
 ⚠️ **Nu al opschrijven:** `tokens.js` is een kopie en kan dus uit de pas lopen. Zolang dat
 zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die níét meekomt.
 
