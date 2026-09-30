@@ -361,7 +361,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-20-A";
+const APP_VERSIE = "2026-09-30-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────

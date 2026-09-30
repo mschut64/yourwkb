@@ -1,9 +1,19 @@
-// YourWkb service worker — v6 (2026-08-13)
+// YourWkb service worker — v8 (2026-09-30)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
 // - expliciete navigate-afhandeling met dubbele fallback
-const CACHE = "yourwkb-v7";
+// ⚠️ BUMP DEZE NAAM BIJ ELKE RELEASE DIE DE APP-SCHIL VERANDERT.
+//
+// `activate` gooit elke cache weg die anders heet. Blijft de naam gelijk, dan
+// blijft de oude /app-pagina staan — en die verwijst naar chunkbestanden met een
+// buildhash die na een nieuwe deploy niet meer bestaan. Resultaat: een WITTE
+// PAGINA, in de browser én in de geïnstalleerde app, die niet vanzelf overgaat.
+//
+// Dat is op 30-09-2026 gebeurd: de naam stond sinds 13-08 op v7 terwijl de app
+// er zeven releases overheen kreeg. Wie de app in die periode één keer had
+// geopend, hield een schil van weken oud.
+const CACHE = "yourwkb-v8";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
@@ -53,7 +63,24 @@ self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches.keys().then((namen) =>
       Promise.all(namen.filter((n) => n !== CACHE).map((n) => caches.delete(n)))
-    ).then(() => self.clients.claim())
+    ).then(async () => {
+      // Riem én bretels: ook binnen de HUIDIGE cache de opgeslagen app-pagina
+      // weggooien zodra er een nieuwe worker aantreedt. Een nieuwe worker
+      // betekent een nieuwe deploy, en dan is de bewaarde schil per definitie
+      // verdacht — hij verwijst naar chunks met de vorige buildhash. De eerste
+      // navigatie daarna haalt hem vers van het netwerk en zet hem terug.
+      //
+      // Dit vangt ook de fout die deze regel nodig maakte: vergeten de
+      // cachenaam te bumpen.
+      const c = await caches.open(CACHE);
+      for (const sleutel of await c.keys()) {
+        const pad = new URL(sleutel.url).pathname;
+        if (pad === "/app" || pad.startsWith("/app/")) {
+          if (pad !== "/app/__gedeeld-bestand") await c.delete(sleutel);
+        }
+      }
+      return self.clients.claim();
+    })
   );
 });
 
