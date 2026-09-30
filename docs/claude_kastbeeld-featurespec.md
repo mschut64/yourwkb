@@ -304,30 +304,45 @@ peer dependency, en het koppelt twee apps aan dezelfde schermindeling terwijl ze
 verschillende vraag stellen. De fasebalken laten zien dat het zonder kan: dezelfde balk,
 dezelfde kleuren, twee stukjes JSX van vijftien regels.
 
-**Gebouwd op 30-09-2026 (K4).** Twee afwijkingen van het bovenstaande, beide om dezelfde
-reden — een strook die niemand kan lezen helpt niet:
+**Gebouwd op 30-09-2026 (K4), en dezelfde dag herzien.** De eerste versie week op twee
+punten af van Kastscan — één rij per aardlekgroep in plaats van één rail, en een ondergrens
+van 46 px per tegel — allebei omdat een rail van twintig modules niet op 375 px past.
 
-1. **Eén rij per aardlekgroep**, niet één lange rail. Op 375 px moet een rail van twintig
-   modules horizontaal geschoven worden, en in YourWkb wordt er per aardlekgroep gemeten.
-2. **Een tegel is minstens 46 px breed**, ook al is een module 26 px. De verhouding tussen
-   brede en smalle toestellen blijft kloppen, maar "Kookplaat" moet leesbaar zijn zonder te
-   tikken. Kastscan komt met 26 px weg omdat daar afkortingen op de tegels staan en je ze
-   aantikt om ze te lezen; hier is de strook een overzicht.
+**Dat is teruggedraaid, op verzoek van Martin: "bij stap 6 wilde ik eigenlijk exact hetzelfde
+als kastscan".** De afwijking loste het verkeerde probleem op. Een kast is één rail, en juist
+wie hem in stukken knipt kan niet meer zien dat er achter de tweede aardlek nog vier modules
+ruimte is — en dát is bij een uitbreiding de enige vraag die telt. Een meterkast is breder dan
+een telefoon; horizontaal schuiven is het eerlijke antwoord, en Kastscan doet dat sinds het
+begin. Sindsdien:
 
-Een onvolledige tegel krijgt een **stippellijn en een geel vraagteken** in plaats van een rode
-rand: er is niets fout, er ontbreekt iets. `tokens.js` in Kastscan is nog steeds een kopie.
+1. **Eén rail**, met de aardlekschakelaar als gewone module van twee breed. Geen kopje boven
+   een rij meer: hij hangt in de kast en bezet daar ruimte, dus hoort hij in het beeld.
+2. **Een module is 52 px** (`MODULE_PX`, de tapmaat uit design-spec §1.3), niet 26 met een
+   ondergrens eroverheen. Ware schaal, en elke tegel blijft met een werkhandschoen te raken.
+3. **De kleurband staat ónder de strook**, niet als streepje in de tegel, en gebruikt de
+   verzadigde schermladder van Kastscan (`AARDLEK_BAND`) — niet de pastelladder van het
+   label (`AARDLEK_KLEUR`). Twee dragers, twee ladders: pastel van 7 px is op een donker
+   scherm niet te zien, en dezelfde tint moet op stickerpapier juist wijken voor de tekst.
+4. **De tegel draagt de fase ook als randpatroon** (`FASE_PATROON`), zoals in Kastscan —
+   fase nooit alleen als kleur.
+5. Wat nog ontbreekt staat als **"invullen" in oranje** onderaan de tegel. Eén markering per
+   vraag: de rand is van de fase, de tekst van de volledigheid.
 
-**De tegels zijn bewerkbaar** (vraag van Martin, 30-09): tik op de aardlekschakelaar en je zet
-type, mA, aantal fasen en de fase; tik op een groep en je zet naam, karakteristiek, nominale
-stroom en soort. De aangetikte tegel licht geel op. Eén tegel tegelijk open — op een telefoon
-zijn twee kaarten onder elkaar al meer dan er past. Dat is Kastscans `Modulekaart`, met de
-velden die in een opleverrapport tellen.
+**De kaartenlijst onder de strook is vervallen.** Die gaf een tweede keer wat de rail al
+toont, met een tweede bewerkpad op hetzelfde gegeven — precies hoe twee weergaven uit elkaar
+gaan lopen, dezelfde fout die `faseBalans` tussen de twee apps maakte. Alles wat erop stond
+zit nu in de **modulekaart** die onder de strook openklapt zodra je een tegel aantikt: naam,
+RCD-type, mA, aantal fasen, de fase zelf, de zwaarst belaste groep van het cluster, de
+veldmetingkeuze en weghalen (met bevestiging in de kaart zelf, geen systeemdialoog). Eén
+kaart tegelijk open. Dat is Kastscans `Modulekaart`, met de velden die in een opleverrapport
+tellen.
 
-⚓ **Eén bewerkpad per gegeven.** Het paneel schrijft via dezelfde `updAG`/`updEind` als de
-kaarten eronder. Een tweede bewerkpad op hetzelfde gegeven is precies hoe twee weergaven uit
-elkaar gaan lopen — dezelfde fout die `faseBalans` tussen de twee apps maakte. De kaarten
-blijven staan voor wat er niet in een tegel past: de zwaarst belaste groep aanwijzen en de
-veldmetingkeuze.
+De **+** op de rail staat op de plek waar de nieuwe groep komt te hangen — achter de laatste
+module van dat blok — en klapt hem meteen open. Zo ook "+ Aardlek" rechtsboven.
+
+Herkomst blijft zichtbaar: een groep uit een gescand paspoort draagt een **geel stipje** in
+de hoek van de tegel en het label "uit paspoort" in de modulekaart. Wat uit een sticker komt
+is niet bevestigd door déze installateur.
 
 ⚠️ **Nu al opschrijven:** `tokens.js` is een kopie en kan dus uit de pas lopen. Zolang dat
 zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die níét meekomt.

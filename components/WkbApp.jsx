@@ -323,7 +323,7 @@ import { trackEvent } from "./analytics";
 // fasenregels draaien onder Kastscan en straks onder de bedrijfs- en
 // onderwijsapp. Eén installatie, één norm, één optelling.
 import {
-  toNum, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR,
+  toNum, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR, FASE_PATROON,
   isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel,
   basisbelastingKw, belastingcheck, faseBalans, faseAdvies,
   // Het kastbeeld: een gescand paspoort terug naar groepen (K4), en de vormtaal
@@ -361,7 +361,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-30-B";
+const APP_VERSIE = "2026-09-30-C";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1795,210 +1795,336 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
 
 // ─── DE KAST ALS STROOK ──────────────────────────────────────────────────────
 //
-// Dezelfde vorm als in Kastscan: tegels op modulebreedte, met onder elke
-// aardlekgroep de kleurband die ook op de labels en in het groepenoverzicht
-// staat. Wie beide apps gebruikt, kijkt zo naar dezelfde kast.
+// Precies de kast van Kastscan (vraag Martin, 30-09-2026): ÉÉN rail met de
+// modules erop op ware breedte, in de volgorde waarin ze hangen, met onder de
+// strook de kleurband die de blokken onderscheidt. Tik op een module en de
+// modulekaart staat eronder. Wie beide apps gebruikt kijkt zo naar dezelfde kast,
+// en hoeft niet twee keer te leren waar hij moet tikken.
 //
-// Waarom dit meer is dan versiering: een lijst vertelt niet dat er nog drie
-// modules vrij zijn naast de tweede aardlek. Bij een uitbreiding is dát de
-// vraag, en daarom staat "+" op de plek waar de nieuwe groep komt te hangen —
-// niet onderaan het scherm bij een knop die "toevoegen" heet.
+// Wat hier tot 30-09-2026 stond — een rij per aardlekgroep, met de
+// aardlekschakelaar als kopje erboven — leek overzichtelijker op een telefoon
+// maar antwoordde de verkeerde vraag. Een kast is één rail. Knip je hem in
+// stukken, dan is niet meer te zien dat er achter de tweede aardlek nog vier
+// modules ruimte is, en dát is bij een uitbreiding het enige wat je wil weten.
+// Een meterkast is breder dan een telefoon; horizontaal schuiven is het eerlijke
+// antwoord, en zo doet Kastscan het sinds het begin.
 //
-// De maatvoering en de kleuren komen uit de motor (`vormtaal.js`), de tekening
-// staat hier. Eén rij per aardlekgroep in plaats van één lange rail: op 375 px
-// zou een rail van twintig modules horizontaal geschoven moeten worden, en hier
-// wordt per aardlekgroep gemeten.
-function Railstrook({ aardlekgroepen, onGroepErbij, updAG, updAGvelden, updEind, remEind }) {
-  // Welke tegel openstaat. Eén tegelijk: op een telefoon is twee open kaarten
-  // onder elkaar al meer dan er past, en het gaat om één ding tegelijk nakijken.
-  const [open, setOpen] = useState(null);   // { soort:"rcd"|"eind", agId, eindId }
-  const isOpen = (soort, agId, eindId) =>
-    open && open.soort === soort && open.agId === agId && open.eindId === eindId;
-  const wissel = (soort, agId, eindId) =>
-    setOpen(isOpen(soort, agId, eindId) ? null : { soort, agId, eindId });
+// De maatvoering, de kleuren en de indeling van de rail komen uit de motor
+// (`vormtaal.js`), de tekening staat hier — de motor mag geen React kennen.
+//
+// Deze strook is sinds deze release de ENIGE plek waar de kast bewerkt wordt: de
+// kaartenlijst eronder is vervallen. Twee bewerkpaden op hetzelfde gegeven is hoe
+// twee weergaven uit elkaar gaan lopen, en de lijst gaf een tweede keer wat de
+// rail al toont.
 
-  const rijen = strookUitAardlekgroepen(aardlekgroepen);
-  if (!rijen.length) return null;
+// De ruimte die de strook heeft: de appkolom (S.app maxWidth) min de padding van
+// S.body. Dezelfde rekensom als in Kastscan.
+const STROOK_BESCHIKBAAR = 430 - 36;
+// De klikplek waar de volgende groep komt te hangen, even breed als in Kastscan.
+const PLEK_PX = 22;
 
-  // EEN MODULE IS 26 PX, MAAR EEN NAAM PAST DAAR NIET IN. Kastscan komt ermee weg
-  // omdat daar afkortingen op de tegels staan en je ze aantikt om ze te lezen;
-  // hier is de strook een overzicht en moet je "Kookplaat" kunnen lezen zonder
-  // te tikken. De verhouding tussen brede en smalle toestellen blijft kloppen —
-  // een vierpolige automaat is nog steeds breder dan een enkelpolige — maar er
-  // geldt een ondergrens. Een strook op ware schaal die niemand kan lezen helpt
-  // niet, en de vraag "waar is nog plek" wordt er niet beter van.
-  const TEGEL_MIN_PX = 46;
+function Railstrook({ aardlekgroepen, kaart, setKaart, hoogstVan, onGroepErbij,
+                      updAG, updAGvelden, updEind, remEind, remAG }) {
+  // Welke module openstaat — `kaart` is { agId, eindId|null }. De toestand staat
+  // in de stap zelf: wie een groep bijzet wil hem meteen open zien, en die knop
+  // staat hierbuiten.
+  const strook = strookUitAardlekgroepen(aardlekgroepen);
+
+  const staatOpen = (m) => !!kaart && kaart.agId === m.agId && kaart.eindId === m.eindId;
+  const wissel = (m) => setKaart(staatOpen(m) ? null : { agId:m.agId, eindId:m.eindId });
+
+  const agOpen = kaart && aardlekgroepen.find(a => a.id === kaart.agId);
+  const egOpen = agOpen && kaart.eindId != null
+    ? (agOpen.eindgroepen || []).find(e => e.id === kaart.eindId) : null;
+
+  // Past de kast in beeld? De klikplekken tellen mee, want ze staan op de rail.
+  const plekken = strook.modules.filter(m => m.laatsteVanBlok).length;
+  const railPx = strook.breedtePx + plekken * (PLEK_PX + 2);
+  const breed = railPx > STROOK_BESCHIKBAAR;
+
+  // De tegels en de kleurband staan in DEZELFDE schuifruimte en met dezelfde
+  // rij-opbouw: voor elke module een vlak, en op de plek van een klikplek een
+  // even brede lege plek. Met een afwijkende opbouw loopt de band per module een
+  // paar pixels weg van de tegel waar hij bij hoort — over veertien modules een
+  // halve tegel scheef.
+  const rij = [];
+  for (const m of strook.modules) {
+    rij.push({ m });
+    if (m.laatsteVanBlok) rij.push({ plek:m.agId, naam:m.naam });
+  }
 
   return (
-    <div style={{ ...S.card, padding: 12, marginBottom: 14 }}>
-      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:10 }}>
+    <div style={{ ...S.card, padding:12, marginBottom:14 }}>
+      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:6 }}>
         <div style={{ fontSize:13, fontWeight:700 }}>De kast</div>
         <div style={{ fontSize:11, color:K.muted }}>
-          {rijen.reduce((n,r)=>n+r.breedte,0)} modules · tik op + om een groep bij te zetten
+          {breed ? "← schuif →  ·  " : ""}{strook.breedte} modules
+        </div>
+      </div>
+      <div style={{ fontSize:11, color:K.muted, marginBottom:8, lineHeight:1.4 }}>
+        Tik op een module om hem in te vullen; tik op <span style={{color:K.yellow,fontWeight:700}}>+</span> om
+        een groep achter die aardlek bij te zetten.
+      </div>
+
+      <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+        <div style={{ minWidth:railPx }}>
+          <div style={{ display:"flex", gap:2 }}>
+            {rij.map((x, i) => x.plek ? (
+              <button key={`p${i}`} onClick={() => onGroepErbij(x.plek)}
+                aria-label={`Groep toevoegen achter ${x.naam}`}
+                style={{ flex:`0 0 ${PLEK_PX}px`, minHeight:92, borderRadius:6, cursor:"pointer",
+                         border:`1px dashed ${K.yellow}77`, background:"transparent",
+                         color:K.yellow, fontFamily:"inherit", fontSize:17, fontWeight:700,
+                         display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>+</button>
+            ) : (
+              <StrookTegel key={x.m.id} m={x.m} open={staatOpen(x.m)}
+                zwaarst={x.m.soort === "eind" && hoogstVan(x.m.agId) === x.m.eindId}
+                onTik={() => wissel(x.m)} />
+            ))}
+          </div>
+          {/* De kleurband onder de strook: hij onderscheidt de blokken, en is
+              bewust NIET de fasekleur — die betekent iets anders en mag hier niet
+              meeliften. */}
+          <div style={{ display:"flex", gap:2, marginTop:3 }}>
+            {rij.map((x, i) => (
+              <div key={`b${i}`} style={{
+                flex:`0 0 ${x.plek ? PLEK_PX : x.m.breedtePx - 2}px`, height:7, borderRadius:3,
+                background:x.plek ? "transparent" : x.m.band,
+              }}/>
+            ))}
+          </div>
         </div>
       </div>
 
-      {rijen.map((rij) => (
-        <div key={rij.code + rij.naam} style={{ marginBottom:12 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
-            <span style={{ width:10, height:10, borderRadius:3, background:rij.kleur, flexShrink:0 }}/>
-            <span style={{ fontSize:11, fontWeight:700 }}>{rij.naam}</span>
-            <span style={{ fontSize:10, color:K.muted }}>{rij.rcd}{rij.fase ? ` · ${rij.fase}` : ""}</span>
+      {/* DE MODULEKAART. Eén blad per module, met de naam bovenaan en de velden
+          eronder — zoals in Kastscan. Bewust één blad en niet twee: een tweede tik
+          om van de naam naar de gegevens te komen zou de flow verlengen. */}
+      {agOpen && (
+        <Modulekaart ag={agOpen} eg={egOpen} hoogstId={hoogstVan(agOpen.id)}
+          onSluiten={() => setKaart(null)}
+          updAG={updAG} updAGvelden={updAGvelden} updEind={updEind}
+          onEindWeg={() => { remEind(agOpen.id, egOpen.id); setKaart(null); }}
+          onAGWeg={() => { remAG(agOpen.id); setKaart(null); }} />
+      )}
+    </div>
+  );
+}
+
+// Eén module op de rail. Dezelfde tegel als in Kastscan: bovenaan waar hij bij
+// hoort, in het midden zijn naam, onderaan wat hem beveiligt, en de fase als
+// label én als randpatroon — nooit alleen als kleur.
+function StrookTegel({ m, open, zwaarst, onTik }) {
+  const isRcd = m.soort === "rcd";
+  const faseKleur = m.fase && m.fase !== "3F" ? FASE_KLEUR[m.fase] : null;
+  return (
+    <button onClick={onTik} title={m.naam}
+      aria-label={`${m.naam || "Naamloze groep"} openen`}
+      style={{ flex:`0 0 ${m.breedtePx - 2}px`, minHeight:92, padding:"6px 4px",
+               borderRadius:8, cursor:"pointer", fontFamily:"inherit", color:K.text,
+               background:isRcd ? K.surface : K.card,
+               border:`1px solid ${open ? K.yellow : (faseKleur || (isRcd ? K.borderStrong : K.border))}`,
+               // De rand draagt de FASE, niet de volledigheid: naast het label en
+               // de kleur is het patroon de derde drager, zodat de fase ook klopt
+               // voor wie kleuren niet onderscheidt (Kastscan-spec › Interactie 4).
+               // Wat er nog ontbreekt staat onderaan de tegel in oranje — één
+               // markering per vraag, anders wordt de strook een kerstboom.
+               borderStyle:open || !faseKleur ? "solid" : FASE_PATROON[m.fase],
+               display:"flex", flexDirection:"column", alignItems:"center",
+               justifyContent:"space-between", gap:2, overflow:"hidden", position:"relative" }}>
+      {/* Uit een gescand paspoort, dus nog niet door deze installateur bevestigd.
+          Klein en in de hoek: het is een aandachtspunt, geen waarschuwing. */}
+      {m.bron === "paspoort" && (
+        <span style={{ position:"absolute", top:3, right:3, width:5, height:5,
+                       borderRadius:3, background:K.yellow }}/>
+      )}
+      <span style={{ fontSize:9, fontWeight:700, letterSpacing:0.4, color:K.muted,
+                     display:"flex", gap:3, alignItems:"center" }}>
+        {isRcd ? m.code : m.nr}
+        {!isRcd && (
+          <span style={{ fontSize:8, fontWeight:700, padding:"1px 3px", borderRadius:3,
+                         background:m.band, color:"#111" }}>{m.code}</span>
+        )}
+        {zwaarst && <span style={{ fontSize:8 }} title="Zwaarst belast in dit cluster">⭐</span>}
+      </span>
+      <span style={{ fontSize:11, lineHeight:1.2, fontWeight:m.naam ? 600 : 500,
+                     color:m.naam ? K.text : K.muted, overflow:"hidden",
+                     textOverflow:"ellipsis", display:"-webkit-box", WebkitLineClamp:2,
+                     WebkitBoxOrient:"vertical", wordBreak:"break-word" }}>
+        {m.naam || "—"}
+      </span>
+      <span style={{ fontSize:9, fontWeight:600, fontVariantNumeric:"tabular-nums",
+                     color:m.onvolledig ? K.orange : K.muted }}>
+        {m.regel}
+      </span>
+      {/* Fase nooit alleen als kleur: het label staat er ook. */}
+      <span style={{ fontSize:9, fontWeight:700, minHeight:12,
+                     color:m.fase === "3F" ? K.muted : (faseKleur || "transparent") }}>
+        {m.fase || ""}
+      </span>
+    </button>
+  );
+}
+
+// De modulekaart: alles wat er over deze module te zeggen valt, op één blad.
+// Sinds deze release is dit de enige plek waar een aardlekgroep of een eindgroep
+// bewerkt wordt — de kaartenlijst onder de strook is vervallen.
+function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind, onEindWeg, onAGWeg }) {
+  // Weghalen vraagt om een bevestiging in de kaart zelf en niet om een
+  // browservenster: `confirm()` is op een telefoon een systeemdialoog die de app
+  // bevriest en er niet uitziet als de app. Twee tikken, zichtbaar waar je bent.
+  const [weghalen, setWeghalen] = useState(false);
+
+  const kop = (
+    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+      <input style={{ ...S.input, fontWeight:700, flex:1, marginBottom:0 }}
+        value={eg ? eg.naam : ag.naam}
+        onChange={e => eg ? updEind(ag.id, eg.id, "naam", e.target.value)
+                          : updAG(ag.id, "naam", e.target.value)}/>
+      <button onClick={onSluiten} aria-label="Modulekaart sluiten"
+        style={{ background:"transparent", border:"none", color:K.muted,
+                 cursor:"pointer", fontSize:20, padding:"0 4px", lineHeight:1 }}>×</button>
+    </div>
+  );
+
+  return (
+    <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:10,
+                  border:`1px solid ${K.yellow}44` }}>
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:K.muted, letterSpacing:0.5,
+                       textTransform:"uppercase" }}>
+          {eg ? "Eindgroep" : "Aardlekschakelaar"}
+        </span>
+        {ag.bron === "paspoort" && (
+          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20,
+                         background:K.yellowDim, color:K.yellow }}>uit paspoort</span>
+        )}
+      </div>
+      {kop}
+
+      {eg ? (<>
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:10 }}>
+          <div>
+            <label style={S.label}>Karakteristiek</label>
+            <MiniSelect value={eg.kar} width={84} options={KAR_TYPE}
+              onChange={v => updEind(ag.id, eg.id, "kar", v)}/>
           </div>
-
-          <div style={{ display:"flex", gap:2, overflowX:"auto", paddingBottom:2 }}>
-            {/* De aardlekschakelaar zelf staat ook op de rail — zonder hem klopt
-                het beeld van hoe vol de kast is niet. */}
-            {rij.rcd !== "geen RCD" && (
-              <button onClick={() => wissel("rcd", rij.id, null)}
-                aria-label={`${rij.naam} instellen`}
-                style={{ flex:`0 0 ${MODULE_PX*2-2}px`, minHeight:74, borderRadius:6,
-                         background:K.surface, cursor:"pointer", padding:0, fontFamily:"inherit",
-                         border:`1px solid ${isOpen("rcd", rij.id, null) ? K.yellow : K.borderStrong}`,
-                         display:"flex", flexDirection:"column", alignItems:"center",
-                         justifyContent:"center", gap:2, fontSize:9, color:K.muted }}>
-                <span style={{ fontSize:13 }}>🛡️</span>
-                <span style={{ fontWeight:700 }}>{rij.code}</span>
-              </button>
-            )}
-
-            {rij.tegels.map((t) => (
-              <button key={t.id} onClick={() => wissel("eind", rij.id, t.id)}
-                title={t.naam}
-                style={{ flex:`0 0 ${Math.max(t.breedtePx, TEGEL_MIN_PX)-2}px`, minHeight:74,
-                         borderRadius:6, cursor:"pointer", padding:"4px 2px",
-                         background:K.card, color:K.text, fontFamily:"inherit",
-                         // Een onvolledige groep krijgt een stippellijn, geen rode
-                         // rand: er is niets fout, er ontbreekt iets.
-                         border:`1px ${t.onvolledig ? "dashed" : "solid"} ${
-                           isOpen("eind", rij.id, t.id) ? K.yellow : (t.onvolledig ? K.borderStrong : K.border)}`,
-                         display:"flex", flexDirection:"column", alignItems:"center",
-                         justifyContent:"space-between", overflow:"hidden" }}>
-                <span style={{ fontSize:9, fontWeight:700, color:t.onvolledig ? K.yellow : K.muted,
-                               letterSpacing:"0.03em", fontVariantNumeric:"tabular-nums" }}>
-                  {t.beveiliging || "?"}
-                </span>
-                <span style={{ fontSize:9, lineHeight:1.15, textAlign:"center", overflow:"hidden",
-                               wordBreak:"break-word", display:"-webkit-box",
-                               WebkitLineClamp:3, WebkitBoxOrient:"vertical" }}>
-                  {t.naam || "—"}
-                </span>
-                <span style={{ width:"100%", height:3, borderRadius:2, background:rij.kleur }}/>
-              </button>
-            ))}
-
-            {/* De lege plek naast het blok. Hier komt de uitbreiding te hangen. */}
-            <button onClick={() => onGroepErbij(rij)} aria-label={`Groep toevoegen aan ${rij.naam}`}
-              style={{ flex:`0 0 ${MODULE_PX+6}px`, minHeight:74, borderRadius:6, cursor:"pointer",
-                       border:`1px dashed ${K.yellow}77`, background:"transparent",
-                       color:K.yellow, fontFamily:"inherit", fontSize:16, fontWeight:700,
-                       display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>+</button>
+          <div>
+            <label style={S.label}>Nominale stroom</label>
+            <MiniSelect value={eg.ampere} width={84} options={GROEP_A}
+              onChange={v => updEind(ag.id, eg.id, "ampere", v)}/>
           </div>
-
-          {/* DE MODULEKAART. Tik op een tegel en de velden staan eronder — zoals
-              in Kastscan. Je hoeft dus niet naar de kaart verderop te scrollen om
-              een mA of een karakteristiek te zetten, en je ziet meteen welke
-              module je te pakken hebt, want die staat aangelicht.
-
-              Bewust dezelfde updatefuncties als de kaarten eronder (updAG,
-              updEind): twee bewerkpaden op één gegeven is hoe twee weergaven uit
-              elkaar gaan lopen. */}
-          {open && open.agId === rij.id && (() => {
-            const ag = aardlekgroepen.find(a => a.id === rij.id);
-            if (!ag) return null;
-
-            if (open.soort === "rcd") return (
-              <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:2 }}>
-                <input style={{ ...S.input, fontWeight:700, marginBottom:10 }} value={ag.naam}
-                  onChange={e => updAG(ag.id, "naam", e.target.value)}/>
-
-                <label style={S.label}>RCD type</label>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                  {[...RCD_TYPE, "geen"].map(t => (
-                    <Pill key={t} small active={ag.rcdType === t}
-                      onClick={() => updAG(ag.id, "rcdType", t)}>{t === "geen" ? "Geen RCD" : `type-${t}`}</Pill>
-                  ))}
-                </div>
-
-                {ag.rcdType !== "geen" && (<>
-                  <label style={S.label}>RCD mA</label>
-                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
-                    {RCD_MA.map(m => (
-                      <Pill key={m} small active={ag.rcdMa === m}
-                        onClick={() => updAG(ag.id, "rcdMa", m)}>{m}mA</Pill>
-                    ))}
-                  </div>
-                </>)}
-
-                <label style={S.label}>Aantal fasen</label>
-                <div style={{ display:"flex", gap:8, marginBottom:10 }}>
-                  <Pill small active={ag.fase === "1"} onClick={() => updAG(ag.id, "fase", "1")}>⚡ 1-fase 230V</Pill>
-                  <Pill small active={ag.fase === "3"} onClick={() => updAG(ag.id, "fase", "3")}>⚡⚡⚡ 3-fase 400V</Pill>
-                </div>
-
-                {/* Welke fase — alleen bij één fase, want een driefasegroep hangt
-                    per definitie aan alle drie. Leeg laten mag: een gegokte fase
-                    is schadelijker dan een lege, want het faseadvies bouwt erop
-                    voort. */}
-                {ag.fase !== "3" && (<>
-                  <label style={S.label}>Fase</label>
-                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:4 }}>
-                    {["L1","L2","L3"].map(l => (
-                      <Pill key={l} small active={ag.L === l}
-                        onClick={() => updAGvelden(ag.id, ag.L === l ? { L:"", Lbron:"" } : { L:l, Lbron:"hand" })}>{l}</Pill>
-                    ))}
-                    {ag.L && <Pill small active={false} onClick={() => updAGvelden(ag.id, { L:"", Lbron:"" })}>wissen</Pill>}
-                  </div>
-                  <div style={{ ...S.hint, marginBottom:0 }}>
-                    {ag.L ? "Weet je het niet zeker, laat het dan leeg." : "Optioneel — nodig voor het faseadvies."}
-                  </div>
-                </>)}
-              </div>
-            );
-
-            const eg = (ag.eindgroepen || []).find(e => e.id === open.eindId);
-            if (!eg) return null;
-            return (
-              <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:2 }}>
-                <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-                  <input style={{ ...S.input, fontWeight:700, flex:1 }} value={eg.naam}
-                    onChange={e => updEind(ag.id, eg.id, "naam", e.target.value)}/>
-                  <button onClick={() => { remEind(ag.id, eg.id); setOpen(null); }}
-                    aria-label="Groep verwijderen"
-                    style={{ background:"transparent", border:"none", color:K.muted,
-                             cursor:"pointer", fontSize:18, padding:"0 6px" }}>×</button>
-                </div>
-
-                <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:10 }}>
-                  <div>
-                    <label style={S.label}>Karakteristiek</label>
-                    <MiniSelect value={eg.kar} width={84}
-                      onChange={v => updEind(ag.id, eg.id, "kar", v)} options={KAR_TYPE}/>
-                  </div>
-                  <div>
-                    <label style={S.label}>Nominale stroom</label>
-                    <MiniSelect value={eg.ampere} width={84}
-                      onChange={v => updEind(ag.id, eg.id, "ampere", v)} options={GROEP_A}/>
-                  </div>
-                </div>
-
-                <label style={S.label}>Soort groep</label>
-                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                  {EINDGROEP_TYPES.map(t => (
-                    <Pill key={t.id} small active={eg.type === t.id}
-                      onClick={() => updEind(ag.id, eg.id, "type", eg.type === t.id ? null : t.id)}>
-                      {t.icon} {t.label}
-                    </Pill>
-                  ))}
-                </div>
-                <div style={{ ...S.hint, marginTop:6, marginBottom:0 }}>
-                  Kook, laad, batterij en warmtepomp tellen als grote verbruiker in de belastingcheck.
-                </div>
-              </div>
-            );
-          })()}
         </div>
-      ))}
+
+        <label style={S.label}>Soort groep</label>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+          {EINDGROEP_TYPES.map(t => (
+            <Pill key={t.id} small active={eg.type === t.id} onClick={() => {
+              if (eg.type === t.id) { updEind(ag.id, eg.id, "type", null); return; }  // nogmaals tikken = deselecteren
+              updEind(ag.id, eg.id, "type", t.id);
+              if (!eg.naam || eg.naam === "Nieuwe eindgroep") updEind(ag.id, eg.id, "naam", t.label);
+            }}>{t.icon} {t.label}</Pill>
+          ))}
+        </div>
+        <div style={{ ...S.hint, marginBottom:10 }}>
+          Kook, laad, batterij en warmtepomp tellen als grote verbruiker in de belastingcheck.
+        </div>
+
+        {/* De RCD-test doe je 1× per cluster, op de zwaarst belaste eindgroep.
+            Zonder keuze pakt de app de hoogste ampèrewaarde. */}
+        {(ag.eindgroepen || []).length > 1 && (
+          <label style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px",
+                          background:K.card, borderRadius:8, cursor:"pointer", marginBottom:10 }}>
+            <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId === eg.id}
+              onClick={() => updAG(ag.id, "hoogstId", ag.hoogstId === eg.id ? null : eg.id)}
+              onChange={() => {}}/>
+            <span style={{ fontSize:11, color:hoogstId === eg.id ? K.yellow : K.muted }}>
+              Zwaarst belast in dit cluster{ag.hoogstId === eg.id ? " — tik voor terug naar automatisch" : ""}
+            </span>
+          </label>
+        )}
+
+        <button onClick={onEindWeg} style={{ ...S.btnGhost, marginBottom:0, color:K.muted }}>
+          Groep weghalen
+        </button>
+      </>) : (<>
+        <label style={S.label}>RCD type</label>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+          {[...RCD_TYPE, "geen"].map(t => (
+            <Pill key={t} small active={ag.rcdType === t} onClick={() => updAG(ag.id, "rcdType", t)}>
+              {t === "geen" ? "Geen RCD" : `type-${t}`}
+            </Pill>
+          ))}
+        </div>
+
+        {ag.rcdType !== "geen" && (<>
+          <label style={S.label}>RCD mA</label>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+            {RCD_MA.map(m => (
+              <Pill key={m} small active={ag.rcdMa === m} onClick={() => updAG(ag.id, "rcdMa", m)}>{m}mA</Pill>
+            ))}
+          </div>
+        </>)}
+
+        <label style={S.label}>Aantal fasen</label>
+        <div style={{ display:"flex", gap:8, marginBottom:10, flexWrap:"wrap" }}>
+          <Pill small active={ag.fase === "1"} onClick={() => updAG(ag.id, "fase", "1")}>⚡ 1-fase 230V</Pill>
+          <Pill small active={ag.fase === "3"} onClick={() => updAG(ag.id, "fase", "3")}>⚡⚡⚡ 3-fase 400V</Pill>
+        </div>
+
+        {/* LET OP het verschil tussen twee velden die allebei "fase" heten:
+            `ag.fase`  is het fasetype — het AANTAL fasen, "1" of "3".
+            `ag.L`     is de fase zelf — L1, L2 of L3, dezelfde waarden als in
+                       Kastscan.
+            Het eerste veld bestond al en is bewust niet hernoemd: het zit in
+            opgeslagen projecten op toestellen van installateurs. */}
+        {ag.fase === "3" ? (
+          <div style={{ ...S.hint, marginBottom:10 }}>
+            Een 3-fasegroep staat op alle drie de fasen — er valt hier niets te kiezen.
+          </div>
+        ) : (<>
+          <label style={S.label}>Fase<LeerIcoon onderwerp="fasekeuze"/></label>
+          <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+            {["L1","L2","L3"].map(l => (
+              <Pill key={l} small active={ag.L === l}
+                onClick={() => updAGvelden(ag.id, ag.L === l ? { L:"", Lbron:"" } : { L:l, Lbron:"hand" })}>{l}</Pill>
+            ))}
+            {ag.L && <Pill small active={false} onClick={() => updAGvelden(ag.id, { L:"", Lbron:"" })}>wissen</Pill>}
+          </div>
+          <div style={{ ...S.hint, marginBottom:10 }}>
+            {ag.L
+              ? (ag.Lbron === "meter"
+                  ? "Bevestigd met meter."
+                  : "Handmatig ingevuld. Weet je het niet zeker, laat het dan leeg — een gok is hier schadelijker dan een leeg veld.")
+              : "Optioneel. Nodig om te kunnen adviseren welke groep naar een andere fase kan; zonder dit veld kan de app alleen zeggen hóe zwaar een fase belast is."}
+          </div>
+        </>)}
+
+        <label style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 10px",
+                        background:K.card, borderRadius:8, cursor:"pointer", marginBottom:10 }}>
+          <input type="checkbox" checked={!!ag.veldmetingSelectie}
+            onChange={() => updAG(ag.id, "veldmetingSelectie", !ag.veldmetingSelectie)}/>
+          <span style={{ fontSize:11, color:K.muted }}>
+            Verste of buitengroep — meenemen in veldmeting stap 8
+          </span>
+        </label>
+
+        {weghalen ? (
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={onAGWeg} style={{ ...S.btnGhost, marginBottom:0, color:K.red,
+                                               borderColor:`${K.red}66`, flex:1 }}>
+              Ja, met alle {(ag.eindgroepen || []).length} groepen
+            </button>
+            <button onClick={() => setWeghalen(false)} style={{ ...S.btnGhost, marginBottom:0, flex:1 }}>
+              Nee
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setWeghalen(true)}
+            style={{ ...S.btnGhost, marginBottom:0, color:K.muted }}>
+            Aardlekgroep weghalen
+          </button>
+        )}
+      </>)}
     </div>
   );
 }
@@ -2013,13 +2139,18 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
     { id:2, naam:"Aardlek B", rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null,
       eindgroepen:[ nieuweEindgroep("Keuken") ] },
   ]);
-  const [editId,setEditId] = useState(null);
+  // Welke module op de rail openstaat: { agId, eindId|null }. Dit was `editId`
+  // (welke kaart uitgeklapt stond) — de kaartenlijst is vervallen, de kast wordt
+  // nu op de rail bewerkt.
+  const [kaart,setKaart] = useState(null);
 
   const sync = (u) => { setAG(u); onChange("aardlekgroepen",u); };
 
   const addAG = () => {
-    const u=[...aardlekgroepen,{ id:Date.now(), naam:`Aardlek ${String.fromCharCode(65+aardlekgroepen.length)}`, rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null, eindgroepen:[nieuweEindgroep()] }];
-    sync(u); setEditId(u[u.length-1].id);
+    const nieuw = { id:Date.now(), naam:`Aardlek ${String.fromCharCode(65+aardlekgroepen.length)}`, rcdType:"A", rcdMa:"30", fase:"1", L:"", Lbron:"", hoogstId:null, eindgroepen:[nieuweEindgroep()] };
+    sync([...aardlekgroepen,nieuw]);
+    // Meteen open: wie een aardlek bijzet moet er type, mA en fase in kwijt.
+    setKaart({ agId:nieuw.id, eindId:null });
   };
   const updAG = (id,k,v) => sync(aardlekgroepen.map(a=>a.id===id?{...a,[k]:v}:a));
   // Meerdere velden tegelijk. Twee keer updAG achter elkaar werkt NIET: beide
@@ -2028,7 +2159,13 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   const updAGvelden = (id,obj) => sync(aardlekgroepen.map(a=>a.id===id?{...a,...obj}:a));
   const remAG = (id) => sync(aardlekgroepen.filter(a=>a.id!==id));
 
-  const addEind = (agId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:[...a.eindgroepen,nieuweEindgroep()]}:a));
+  // De nieuwe groep klapt meteen open — dat is wat de "+" op de rail belooft:
+  // hier komt hij te hangen, en dit moet er nog in.
+  const addEind = (agId) => {
+    const eg = nieuweEindgroep();
+    sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:[...a.eindgroepen,eg]}:a));
+    setKaart({ agId, eindId:eg.id });
+  };
   const updEind = (agId,eindId,k,v) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.map(e=>e.id===eindId?{...e,[k]:v}:e)}:a));
   const remEind = (agId,eindId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.filter(e=>e.id!==eindId)}:a));
 
@@ -2076,160 +2213,33 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
             </div>
           </div>
         )}
-        {/* De kast als strook, in de vormtaal van Kastscan. Alleen als er iets te
-            tekenen valt: bij een nieuwe kast met twee lege standaardgroepen voegt
-            hij niets toe, en dan is een lijst korter en duidelijker. */}
-        {aardlekgroepen.some(a=>(a.eindgroepen||[]).length) && (
+        {/* DE KAST IS DE STROOK. Sinds 30-09-2026 staat de kast er precies zoals
+            in Kastscan (vraag Martin): één rail, de aardlekschakelaar als module
+            van twee, en de modulekaart eronder zodra je een tegel aantikt.
+
+            De kaartenlijst die hier stond is vervallen. Die gaf een tweede keer
+            wat de rail al toont, met een tweede bewerkpad op hetzelfde gegeven —
+            en dat is hoe twee weergaven uit elkaar gaan lopen. Alles wat op die
+            kaarten stond zit nu in de modulekaart: naam, RCD-type, mA, aantal
+            fasen, fase, de zwaarst belaste groep, de veldmetingselectie en
+            weghalen. */}
+        {aardlekgroepen.length === 0 ? (
+          <div style={{...S.card, textAlign:"center", padding:24}}>
+            <p style={{...S.hint, marginBottom:0}}>
+              Nog geen aardlekgroepen. Tik rechtsboven op <strong style={{color:K.yellow}}>+ Aardlek</strong>,
+              of scan de sticker van de kast — dan staat de bestaande kast er meteen.
+            </p>
+          </div>
+        ) : (
           <Railstrook
             aardlekgroepen={aardlekgroepen}
-            onGroepErbij={(rij)=>addEind(rij.id)}
-            updAG={updAG} updAGvelden={updAGvelden} updEind={updEind} remEind={remEind}
+            kaart={kaart} setKaart={setKaart}
+            hoogstVan={(agId)=>{ const a=aardlekgroepen.find(x=>x.id===agId); return a ? (a.hoogstId || autoHoogst(a)) : null; }}
+            onGroepErbij={addEind}
+            updAG={updAG} updAGvelden={updAGvelden} updEind={updEind}
+            remEind={remEind} remAG={remAG}
           />
         )}
-
-        {aardlekgroepen.map((ag,i)=>{
-          const hoogstId = ag.hoogstId || autoHoogst(ag);
-          const vanSticker = ag.bron === "paspoort";
-          return (
-          <div key={ag.id} style={S.card}>
-            {editId===ag.id ? (
-              <div>
-                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-                  <input style={{...S.input,fontWeight:700,flex:1}} value={ag.naam} autoFocus onChange={e=>updAG(ag.id,"naam",e.target.value)}/>
-                  <button onClick={()=>setEditId(null)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:K.yellow,color:"#000",fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>Klaar</button>
-                </div>
-
-                <label style={S.label}>RCD type</label>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                  {[...RCD_TYPE,"geen"].map(t=>(
-                    <Pill key={t} small active={ag.rcdType===t} onClick={()=>updAG(ag.id,"rcdType",t)}>{t==="geen"?"Geen RCD":`type-${t}`}</Pill>
-                  ))}
-                </div>
-
-                {ag.rcdType!=="geen" && (
-                  <>
-                    <label style={S.label}>RCD mA</label>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                      {RCD_MA.map(m=><Pill key={m} small active={ag.rcdMa===m} onClick={()=>updAG(ag.id,"rcdMa",m)}>{m}mA</Pill>)}
-                    </div>
-                  </>
-                )}
-
-                <label style={S.label}>Aantal fasen</label>
-                <div style={{display:"flex",gap:8,marginBottom:14}}>
-                  <Pill small active={ag.fase==="1"} onClick={()=>updAG(ag.id,"fase","1")}>⚡ 1-fase 230V</Pill>
-                  <Pill small active={ag.fase==="3"} onClick={()=>updAG(ag.id,"fase","3")}>⚡⚡⚡ 3-fase 400V</Pill>
-                </div>
-
-                {/* LET OP het verschil tussen twee velden die allebei "fase" heten:
-                    `ag.fase`  is het fasetype — het AANTAL fasen, "1" of "3".
-                    `ag.L`     is de fase zelf — L1, L2 of L3, dezelfde waarden
-                               als de Kastscan gebruikt.
-                    Het eerste veld bestond al en is bewust niet hernoemd: het
-                    zit in opgeslagen projecten op toestellen van installateurs.
-                    Zonder `L` weet de app wél hoe zwaar een fase belast is, maar
-                    niet wélke aardlek daarop zit — en dat is precies wat je nodig
-                    hebt om te kunnen adviseren wat er verhangen moet worden. */}
-                {ag.fase === "3" ? (
-                  <div style={{...S.hint, marginBottom:14}}>
-                    Een 3-fasegroep staat op alle drie de fasen — er valt hier niets te kiezen.
-                  </div>
-                ) : (
-                  <>
-                    <label style={S.label}>Fase<LeerIcoon onderwerp="fasekeuze"/></label>
-                    <div style={{display:"flex",gap:8,marginBottom:6,flexWrap:"wrap"}}>
-                      {["L1","L2","L3"].map(l=>(
-                        <Pill key={l} small active={ag.L===l}
-                          onClick={()=>updAGvelden(ag.id, ag.L===l ? {L:"",Lbron:""} : {L:l,Lbron:"hand"})}>{l}</Pill>
-                      ))}
-                      {ag.L && <Pill small active={false} onClick={()=>updAGvelden(ag.id,{L:"",Lbron:""})}>wissen</Pill>}
-                    </div>
-                    <div style={{...S.hint, marginBottom:14}}>
-                      {ag.L
-                        ? (ag.Lbron === "meter"
-                            ? "Bevestigd met meter."
-                            : "Handmatig ingevuld. Weet je het niet zeker, laat het dan leeg — een gok is hier schadelijker dan een leeg veld.")
-                        : "Optioneel. Nodig om te kunnen adviseren welke groep naar een andere fase kan; zonder dit veld kan de app alleen zeggen hóe zwaar een fase belast is."}
-                    </div>
-                  </>
-                )}
-
-                <div style={{height:1,background:K.border,margin:"4px 0 12px"}}/>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <label style={{...S.label,marginBottom:0}}>Eindgroepen ({ag.eindgroepen.length})</label>
-                  <button onClick={()=>addEind(ag.id)} style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:11,cursor:"pointer"}}>+ Eindgroep</button>
-                </div>
-                {ag.eindgroepen.map(eg=>(
-                  <div key={eg.id} style={{background:K.surface,borderRadius:10,padding:10,marginBottom:8}}>
-                    <div style={{display:"flex",gap:6,marginBottom:8}}>
-                      <input style={{...S.input,fontSize:13,flex:1}} value={eg.naam} onChange={e=>updEind(ag.id,eg.id,"naam",e.target.value)}/>
-                      <button onClick={()=>remEind(ag.id,eg.id)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
-                    </div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                      {EINDGROEP_TYPES.map(t=>(
-                        <Pill key={t.id} small active={eg.type===t.id} onClick={()=>{
-                          if (eg.type===t.id) { updEind(ag.id,eg.id,"type",null); return; }  // nogmaals tikken = deselecteren
-                          updEind(ag.id,eg.id,"type",t.id);
-                          if (eg.naam===""||eg.naam==="Nieuwe eindgroep") updEind(ag.id,eg.id,"naam",t.label);
-                        }}>{t.icon} {t.label}</Pill>
-                      ))}
-                    </div>
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      <MiniSelect value={eg.kar} onChange={v=>updEind(ag.id,eg.id,"kar",v)} options={KAR_TYPE} width={56}/>
-                      <MiniSelect value={eg.ampere} onChange={v=>updEind(ag.id,eg.id,"ampere",v)} options={GROEP_A} width={72}/>
-                      {ag.eindgroepen.length>1 && (
-                        <label style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:hoogstId===eg.id?K.yellow:K.muted,cursor:"pointer",marginLeft:"auto"}}>
-                          <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId===eg.id}
-                            onClick={()=> ag.hoogstId===eg.id ? updAG(ag.id,"hoogstId",null) : updAG(ag.id,"hoogstId",eg.id)}
-                            onChange={()=>{}}/>
-                          zwaarst belast{ag.hoogstId===eg.id?" (tik = terug naar automatisch)":" in dit cluster"}
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <label style={{display:"flex",alignItems:"center",gap:8,marginTop:10,padding:"8px 10px",background:K.surface,borderRadius:8,cursor:"pointer"}}>
-                  <input type="checkbox" checked={!!ag.veldmetingSelectie} onChange={()=>updAG(ag.id,"veldmetingSelectie",!ag.veldmetingSelectie)}/>
-                  <span style={{fontSize:11,color:K.muted}}>Verste of buitengroep — meenemen in veldmeting stap 8</span>
-                </label>
-              </div>
-            ) : (
-              <div style={{cursor:"pointer"}} onClick={()=>setEditId(ag.id)}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:ag.eindgroepen.length?10:0}}>
-                  <div style={{width:36,height:36,borderRadius:8,background:K.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
-                    {ag.rcdType==="geen"?"⭕":"🛡️"}
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                      {ag.naam}
-                      {/* Waar dit vandaan komt. Niet om te pronken met de scan,
-                          maar omdat de installateur moet weten wat hij nog moet
-                          nalopen: een groep die hij zelf intikte is bevestigd,
-                          een groep van de sticker is dat niet. */}
-                      {vanSticker && (
-                        <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,
-                                      background:K.yellowDim,color:K.yellow,letterSpacing:"0.02em"}}>uit paspoort</span>
-                      )}
-                    </div>
-                    <div style={{fontSize:11,color:K.muted}}>
-                      {ag.rcdType==="geen"?"Geen RCD":`RCD ${ag.rcdMa}mA type-${ag.rcdType}`} · {ag.fase==="3"?"3-fase 400V":(ag.L?`1-fase ${ag.L}`:"1-fase 230V")} · {ag.eindgroepen.length} eindgroep{ag.eindgroepen.length!==1?"en":""}
-                    </div>
-                  </div>
-                  <button onClick={e=>{e.stopPropagation();remAG(ag.id);}} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
-                </div>
-                {ag.eindgroepen.length>0 && (
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6,paddingLeft:48}}>
-                    {ag.eindgroepen.map(eg=>(
-                      <span key={eg.id} style={{fontSize:10,padding:"3px 8px",borderRadius:20,background:hoogstId===eg.id?K.yellowDim:K.surface,color:hoogstId===eg.id?K.yellow:K.muted,fontWeight:hoogstId===eg.id?700:400}}>
-                        {hoogstId===eg.id?"⭐ ":""}{eg.naam} ({eg.kar}{eg.ampere?.replace("A","")})
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )})}
 
         {/* Opties voor in de bijlage — automatisch uit de aardlekgroep-data */}
         {aardlekgroepen.length > 0 && (
