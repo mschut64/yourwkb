@@ -361,7 +361,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-30-A";
+const APP_VERSIE = "2026-09-30-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1808,7 +1808,15 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
 // staat hier. Eén rij per aardlekgroep in plaats van één lange rail: op 375 px
 // zou een rail van twintig modules horizontaal geschoven moeten worden, en hier
 // wordt per aardlekgroep gemeten.
-function Railstrook({ aardlekgroepen, onGroepErbij, onKies }) {
+function Railstrook({ aardlekgroepen, onGroepErbij, updAG, updAGvelden, updEind, remEind }) {
+  // Welke tegel openstaat. Eén tegelijk: op een telefoon is twee open kaarten
+  // onder elkaar al meer dan er past, en het gaat om één ding tegelijk nakijken.
+  const [open, setOpen] = useState(null);   // { soort:"rcd"|"eind", agId, eindId }
+  const isOpen = (soort, agId, eindId) =>
+    open && open.soort === soort && open.agId === agId && open.eindId === eindId;
+  const wissel = (soort, agId, eindId) =>
+    setOpen(isOpen(soort, agId, eindId) ? null : { soort, agId, eindId });
+
   const rijen = strookUitAardlekgroepen(aardlekgroepen);
   if (!rijen.length) return null;
 
@@ -1842,24 +1850,28 @@ function Railstrook({ aardlekgroepen, onGroepErbij, onKies }) {
             {/* De aardlekschakelaar zelf staat ook op de rail — zonder hem klopt
                 het beeld van hoe vol de kast is niet. */}
             {rij.rcd !== "geen RCD" && (
-              <div style={{ flex:`0 0 ${MODULE_PX*2-2}px`, minHeight:74, borderRadius:6,
-                            background:K.surface, border:`1px solid ${K.borderStrong}`,
-                            display:"flex", flexDirection:"column", alignItems:"center",
-                            justifyContent:"center", gap:2, fontSize:9, color:K.muted }}>
+              <button onClick={() => wissel("rcd", rij.id, null)}
+                aria-label={`${rij.naam} instellen`}
+                style={{ flex:`0 0 ${MODULE_PX*2-2}px`, minHeight:74, borderRadius:6,
+                         background:K.surface, cursor:"pointer", padding:0, fontFamily:"inherit",
+                         border:`1px solid ${isOpen("rcd", rij.id, null) ? K.yellow : K.borderStrong}`,
+                         display:"flex", flexDirection:"column", alignItems:"center",
+                         justifyContent:"center", gap:2, fontSize:9, color:K.muted }}>
                 <span style={{ fontSize:13 }}>🛡️</span>
                 <span style={{ fontWeight:700 }}>{rij.code}</span>
-              </div>
+              </button>
             )}
 
             {rij.tegels.map((t) => (
-              <button key={t.id} onClick={() => onKies && onKies(t.id)}
+              <button key={t.id} onClick={() => wissel("eind", rij.id, t.id)}
                 title={t.naam}
                 style={{ flex:`0 0 ${Math.max(t.breedtePx, TEGEL_MIN_PX)-2}px`, minHeight:74,
                          borderRadius:6, cursor:"pointer", padding:"4px 2px",
                          background:K.card, color:K.text, fontFamily:"inherit",
                          // Een onvolledige groep krijgt een stippellijn, geen rode
                          // rand: er is niets fout, er ontbreekt iets.
-                         border:`1px ${t.onvolledig ? "dashed" : "solid"} ${t.onvolledig ? K.borderStrong : K.border}`,
+                         border:`1px ${t.onvolledig ? "dashed" : "solid"} ${
+                           isOpen("eind", rij.id, t.id) ? K.yellow : (t.onvolledig ? K.borderStrong : K.border)}`,
                          display:"flex", flexDirection:"column", alignItems:"center",
                          justifyContent:"space-between", overflow:"hidden" }}>
                 <span style={{ fontSize:9, fontWeight:700, color:t.onvolledig ? K.yellow : K.muted,
@@ -1882,6 +1894,109 @@ function Railstrook({ aardlekgroepen, onGroepErbij, onKies }) {
                        color:K.yellow, fontFamily:"inherit", fontSize:16, fontWeight:700,
                        display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>+</button>
           </div>
+
+          {/* DE MODULEKAART. Tik op een tegel en de velden staan eronder — zoals
+              in Kastscan. Je hoeft dus niet naar de kaart verderop te scrollen om
+              een mA of een karakteristiek te zetten, en je ziet meteen welke
+              module je te pakken hebt, want die staat aangelicht.
+
+              Bewust dezelfde updatefuncties als de kaarten eronder (updAG,
+              updEind): twee bewerkpaden op één gegeven is hoe twee weergaven uit
+              elkaar gaan lopen. */}
+          {open && open.agId === rij.id && (() => {
+            const ag = aardlekgroepen.find(a => a.id === rij.id);
+            if (!ag) return null;
+
+            if (open.soort === "rcd") return (
+              <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:2 }}>
+                <input style={{ ...S.input, fontWeight:700, marginBottom:10 }} value={ag.naam}
+                  onChange={e => updAG(ag.id, "naam", e.target.value)}/>
+
+                <label style={S.label}>RCD type</label>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                  {[...RCD_TYPE, "geen"].map(t => (
+                    <Pill key={t} small active={ag.rcdType === t}
+                      onClick={() => updAG(ag.id, "rcdType", t)}>{t === "geen" ? "Geen RCD" : `type-${t}`}</Pill>
+                  ))}
+                </div>
+
+                {ag.rcdType !== "geen" && (<>
+                  <label style={S.label}>RCD mA</label>
+                  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                    {RCD_MA.map(m => (
+                      <Pill key={m} small active={ag.rcdMa === m}
+                        onClick={() => updAG(ag.id, "rcdMa", m)}>{m}mA</Pill>
+                    ))}
+                  </div>
+                </>)}
+
+                <label style={S.label}>Aantal fasen</label>
+                <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+                  <Pill small active={ag.fase === "1"} onClick={() => updAG(ag.id, "fase", "1")}>⚡ 1-fase 230V</Pill>
+                  <Pill small active={ag.fase === "3"} onClick={() => updAG(ag.id, "fase", "3")}>⚡⚡⚡ 3-fase 400V</Pill>
+                </div>
+
+                {/* Welke fase — alleen bij één fase, want een driefasegroep hangt
+                    per definitie aan alle drie. Leeg laten mag: een gegokte fase
+                    is schadelijker dan een lege, want het faseadvies bouwt erop
+                    voort. */}
+                {ag.fase !== "3" && (<>
+                  <label style={S.label}>Fase</label>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+                    {["L1","L2","L3"].map(l => (
+                      <Pill key={l} small active={ag.L === l}
+                        onClick={() => updAGvelden(ag.id, ag.L === l ? { L:"", Lbron:"" } : { L:l, Lbron:"hand" })}>{l}</Pill>
+                    ))}
+                    {ag.L && <Pill small active={false} onClick={() => updAGvelden(ag.id, { L:"", Lbron:"" })}>wissen</Pill>}
+                  </div>
+                  <div style={{ ...S.hint, marginBottom:0 }}>
+                    {ag.L ? "Weet je het niet zeker, laat het dan leeg." : "Optioneel — nodig voor het faseadvies."}
+                  </div>
+                </>)}
+              </div>
+            );
+
+            const eg = (ag.eindgroepen || []).find(e => e.id === open.eindId);
+            if (!eg) return null;
+            return (
+              <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:2 }}>
+                <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                  <input style={{ ...S.input, fontWeight:700, flex:1 }} value={eg.naam}
+                    onChange={e => updEind(ag.id, eg.id, "naam", e.target.value)}/>
+                  <button onClick={() => { remEind(ag.id, eg.id); setOpen(null); }}
+                    aria-label="Groep verwijderen"
+                    style={{ background:"transparent", border:"none", color:K.muted,
+                             cursor:"pointer", fontSize:18, padding:"0 6px" }}>×</button>
+                </div>
+
+                <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:10 }}>
+                  <div>
+                    <label style={S.label}>Karakteristiek</label>
+                    <MiniSelect value={eg.kar} width={84}
+                      onChange={v => updEind(ag.id, eg.id, "kar", v)} options={KAR_TYPE}/>
+                  </div>
+                  <div>
+                    <label style={S.label}>Nominale stroom</label>
+                    <MiniSelect value={eg.ampere} width={84}
+                      onChange={v => updEind(ag.id, eg.id, "ampere", v)} options={GROEP_A}/>
+                  </div>
+                </div>
+
+                <label style={S.label}>Soort groep</label>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {EINDGROEP_TYPES.map(t => (
+                    <Pill key={t.id} small active={eg.type === t.id}
+                      onClick={() => updEind(ag.id, eg.id, "type", eg.type === t.id ? null : t.id)}>
+                      {t.icon} {t.label}
+                    </Pill>
+                  ))}
+                </div>
+                <div style={{ ...S.hint, marginTop:6, marginBottom:0 }}>
+                  Kook, laad, batterij en warmtepomp tellen als grote verbruiker in de belastingcheck.
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ))}
     </div>
@@ -1921,11 +2036,6 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   // aanraakt blijft `bron` staan — dat is geen fout: hij bevestigt dan wat er al
   // stond, en de herkomst van het GEGEVEN verandert daar niet door.
   const uitPaspoort = aardlekgroepen.filter(a=>a.bron==="paspoort").length;
-
-  // De strook krijgt rijen in dezelfde volgorde als de aardlekgroepen; de naam is
-  // het aanknopingspunt terug. Niet de code: die wordt per positie in de lijst
-  // bepaald en verschuift dus zodra er een groep tussenuit gaat.
-  const rijen_index = (rij) => aardlekgroepen.findIndex(a=>a.naam===rij.naam);
 
   // Automatisch de hoogst belaste eindgroep bepalen (vuistregel: hoogste ampèrewaarde)
   const autoHoogst = (ag) => {
@@ -1972,14 +2082,8 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
         {aardlekgroepen.some(a=>(a.eindgroepen||[]).length) && (
           <Railstrook
             aardlekgroepen={aardlekgroepen}
-            onGroepErbij={(rij)=>{
-              const ag = aardlekgroepen[rijen_index(rij)];
-              if (ag) { addEind(ag.id); setEditId(ag.id); }
-            }}
-            onKies={(eindId)=>{
-              const ag = aardlekgroepen.find(a=>(a.eindgroepen||[]).some(e=>e.id===eindId));
-              if (ag) setEditId(ag.id);
-            }}
+            onGroepErbij={(rij)=>addEind(rij.id)}
+            updAG={updAG} updAGvelden={updAGvelden} updEind={updEind} remEind={remEind}
           />
         )}
 
