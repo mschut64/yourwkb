@@ -26,12 +26,13 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
 
 ```
                     ┌────────────────────────────────────────────────┐
-                    │       yourwkb-core  (eigen repo, tag v0.2.0)   │
+                    │       yourwkb-core  (eigen repo, tag v0.3.0)   │
                     │  DE MOTOR — belasting, fasen, én het kastbeeld  │
                     │  vermogen.js · fasen.js · belasting.js         │
                     │  fasebalans.js — werkt op de paspoort-grp[]    │
                     │  toestellen · normaliseren · indeling ·        │
                     │  verklaring · leren · leerlus                  │
+                    │  prompt.js — apart pad, server-side            │
                     └──────────┬───────────────────────┬─────────────┘
                     ┌──────────┴───────────────────────┴─────────────┐
                     │     meterkastpaspoort  (eigen repo, tag)       │
@@ -76,8 +77,8 @@ los van zijn gebruikers en is de architectuur stuk.
 |---|---|---|---|
 | **`mschut64/yourwkb-core`** | **De motor**: belasting per fase, belastingcheck, fasebalans, faseadvies, en sinds v0.2.0 het **kastbeeld** (een foto lezen, de blokindeling, de leerlus). Publiek leesbaar, alle rechten voorbehouden. | niet gedeployed — alleen dependency | niets |
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, controle, specificatie, referentielezer, QR-redirect, de index van sleutels. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
-| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.2.0`, meterkastpaspoort `v0.3.2` |
-| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | yourwkb-core `v0.2.0`, meterkastpaspoort `v0.3.2` |
+| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.3.0`, meterkastpaspoort `v0.3.2` |
+| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | yourwkb-core `v0.3.0`, meterkastpaspoort `v0.3.2` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
 `/p` en `/p/:rest*` → `yourwkb.nl/app` waar **elke QR-sticker in het veld** van afhangt.
@@ -369,8 +370,8 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 | | Versie | Tests |
 |---|---|---|
 | YourWkb | **`v2026-09-20-A`**, live | 264 |
-| yourwkb-core | **`v0.2.0`** — de motor, onder beide apps | 247 |
-| Kastscan | **`v2026-09-30-B`**, live | 1235 |
+| yourwkb-core | **`v0.3.0`** — de motor, onder beide apps | 265 |
+| Kastscan | **`v2026-09-30-C`**, live | 1238 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
 Sinds de vorige stand (12-09):
@@ -388,6 +389,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
+| 30-09 | **K2 — de prompt naar de motor (`v0.3.0`).** Instructie en schema uit Kastscans route (623 → 314 regels) naar `prompt.js`, apart te importeren zodat 22 kB nooit in een browserbundel belandt. Het JSON-voorbeeld sprak het afgedwongen schema op drie punten tegen; gecorrigeerd, `PROMPTVERSIE` mee omhoog, 18 tests die het voorbeeld naast het schema leggen. ⚠️ Vraagt een verse referentierun (vrijgaveregel). **Regressie meegemaakt:** `sleutelProbleem()` werd meegeknipt en `/api/kastscan` gaf live een lege 500; hersteld, met `tests/test-route.js` als vangnet. |
 | 30-09 | **K1 — het kastbeeld naar de motor (`v0.2.0`).** Het lezen van een kastfoto, de blokindeling, de groepenverklaring, het correctielog en heel `leerlus.js`: 34 exports uit Kastscans `model.js` (2684 → 1989 regels) plus `leerlus.js` (452 → 22). `correctieStatistiek` en `correctieStatistiekVoorDelen` waren bijna gelijk en zijn er één, met `ZEKERHEIDSDREMPEL` in plaats van een tweede hardgecodeerde 0,75. Geen gedragswijziging. Ook gefixt: de bevestigingslus las `zekerheid` als object terwijl het een getal is, dus legde "Bevestigen en verder" niets vast — de app leerde wel wat hij fout deed, niet wat hij goed deed. Nu `zekerheidVan()` met tests. **Featurespec voor het hele spoor: `docs/claude_kastbeeld-featurespec.md`.** |
 | 30-09 | **Kastscan op de motor.** `faseBalans`/`belastingcheck`/`faseCapaciteitKw` zijn schillen; `grpRegels()` vertaalt het railmodel naar de paspoortvorm en `mkpBouw` gebruikt diezelfde vertaling. **Drie gedragswijzigingen:** teruglevering positief (PV van −3,0 naar 3,0, en de omvormer komt nu mét `kw` in het paspoort), de thuisbatterij als twee regels, en op een eenfasige aansluiting tellen groepen zonder aangetikte fase gewoon mee. Kasten die groen waren kunnen rood worden. 1275 → 1289 tests. |
 | 30-09 | **De motor `yourwkb-core` v0.1.0.** Belasting, fasen en de normkeuzes eromheen uit YourWkbs `model.js`/`fasebalans.js` naar een eigen repo, in zes modules met de namen van Kastscan. Datavorm = de paspoort-`grp[]`. Nieuw: `faseCapaciteitKw`. YourWkb draait erop, geen gedragswijziging. **Kastscan nog niet** — daar is het er wél een. |
@@ -508,8 +510,8 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
 ## 11 · Waar je verder kunt
 
 **⓪ Het kastbeeld in YourWkb** — `docs/claude_kastbeeld-featurespec.md`, zes releases.
-**K1 is af** (30-09): het lezen van een kastfoto en de leerlus staan in de motor. Volgende:
-**K2** de prompt als data, **K3** `aardlekgroepenUitPosities`, **K4** een gescand paspoort
+**K1 en K2 zijn af** (30-09): het lezen van een kastfoto, de leerlus én de prompt staan in de motor.
+Volgende: **K3** `aardlekgroepenUitPosities`, **K4** een gescand paspoort
 met `mat[]` vult stap 6 (grootste tijdwinst, geen model nodig), **K5** de fotostap zelf,
 **K6** de leerlus aan. Vóór K5 moeten er drie dingen beslist zijn: de kosten per scan, de
 privacytekst, en of YourWkb een eigen route krijgt (advies: ja).
