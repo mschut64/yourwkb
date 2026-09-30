@@ -156,7 +156,7 @@ export function mkpBouw(data, discipline) {
     p.ha = data.mkpImport.ha;
   }
   if (m.kamMm2 || m.kamA) { p.kam = {}; if (m.kamMm2) p.kam.mm2 = toNum(m.kamMm2); if (m.kamA) p.kam.a = toNum(m.kamA); }
-  const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov" };
+  const EIND_NAAR_MKP_B = { kook:"kook", pv:"pv", laad:"lp", batterij:"bat", kracht:"ov", wp:"wp" };
   const kwByIdB = m.kwById || {};
   let grp = (data.aardlekgroepen||[]).flatMap(ag =>
     (ag.eindgroepen||[]).flatMap(e => {

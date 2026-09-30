@@ -320,7 +320,7 @@ zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die n�
 | **K1** ✅ | **Motor v0.2** *(30-09)*: de pure fotologica, het correctielog en de leerlus naar `yourwkb-core`. Kastscan importeert ze; gedrag ongewijzigd. Twee definities van 0,75 worden er één, `correctieStatistiek` en `correctieStatistiekVoorDelen` worden er één. | niets | laag — mechanisch, met ~347 bestaande asserties eroverheen |
 | **K2** ✅ | **Motor v0.3** *(30-09)*: de prompt als data (`prompt.js`, apart pad — 22 kB hoort niet in een browserbundel), `PROMPTVERSIE` mee. Kastscans route ging van 623 naar 314 regels. De drie discrepanties tussen het JSON-voorbeeld en het afgedwongen schema zijn eruit, met 18 tests die ze vangen. ⚠️ **Promptwijziging: vraagt een verse run over de referentieset** (vrijgaveregel). | niets zichtbaar; het model krijgt een voorbeeld dat de API niet meer zou afkeuren | laag, mits de referentierun gedaan wordt |
 | **K3** ✅ | **`aardlekgroepenUitPosities`** *(30-09)*, motor v0.4.0. `mkpType` verhuisde mee. 36 tests op de vertaling, 15 in YourWkb op de doorgang naar het paspoort — gecontroleerd dat die een verkeerde fasemapping ook echt afkeurt. | niets | — |
-| **K4** | **Paspoort vult stap 6** (deel 3). `mat[]` lezen, de kast tonen als **railstrook in de vormtaal van Kastscan** (§5b), uitbreidingsmodus met "+ Groep toevoegen" op de lege module. Nog geen foto. | **veel** — wie een sticker scant hoeft de kast niet meer in te tikken, en ziet hem zoals in Kastscan | midden |
+| **K4** 🔄 | **Paspoort vult stap 6** (deel 3) *(30-09)*. `mat[]` lezen en de kast voorvullen: **gedaan**, met de herkomst per groep in beeld. De **railstrook** (§5b) en een expliciete "+ Groep toevoegen" staan nog open. | **veel** — wie een sticker scant heeft de kast al staan | midden |
 | **K5** | **Fotostap in YourWkb** (deel 2). Eigen route `/api/kastbeeld`, de fotoafhandeling van Kastscan, de nieuwe stap vóór Groepen, en de vijftien stapnummers in teksten mee. | **veel** | hoog — nieuwe route, kosten per scan, AVG-tekst erbij |
 | **K6** | **De leerlus aan** in YourWkb: catalogus onder een eigen sleutel, `vulAanUitCatalogus` na normaliseren, `catalogusLeer` bij bevestigen, `maakCorrectie` bij elke wijziging. | niets direct; de app wordt beter | laag, maar pas zinvol bij volume |
 
@@ -352,6 +352,11 @@ is de vangnet-weg voor K5: werkt de foto niet, dan is er altijd nog het paspoort
 
 Los van het bouwwerk hierboven, en los te repareren:
 
+0. ⚠️ **Nog open, uit K4:** een smeltveiligheid schrijft Kastscan als `s: "ov"`, dezelfde code als "overig"
+   (`MKP_SOORT`). Terug is die dus niet te onderscheiden, en een stop uit een paspoort komt binnen als
+   "overig" in plaats van als smeltveiligheid. De karakteristiek redt het wel — `parseBeveiliging` leest
+   sinds v0.5.1 ook "gG20" — maar de soort niet. Een eigen code (`als` bestaat al voor de
+   aardlekschakelaar; `sme` zou passen) is een **spec-wijziging** en vraagt Martins besluit.
 1. ✅ **Opgelost 30-09.** ~~De bevestigingslus in Kastscan schrijft niets meer weg.~~ `KastscanApp.jsx:1293` leest
    `p.zekerheid` als object (`(p.zekerheid || {})[veld]`), maar sinds promptversie B is dat een
    **getal**. Elk veld valt daardoor op `undefined` en wordt overgeslagen: bij "Bevestigen en

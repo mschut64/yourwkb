@@ -326,6 +326,8 @@ import {
   toNum, GROTE_VERBRUIKERS_MKP, GELIJKTIJDIGHEID, GROOT_STANDAARD_KW, FASE_KLEUR,
   isGroteVerbruikerMkp, groepVermogenKw, FASE_RESERVE_KW, periodeLabel,
   basisbelastingKw, belastingcheck, faseBalans, faseAdvies,
+  // Het kastbeeld: een gescand paspoort terug naar groepen (K4).
+  positiesUitPaspoort, aardlekgroepenUitPosities, paspoortDraagtKast,
 } from "yourwkb-core";
 // Wat alleen deze app doet: de gG-kromme en de cross-checks over de meetwaarden.
 import { GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks } from "./wkb/model";
@@ -423,8 +425,15 @@ const ALS_FABS  = ["Hager","Schneider","ABB","Eaton","Siemens","Doepke","Anders"
 const ALS_TYPES = ["40A/2p/30mA type-A","40A/4p/30mA type-A","63A/2p/30mA type-A","63A/4p/30mA type-A","25A/2p/10mA type-A (bad)","40A/2p/30mA type-B","63A/4p/30mA type-B"];
 const RCD_MA = ["10","30","100","300","500"];
 const RCD_TYPE = ["A","B","AC","F"];
-const KAR_TYPE = ["B","C","D"];
-const GROEP_A  = ["6A","10A","16A","20A","25A","32A"];
+// gG hoort erbij sinds een kast uit een foto of paspoort kan komen: een
+// smeltveiligheid heeft geen B/C/D maar een trage gG-karakteristiek, en bij gG
+// komt Z_max uit een tijd-stroomkromme in plaats van uit factor x In. Stond die
+// keuze er niet, dan toonde het scherm een leeg vakje bij elke stop.
+const KAR_TYPE = ["B","C","D","gG"];
+// Tot 32 A volstond zolang een installateur elke groep zelf intikte. Een foto of
+// paspoort kan er 40 of 63 lezen — een kookgroep of een laadpaal op een zware
+// voeding — en dan hoort het scherm te tonen wat er staat in plaats van niets.
+const GROEP_A  = ["6A","10A","16A","20A","25A","32A","40A","50A","63A"];
 
 
 // ─── MKP: OPEN METERKASTPASPOORT (spec v0.1 — meterkastpaspoort.nl) ──────────
@@ -444,12 +453,24 @@ const SCOPE_VOETNOOT = "De uitgevoerde werkzaamheden zijn getoetst aan de actuel
 // Voorgedefinieerde eindgroep-categorieën — snelkeuze die de naam automatisch invult.
 // Laadgroep/thuisbatterij ook relevant wanneer die via de hoofdgroepenkast gevoed worden
 // i.p.v. als losse discipline.
+// De typen die het paspoort kent als aparte groep. Elk van deze vier — kook,
+// laad, batterij, warmtepomp — is een GROTE VERBRUIKER en krijgt daarmee de
+// gelijktijdigheidsfactor 0,6 en een terugvalvermogen als er geen kW is
+// ingevuld; pv en kracht niet.
+//
+// De warmtepomp is er op 30-09-2026 bijgekomen (besluit Martin). Hij bestond al
+// wél in het meterkastpaspoort (`wp`) maar niet als eindgroep, dus een
+// warmtepompgroep in een groepenkast belandde als `alg` in de QR: zonder factor
+// en zonder terugval. Bestaande projecten veranderen niet — daar staat op geen
+// enkele groep `wp` — maar wie hem voortaan aantikt, ziet zijn kast zwaarder
+// uitvallen. Dat is de bedoeling.
 const EINDGROEP_TYPES = [
   { id:"kook",   icon:"🍳", label:"Kookgroep" },
   { id:"pv",     icon:"☀️", label:"PV-groep" },
   { id:"kracht", icon:"⚡", label:"Krachtgroep" },
   { id:"laad",   icon:"🔌", label:"Laadgroep (auto)" },
   { id:"batterij", icon:"🔋", label:"Thuisbatterij" },
+  { id:"wp",     icon:"♨️", label:"Warmtepomp" },
 ];
 
 // Foto's vóór de werkzaamheden (bestaande situatie)
@@ -1799,6 +1820,11 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   const updEind = (agId,eindId,k,v) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.map(e=>e.id===eindId?{...e,[k]:v}:e)}:a));
   const remEind = (agId,eindId) => sync(aardlekgroepen.map(a=>a.id===agId?{...a,eindgroepen:a.eindgroepen.filter(e=>e.id!==eindId)}:a));
 
+  // Hoeveel groepen uit een gescand paspoort komen. Zodra de installateur er een
+  // aanraakt blijft `bron` staan — dat is geen fout: hij bevestigt dan wat er al
+  // stond, en de herkomst van het GEGEVEN verandert daar niet door.
+  const uitPaspoort = aardlekgroepen.filter(a=>a.bron==="paspoort").length;
+
   // Automatisch de hoogst belaste eindgroep bepalen (vuistregel: hoogste ampèrewaarde)
   const autoHoogst = (ag) => {
     if (!ag.eindgroepen.length) return null;
@@ -1816,8 +1842,31 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
         <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
           Eén aardlekschakelaar beschermt vaak meerdere eindgroepen. De RCD-test (ΔT/ΔI) doe je 1× per aardlekgroep — op de <strong>zwaarst belaste eindgroep in dat cluster</strong>. Dit is een ander begrip dan de "hoogst afgaande groep van de installatie" die je straks in stap 7 gebruikt voor de Z-toetsing (dat gaat over de hele installatie, niet over één cluster). <LeerIcoon onderwerp="aardlekgroep"/>
         </div>
+
+        {/* DE KAST STOND AL IN HET PASPOORT.
+            Wie een sticker scant hoeft de bestaande kast niet opnieuw in te
+            tikken: de materiaallijst gaf per toestel het merk, de typeaanduiding
+            en de plaats op de rail, en daaruit komen de karakteristiek en de
+            nominale stroom. Wat er dan nog bij komt is de UITBREIDING.
+
+            Het blijft een voorstel, en dat staat er ook: de kast kan sinds de
+            vorige klus veranderd zijn, en het RCD-type staat niet in het
+            paspoort. Daarom "controleer" en niet "overgenomen". */}
+        {uitPaspoort > 0 && (
+          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+              📥 {uitPaspoort} groep{uitPaspoort===1?"":"en"} uit het meterkastpaspoort
+            </div>
+            <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
+              De kast stond al op de sticker — merk, type, karakteristiek en stroom komen daarvandaan.
+              <strong style={{color:K.text}}> Loop ze na</strong> en voeg toe wat er bij deze klus bij komt.
+              Het aardleksoort en de aanspreekstroom staan niet in een paspoort; die zijn op type A / 30 mA gezet.
+            </div>
+          </div>
+        )}
         {aardlekgroepen.map((ag,i)=>{
           const hoogstId = ag.hoogstId || autoHoogst(ag);
+          const vanSticker = ag.bron === "paspoort";
           return (
           <div key={ag.id} style={S.card}>
             {editId===ag.id ? (
@@ -1928,7 +1977,17 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
                     {ag.rcdType==="geen"?"⭕":"🛡️"}
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontWeight:600,fontSize:14}}>{ag.naam}</div>
+                    <div style={{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                      {ag.naam}
+                      {/* Waar dit vandaan komt. Niet om te pronken met de scan,
+                          maar omdat de installateur moet weten wat hij nog moet
+                          nalopen: een groep die hij zelf intikte is bevestigd,
+                          een groep van de sticker is dat niet. */}
+                      {vanSticker && (
+                        <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,
+                                      background:K.yellowDim,color:K.yellow,letterSpacing:"0.02em"}}>uit paspoort</span>
+                      )}
+                    </div>
                     <div style={{fontSize:11,color:K.muted}}>
                       {ag.rcdType==="geen"?"Geen RCD":`RCD ${ag.rcdMa}mA type-${ag.rcdType}`} · {ag.fase==="3"?"3-fase 400V":(ag.L?`1-fase ${ag.L}`:"1-fase 230V")} · {ag.eindgroepen.length} eindgroep{ag.eindgroepen.length!==1?"en":""}
                     </div>
@@ -6548,6 +6607,18 @@ export default function App() {
       // postcode/huisnummer/toevoeging het nummer zette.
       projectId: buildId(p.pc, p.nr),
       mkpImport: p,
+      // DE KAST STAAT ER AL. Draagt het paspoort een materiaallijst, dan is de
+      // groepenkast bekend: mat[] geeft per toestel de plaats, het merk en de
+      // typeaanduiding, en uit "B16" komen de karakteristiek en de nominale
+      // stroom. Dan hoeft de installateur hem niet opnieuw in te tikken — er komt
+      // alleen een uitbreiding bij (featurespec kastbeeld §5).
+      //
+      // Het blijft een VOORSTEL: elke groep draagt `bron: "paspoort"`, niets is
+      // vastgezet, en de kast kan sinds de vorige klus veranderd zijn. Het RCD-type
+      // staat niet in het paspoort en valt terug op A; dat vraagt bevestiging.
+      aardlekgroepen: paspoortDraagtKast(p)
+        ? aardlekgroepenUitPosities(positiesUitPaspoort(p), { bron: "paspoort" })
+        : undefined,
       mkp: {
         bj: p.bj || "", ean: p.ean || "", ean2: p.ean2 || "",
         haF: p.ha?.f ? String(p.ha.f) : "", haA: p.ha?.a ? String(p.ha.a) : "",
