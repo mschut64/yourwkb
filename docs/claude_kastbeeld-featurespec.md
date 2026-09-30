@@ -238,14 +238,60 @@ breidt hetzelfde principe uit naar de materiaal- en groepenkant.
 
 ---
 
+## 5b · De kast eruit laten zien zoals in Kastscan
+
+*Vraag van Martin, 30-09-2026: "voor YourWkb is het misschien ook mooi om de look and feel
+te gebruiken van de kast zoals deze in Kastscan is gebruikt."*
+
+**Ja — en het is minder werk dan het lijkt, want de helft staat er al.** `tokens.js` in
+Kastscan is letterlijk een kopie van het `K`/`S`-blok uit `WkbApp.jsx`: dezelfde kleuren,
+dezelfde maten, dezelfde knoppen. De twee apps spreken al dezelfde vormtaal; wat Kastscan
+erbovenop heeft is de **railstrook** — de horizontale balk met modules op ware breedte,
+gekleurde aardlekbanden eronder en een tegel per groep.
+
+Er zijn drie goede redenen om die naar YourWkb te halen:
+
+1. **Herkenning.** Wie beide apps gebruikt, kijkt naar dezelfde kast. Dat is precies het
+   "één motor, meerdere verpakkingen" uit de visie, maar dan zichtbaar.
+2. **Een kast is ruimtelijk.** Een lijstje aardlekgroepen vertelt niet dat groep 7 helemaal
+   rechts op rail 2 zit. Bij een uitbreiding (§5) is juist dát de vraag: waar is nog plek.
+3. **Het is de natuurlijke weergave van `posities[]`**, en dat wordt toch al het gedeelde
+   kastbeeld.
+
+### Wat waar hoort
+
+De motor mag geen React kennen — dat is de regel die de hele opzet draagt. De scheiding is
+dus dezelfde als bij de fasebalken, die in beide apps hetzelfde tekenen zonder gedeelde
+component:
+
+| | Waar | Wat |
+|---|---|---|
+| **Maatvoering** | motor | hoe breed een module is (18 mm), waar een tegel begint, hoe lang een rail is, welke tegel op welke plek. Pure rekenkunde, en nu nog verdeeld over `render.js` en `KastscanApp.jsx` |
+| **Vormtaal** | motor, als data | de kleuren en maten die nu twee keer bestaan (`tokens.js` ↔ het `K`/`S`-blok). Eén bron, zoals `FASE_KLEUR` dat al is |
+| **De tekening zelf** | per app | de JSX. Klein zodra de maatvoering en de kleuren van buiten komen, en elke app mag hem anders inbedden — Kastscan tikt tegels aan om ze te benoemen, YourWkb hangt er meetwaarden aan |
+
+**Niet doen: één gedeelde React-component.** Dat vraagt een vierde pakket met React als
+peer dependency, en het koppelt twee apps aan dezelfde schermindeling terwijl ze een
+verschillende vraag stellen. De fasebalken laten zien dat het zonder kan: dezelfde balk,
+dezelfde kleuren, twee stukjes JSX van vijftien regels.
+
+**Wanneer:** bij **K4**. Dan heeft YourWkb voor het eerst een kast om te tekenen, en is de
+railstrook meteen de plek waar "+ Groep toevoegen" op zijn plaats valt — je wijst de lege
+module aan waar hij komt. Vóór K4 is er niets om te tonen.
+
+⚠️ **Nu al opschrijven:** `tokens.js` is een kopie en kan dus uit de pas lopen. Zolang dat
+zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die níét meekomt.
+
+---
+
 ## 6 · Releases
 
 | # | Wat | Zichtbaar voor de installateur | Risico |
 |---|---|---|---|
-| **K1** | **Motor v0.2**: de pure fotologica, het correctielog en de leerlus naar `yourwkb-core`. Kastscan importeert ze; gedrag ongewijzigd. Twee definities van 0,75 worden er één, `correctieStatistiek` en `correctieStatistiekVoorDelen` worden er één. | niets | laag — mechanisch, met ~347 bestaande asserties eroverheen |
-| **K2** | **Motor v0.3**: de prompt als data (`prompt.js`) + `PROMPTVERSIE`. Kastscans route haalt hem daar. Eerste test op de prompt: de drie discrepanties tussen het JSON-voorbeeld en het afgedwongen schema eruit. | niets | laag |
+| **K1** ✅ | **Motor v0.2** *(30-09)*: de pure fotologica, het correctielog en de leerlus naar `yourwkb-core`. Kastscan importeert ze; gedrag ongewijzigd. Twee definities van 0,75 worden er één, `correctieStatistiek` en `correctieStatistiekVoorDelen` worden er één. | niets | laag — mechanisch, met ~347 bestaande asserties eroverheen |
+| **K2** ✅ | **Motor v0.3** *(30-09)*: de prompt als data (`prompt.js`, apart pad — 22 kB hoort niet in een browserbundel), `PROMPTVERSIE` mee. Kastscans route ging van 623 naar 314 regels. De drie discrepanties tussen het JSON-voorbeeld en het afgedwongen schema zijn eruit, met 18 tests die ze vangen. ⚠️ **Promptwijziging: vraagt een verse run over de referentieset** (vrijgaveregel). | niets zichtbaar; het model krijgt een voorbeeld dat de API niet meer zou afkeuren | laag, mits de referentierun gedaan wordt |
 | **K3** | **`aardlekgroepenUitPosities`** in de motor, met de heen-en-terug-test tegen `mkpBouw`. Nog geen scherm. | niets | midden — nieuwe logica |
-| **K4** | **Paspoort vult stap 6** (deel 3). `mat[]` lezen, de kast tonen, uitbreidingsmodus met "+ Groep toevoegen". Nog geen foto. | **veel** — wie een sticker scant hoeft de kast niet meer in te tikken | midden |
+| **K4** | **Paspoort vult stap 6** (deel 3). `mat[]` lezen, de kast tonen als **railstrook in de vormtaal van Kastscan** (§5b), uitbreidingsmodus met "+ Groep toevoegen" op de lege module. Nog geen foto. | **veel** — wie een sticker scant hoeft de kast niet meer in te tikken, en ziet hem zoals in Kastscan | midden |
 | **K5** | **Fotostap in YourWkb** (deel 2). Eigen route `/api/kastbeeld`, de fotoafhandeling van Kastscan, de nieuwe stap vóór Groepen, en de vijftien stapnummers in teksten mee. | **veel** | hoog — nieuwe route, kosten per scan, AVG-tekst erbij |
 | **K6** | **De leerlus aan** in YourWkb: catalogus onder een eigen sleutel, `vulAanUitCatalogus` na normaliseren, `catalogusLeer` bij bevestigen, `maakCorrectie` bij elke wijziging. | niets direct; de app wordt beter | laag, maar pas zinvol bij volume |
 
@@ -277,18 +323,18 @@ is de vangnet-weg voor K5: werkt de foto niet, dan is er altijd nog het paspoort
 
 Los van het bouwwerk hierboven, en los te repareren:
 
-1. 🐛 **De bevestigingslus in Kastscan schrijft niets meer weg.** `KastscanApp.jsx:1293` leest
+1. ✅ **Opgelost 30-09.** ~~De bevestigingslus in Kastscan schrijft niets meer weg.~~ `KastscanApp.jsx:1293` leest
    `p.zekerheid` als object (`(p.zekerheid || {})[veld]`), maar sinds promptversie B is dat een
    **getal**. Elk veld valt daardoor op `undefined` en wordt overgeslagen: bij "Bevestigen en
    verder" komen er geen `"bevestigd"`-regels in het correctielog. De noemer van de correctiegraad
    bestaat dus alleen nog uit correcties, waardoor de vrijgaveregel (`oordeelOverWijziging`) op
    drijfzand staat. Exact dezelfde fout is op regel 1364 wél gerepareerd. **Dit raakt deel 1
    rechtstreeks: de app leert nu niet wat hij goed deed, alleen wat hij fout deed.**
-2. Het JSON-voorbeeld ín de prompt wijkt af van het afgedwongen schema: `zekerheid` staat er als
+2. ✅ **Opgelost 30-09 (K2).** ~~Het JSON-voorbeeld ín de prompt wijkt af van het afgedwongen schema:~~ `zekerheid` staat er als
    object (schema eist een getal), `"blokken"` staat er twee keer, en `"smeltveiligheid"` ontbreekt
    in de `soort`-opsomming. Het model krijgt dus een voorbeeld dat het schema zou afkeuren.
-3. `docs/INTEGRATIE-YOURWKB.md` (Kastscan) noemt `model.js` nog "importvrij" — sinds 30-09 klopt dat
-   niet meer.
+3. ✅ **Opgelost 30-09.** ~~`docs/INTEGRATIE-YOURWKB.md` noemt `model.js` nog "importvrij".~~ Het
+   document heeft een kop gekregen die zegt dat het kopieerplan vervallen is.
 4. `data.mkp.grp` in YourWkb wordt geschreven (`WkbApp.jsx:6555`) en nergens gelezen. Dood veld.
 5. `Lbron` kent de waarde `"meter"` die nooit geschreven wordt. Met dit spoor komt er een derde
    bron bij (`"foto"`, `"paspoort"`); dat patroon is er dus al op voorbereid.
