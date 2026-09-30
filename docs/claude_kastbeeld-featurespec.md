@@ -189,6 +189,35 @@ blokIndeling(posities) → [{ aardlek, posities }]
 Plus `hoogstId`: YourWkb kiest de zwaarst belaste eindgroep per cluster. `autoHoogst` doet dat al
 op ampère; die regel blijft, alleen de invoer verandert.
 
+**Gebouwd op 30-09-2026.** Drie dingen die tijdens het bouwen bleken en die het ontwerp scherper
+maken dan hierboven stond:
+
+1. **Een smeltveiligheid krijgt `kar: "gG"`, niet "B".** Bij een trage smeltzekering komt Z_max
+   uit een tijd-stroomkromme en niet uit factor × In; stilletjes "B" invullen laat het rapport
+   slagen op een norm die daar niet geldt. ⚠️ De `kar`-keuze in de groepen-stap kent alleen
+   B/C/D — die moet er in K4 "gG" bij krijgen, anders toont het scherm een lege keuze.
+2. **Een gelezen stroom van bijvoorbeeld 40 A past niet in de keuzelijst** (`GROEP_A` gaat tot
+   32 A). Ook dat is een K4-punt: toon wat er gelezen is in plaats van niets.
+3. **De identifiers zijn deterministisch** (`a1`, `a1e1`), geen `Date.now()`. Anders verandert een
+   tweede scan stil elke verwijzing — `hoogstId`, en de meetwaarden die per groep-id zijn
+   opgeslagen.
+
+### ⚠️ Een warmtepomp bestaat in het paspoort, maar niet als eindgroep
+
+`EINDGROEP_TYPES` in YourWkb kent kook, pv, kracht, laad en batterij — **geen warmtepomp**. Het
+paspoort kent `wp` wél, mét de gelijktijdigheidsfactor 0,6 en een terugvalvermogen van 6,9 kW.
+
+Een warmtepompgroep in een groepenkast komt daardoor zonder type binnen en belandt in het paspoort
+als `alg`: geen factor, geen terugval, en in de fasebalans telt hij alleen mee als er toevallig een
+vermogen is ingevuld. Dat is geen tekortkoming van deze vertaling maar een gat in de app, en het
+raakt precies de discipline die het snelst groeit.
+
+**Voorstel voor K4:** `wp` als zesde eindgroeptype toevoegen (🔥 Warmtepomp). Eén regel in
+`EINDGROEP_TYPES`, één in `EIND_NAAR_MKP_B`, en `EINDGROEP_ONBEKEND` in de motor kan leeg. Vraagt
+wel Martins akkoord: het is een normrelevante toevoeging, want hij zet de factor 0,6 aan voor
+groepen die hem nu niet krijgen. Vastgelegd in `tests/test-aardlekgroepen.js` categorie 6, zodat
+het een besluit blijft en geen vergetelheid.
+
 **Heen en terug moet kloppen.** Een test bewaakt dat `aardlekgroepenUitPosities` gevolgd door
 `mkpBouw` hetzelfde paspoort oplevert als Kastscans `mkpBouw` op dezelfde posities — anders zegt de
 QR van de ene app iets anders dan die van de andere over dezelfde kast.
@@ -290,7 +319,7 @@ zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die n�
 |---|---|---|---|
 | **K1** ✅ | **Motor v0.2** *(30-09)*: de pure fotologica, het correctielog en de leerlus naar `yourwkb-core`. Kastscan importeert ze; gedrag ongewijzigd. Twee definities van 0,75 worden er één, `correctieStatistiek` en `correctieStatistiekVoorDelen` worden er één. | niets | laag — mechanisch, met ~347 bestaande asserties eroverheen |
 | **K2** ✅ | **Motor v0.3** *(30-09)*: de prompt als data (`prompt.js`, apart pad — 22 kB hoort niet in een browserbundel), `PROMPTVERSIE` mee. Kastscans route ging van 623 naar 314 regels. De drie discrepanties tussen het JSON-voorbeeld en het afgedwongen schema zijn eruit, met 18 tests die ze vangen. ⚠️ **Promptwijziging: vraagt een verse run over de referentieset** (vrijgaveregel). | niets zichtbaar; het model krijgt een voorbeeld dat de API niet meer zou afkeuren | laag, mits de referentierun gedaan wordt |
-| **K3** | **`aardlekgroepenUitPosities`** in de motor, met de heen-en-terug-test tegen `mkpBouw`. Nog geen scherm. | niets | midden — nieuwe logica |
+| **K3** ✅ | **`aardlekgroepenUitPosities`** *(30-09)*, motor v0.4.0. `mkpType` verhuisde mee. 36 tests op de vertaling, 15 in YourWkb op de doorgang naar het paspoort — gecontroleerd dat die een verkeerde fasemapping ook echt afkeurt. | niets | — |
 | **K4** | **Paspoort vult stap 6** (deel 3). `mat[]` lezen, de kast tonen als **railstrook in de vormtaal van Kastscan** (§5b), uitbreidingsmodus met "+ Groep toevoegen" op de lege module. Nog geen foto. | **veel** — wie een sticker scant hoeft de kast niet meer in te tikken, en ziet hem zoals in Kastscan | midden |
 | **K5** | **Fotostap in YourWkb** (deel 2). Eigen route `/api/kastbeeld`, de fotoafhandeling van Kastscan, de nieuwe stap vóór Groepen, en de vijftien stapnummers in teksten mee. | **veel** | hoog — nieuwe route, kosten per scan, AVG-tekst erbij |
 | **K6** | **De leerlus aan** in YourWkb: catalogus onder een eigen sleutel, `vulAanUitCatalogus` na normaliseren, `catalogusLeer` bij bevestigen, `maakCorrectie` bij elke wijziging. | niets direct; de app wordt beter | laag, maar pas zinvol bij volume |
