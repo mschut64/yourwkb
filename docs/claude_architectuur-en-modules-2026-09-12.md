@@ -50,8 +50,8 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
     │  WkbApp.jsx (schermen)       │              │    PaspoortScanner/-Weergave │
     │                              │              │  KastscanApp.jsx (schermen)  │
     └──────────────────────────────┘              └──────────────────────────────┘
-          264 tests groen                                1275 tests groen
-              (motor: 146)                          (nog NIET op de motor)
+          264 tests groen                                1289 tests groen
+                    └──────── motor: 146 tests ────────┘
                    │                                               │
                    └───────────────────┬───────────────────────────┘
                                        ▼
@@ -75,7 +75,7 @@ los van zijn gebruikers en is de architectuur stuk.
 | **`mschut64/yourwkb-core`** | **De motor**: belasting per fase, belastingcheck, fasebalans, faseadvies. Publiek leesbaar, alle rechten voorbehouden. | niet gedeployed — alleen dependency | niets |
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, controle, specificatie, referentielezer, QR-redirect, de index van sleutels. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
 | **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.1.0`, meterkastpaspoort `v0.3.2` |
-| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | meterkastpaspoort `v0.3.2` |
+| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | yourwkb-core `v0.1.0`, meterkastpaspoort `v0.3.2` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
 `/p` en `/p/:rest*` → `yourwkb.nl/app` waar **elke QR-sticker in het veld** van afhangt.
@@ -367,8 +367,8 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 | | Versie | Tests |
 |---|---|---|
 | YourWkb | **`v2026-09-20-A`**, live | 264 |
-| yourwkb-core | **`v0.1.0`** — de motor | 146 |
-| Kastscan | **`v2026-09-19-B`**, live | 1275 |
+| yourwkb-core | **`v0.1.0`** — de motor, onder beide apps | 146 |
+| Kastscan | **`v2026-09-30-A`**, live | 1289 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
 Sinds de vorige stand (12-09):
@@ -386,6 +386,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
+| 30-09 | **Kastscan op de motor.** `faseBalans`/`belastingcheck`/`faseCapaciteitKw` zijn schillen; `grpRegels()` vertaalt het railmodel naar de paspoortvorm en `mkpBouw` gebruikt diezelfde vertaling. **Drie gedragswijzigingen:** teruglevering positief (PV van −3,0 naar 3,0, en de omvormer komt nu mét `kw` in het paspoort), de thuisbatterij als twee regels, en op een eenfasige aansluiting tellen groepen zonder aangetikte fase gewoon mee. Kasten die groen waren kunnen rood worden. 1275 → 1289 tests. |
 | 30-09 | **De motor `yourwkb-core` v0.1.0.** Belasting, fasen en de normkeuzes eromheen uit YourWkbs `model.js`/`fasebalans.js` naar een eigen repo, in zes modules met de namen van Kastscan. Datavorm = de paspoort-`grp[]`. Nieuw: `faseCapaciteitKw`. YourWkb draait erop, geen gedragswijziging. **Kastscan nog niet** — daar is het er wél een. |
 | 30-09 | **Prijs € 9,50 per rapport, bundel 20 × € 8,50** (presentatie "Drie producten, één fundament"): landing, FAQ, JSON-LD en AVG-pagina gelijkgetrokken. |
 | 20-09 | YourWkb `-20-A`: **printen op iPhone en iPad** — het rapport ging via een verborgen iframe van 0×0, en WebKit printte daaruit het app-scherm plus een half rapport (melding Maurits). Nu een echt tabblad, met een printknop erin; opbouw en ontsmetting in `components/wkb/rapport-print.js`, met tests. **Nieuw: "Rapport delen of opslaan"** — het rapport als één zelfstandig bestand via het deel-menu van het toestel (AirDrop, Mail, WhatsApp, Bestanden), met een download als terugval. Knop met het Apple-deelteken als SVG. |
@@ -419,22 +420,16 @@ Sinds de vorige stand (12-09):
 
 ## 10 · Bekende scheuren — hier zou ik als eerste kijken
 
-### 10a · Kastscan staat uit de pas met twee normbesluiten van 12-09 ⚠️ *(nog open — en nu de hoofdklus)*
+### 10a · ~~Kastscan uit de pas met de normbesluiten van 12-09~~ ✅ *(opgelost 30-09)*
 
-**Sinds 30-09 is dit niet langer "twee waarden gelijkzetten" maar "Kastscan op de motor".**
-De motor heeft Kastscans structuur en namen, maar YourWkbs norminhoud; zodra Kastscan hem
-gebruikt, vervallen deze twee afwijkingen vanzelf. Wat het vraagt: `faseBalans(posities,
-hoofd)` wordt een dunne schil die via de eigen `mkpBouw` een `grp[]` maakt en de motor
-aanroept, `INDICATIEF_KW["zonnepanelen"]` gaat van −3,0 naar positief (anders valt PV weg,
-want `mkpBouw` schrijft `kw` alleen als hij > 0 is), de batterij wordt twee regels, en zo'n
-45 asserties moeten mee. Gedragswijziging in Kastscan: kasten die nu groen zijn kunnen rood
-worden.
+Opgelost door de oorzaak weg te nemen in plaats van de waarden gelijk te zetten:
+beide apps rekenen met `yourwkb-core`. Teruglevering telt positief en per fase als
+zwaarste-van-twee-richtingen, de thuisbatterij staat als twee regels in het paspoort, en
+op een eenfasige aansluiting tellen groepen zonder aangetikte fase mee. Dat laatste was een
+zelfstandige fout: Kastscan zag op een eenfasige kast nooit een overbelasting.
 
-- `INDICATIEF_KW["zonnepanelen"] = -3.0` in `components/kastscan/model.js` — teruglevering
-  als *negatieve* belasting. Het besluit: positief, en nooit optellen bij de afname.
-- **De batterij is er één regel**, geen twee.
-
-Dezelfde kast kan daardoor in Kastscan een ander oordeel geven dan in YourWkb.
+**Voor Kastscan-gebruikers is dit een gedragswijziging** — kasten die groen waren kunnen
+rood worden. Nog niet in het veld bevestigd; dit is materiaal voor Maurits en Herman.
 
 ### 10b · `MKP_SPEC_VERSIE` staat twee keer *(afgedekt)*
 
@@ -509,11 +504,11 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
 
 ## 11 · Waar je verder kunt
 
-**⓪ Kastscan op de motor** *(begonnen 30-09, helft gedaan)*
-YourWkb draait op `yourwkb-core`; Kastscan nog op zijn eigen kopie. Zolang dat zo is bestaat
-de drift gewoon nog — de motor lost hem pas op als beide apps erin zitten. Zie 10a voor wat
-het precies vraagt. Daarna kunnen de bedrijfs- en onderwijsapp uit de visie er zonder meer
-aan hangen; dat is het `@yourwkb/core` uit dat document.
+**⓪ ~~Kastscan op de motor~~** ✅ *(30-09)* — beide apps draaien op `yourwkb-core v0.1.0`.
+Wat er nog ligt: de **bedrijfs- en onderwijsapp** uit de visie kunnen er nu aan hangen (dat
+is het `@yourwkb/core` uit dat document), en de cross-checks over meetwaarden
+(`gkCrossChecks`, `pvCrossChecks`, de gG-kromme) staan nog in YourWkb — die verhuizen zodra
+de onderwijsapp dezelfde meetwaarden moet toetsen.
 
 **① Dossiercode en uitbreidingsmodus** *(spec ligt klaar)*
 `docs/claude_dossiercode-en-uitbreiding-featurespec.md`. Een tweede QR in het rapport met het
