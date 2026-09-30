@@ -1,6 +1,6 @@
 # YourWkb · Kastscan · Meterkastpaspoort — architectuur, modules en waar je verder kunt
 
-*Stand 20-09-2026 (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
+*Stand 30-09-2026 (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
 
 **Lees dit ná `CLAUDE.md`.** CLAUDE.md zegt wát er moet gebeuren en volgens welke regels;
 dit document zegt **wat waar staat, waarom het daar staat, en waar de scheuren zitten**.
@@ -26,6 +26,12 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
 
 ```
                     ┌────────────────────────────────────────────────┐
+                    │       yourwkb-core  (eigen repo, tag v0.1.0)   │
+                    │       DE MOTOR — belasting, fasen, normkeuzes  │
+                    │  vermogen.js · fasen.js · belasting.js         │
+                    │  fasebalans.js — werkt op de paspoort-grp[]    │
+                    └──────────┬───────────────────────┬─────────────┘
+                    ┌──────────┴───────────────────────┴─────────────┐
                     │     meterkastpaspoort  (eigen repo, tag)       │
                     │     HET FORMAAT + DE CONTROLE — normneutraal   │
                     │  mkp.js · spec-site · lezer.html · /p-redirect │
@@ -38,13 +44,14 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
     │           YourWkb            │              │           Kastscan           │
     │     opleverrapporten         │              │    foto → gelabelde kast     │
     │  components/wkb/             │              │  components/kastscan/        │
-    │    model.js     fasebalans.js│◀── namen ───▶│    model.js   labels.js      │
+    │    model.js (meetchecks)     │◀── namen ───▶│    model.js   labels.js      │
     │    mkp-bouw.js  mkp-qr.js    │   kleuren    │    render.js  documenten.js  │
-    │    mkp-bronnen.js veilig.js  │   normregels │    mkp.js     mkp-bronnen.js │
+    │    mkp-bronnen.js veilig.js  │              │    mkp.js     mkp-bronnen.js │
     │  WkbApp.jsx (schermen)       │              │    PaspoortScanner/-Weergave │
     │                              │              │  KastscanApp.jsx (schermen)  │
     └──────────────────────────────┘              └──────────────────────────────┘
-          410 tests groen                                1275 tests groen
+          264 tests groen                                1275 tests groen
+              (motor: 146)                          (nog NIET op de motor)
                    │                                               │
                    └───────────────────┬───────────────────────────┘
                                        ▼
@@ -52,8 +59,11 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
                      (pakket zelf: 109 tests, `npm test` daar)
 ```
 
-**De pijlrichting is de kern.** Beide apps hangen aan het paspoort; het paspoort hangt
-nergens aan. Zodra iets in het pakket app-specifiek wordt, staat de standaard niet meer
+**De pijlrichting is de kern.** Beide apps hangen aan de motor en aan het paspoort; die
+twee hangen nergens aan. En ze zijn niet hetzelfde: het **paspoort** is een formaat en moet
+normneutraal blijven (het is een open standaard, CC BY 4.0); de **motor** is juist niets
+ánders dan normkeuzes — 230 V, gelijktijdigheid 0,6, reserve 1,0 kW. Daarom twee repo's en
+geen één. Zodra iets in het pakket app-specifiek wordt, staat de standaard niet meer
 los van zijn gebruikers en is de architectuur stuk.
 
 ---
@@ -62,8 +72,9 @@ los van zijn gebruikers en is de architectuur stuk.
 
 | Repo | Wat het is | Hosting | Afhankelijk van |
 |---|---|---|---|
+| **`mschut64/yourwkb-core`** | **De motor**: belasting per fase, belastingcheck, fasebalans, faseadvies. Publiek leesbaar, alle rechten voorbehouden. | niet gedeployed — alleen dependency | niets |
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, controle, specificatie, referentielezer, QR-redirect, de index van sleutels. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
-| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | meterkastpaspoort `v0.3.2` |
+| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.1.0`, meterkastpaspoort `v0.3.2` |
 | **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | meterkastpaspoort `v0.3.2` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
@@ -185,8 +196,7 @@ niet dat de sticker op de juiste kast zit. *Wij verifiëren niets; wij maken con
 
 | Bestand | Regels | Wat | Getest door |
 |---|---:|---|---|
-| `components/wkb/model.js` | 515 | **De rekenkern.** Grenswaarden, cross-checks, belastingcheck, belasting per fase. | `tests/test.js` (151) |
-| `components/wkb/fasebalans.js` | 186 | Belasting per fase + `faseAdvies`. Gevormd op de paspoort-`grp[]`. | `tests/test-fasebalans.js` (75) |
+| `components/wkb/model.js` | 224 | Normchecks van **déze** app: gG-tijd-stroomkromme en de cross-checks over de meetwaarden. Belasting en fasen zitten in de motor. | `tests/test.js` (80) |
 | `components/wkb/mkp-bouw.js` | 240 | App-gegevens → paspoort, incl. `log[].erk` per klus (`erkVoorKlus`: cv → CO-certificaat `kiwa:…`, anders erkenning `installq:…`) en samenvoegen met `data.mkpImport`. | `tests/test-mkp.js` (70), `tests/test-mkp-qr.js` |
 | `components/wkb/mkp-qr.js` | 30 | **Eén weg naar de QR** voor app, rapport, PDF en e-mail: `mkpBouw` → `mkpAfkappen` → `mkpEncode` → PNG-data-URI. | `tests/test-mkp-qr.js` (27) — leest de PNG terug met jsQR; ook erk/CO |
 | `components/wkb/mkp-bronnen.js` | 53 | Index + feeds ophalen (rechtstreeks van www), offline de laatst bewaarde versie. | `tests/test-mkp-bronnen.js` (6) |
@@ -195,11 +205,11 @@ niet dat de sticker op de juiste kast zit. *Wij verifiëren niets; wij maken con
 | `components/WkbApp.jsx` | 6779 | **Alle schermen**, incl. `genereerRapport` en `MkpViewer`. | — *(ongetest, per definitie)* |
 | `scripts/demo-opleverrapport.mjs` | 412 | Maakt `public/voorbeeld-opleverrapport.html` + `.pdf` door de echte code (`npm run demo-rapport`). | leest de QR terug vóór het wegschrijven |
 
-**Totaal: 410 tests, `npm test`.**
+**Totaal: 264 tests hier, `npm test`; plus 146 in `yourwkb-core`.**
 
 ### De lagenregel
 
-> **Normlogica hoort in `model.js`, niet in `WkbApp.jsx`.**
+> **Belasting- en faselogica hoort in de motor; andere normlogica in `model.js`; nooit in `WkbApp.jsx`.**
 
 Alles in `WkbApp.jsx` is ongetest omdat het niet te importeren is. Zit er een grenswaarde,
 een factor, een oordeel of een vertaling naar het paspoort in je nieuwe code, dan hoort dat
@@ -356,7 +366,8 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 
 | | Versie | Tests |
 |---|---|---|
-| YourWkb | **`v2026-09-20-A`**, live | 410 |
+| YourWkb | **`v2026-09-20-A`**, live | 264 |
+| yourwkb-core | **`v0.1.0`** — de motor | 146 |
 | Kastscan | **`v2026-09-19-B`**, live | 1275 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
@@ -375,6 +386,8 @@ Sinds de vorige stand (12-09):
 | 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
+| 30-09 | **De motor `yourwkb-core` v0.1.0.** Belasting, fasen en de normkeuzes eromheen uit YourWkbs `model.js`/`fasebalans.js` naar een eigen repo, in zes modules met de namen van Kastscan. Datavorm = de paspoort-`grp[]`. Nieuw: `faseCapaciteitKw`. YourWkb draait erop, geen gedragswijziging. **Kastscan nog niet** — daar is het er wél een. |
+| 30-09 | **Prijs € 9,50 per rapport, bundel 20 × € 8,50** (presentatie "Drie producten, één fundament"): landing, FAQ, JSON-LD en AVG-pagina gelijkgetrokken. |
 | 20-09 | YourWkb `-20-A`: **printen op iPhone en iPad** — het rapport ging via een verborgen iframe van 0×0, en WebKit printte daaruit het app-scherm plus een half rapport (melding Maurits). Nu een echt tabblad, met een printknop erin; opbouw en ontsmetting in `components/wkb/rapport-print.js`, met tests. **Nieuw: "Rapport delen of opslaan"** — het rapport als één zelfstandig bestand via het deel-menu van het toestel (AirDrop, Mail, WhatsApp, Bestanden), met een download als terugval. Knop met het Apple-deelteken als SVG. |
 | 19-09 | YourWkb `-19-B`: **TloKB weg als uitgever**; CO-certificaat (Kiwa/andere) als eigen profielveld, bij cv in de logregel en in het rapport. Specvoorbeeld `tlokb:…` → `kiwa:K0213477` |
 
@@ -406,7 +419,16 @@ Sinds de vorige stand (12-09):
 
 ## 10 · Bekende scheuren — hier zou ik als eerste kijken
 
-### 10a · Kastscan staat uit de pas met twee normbesluiten van 12-09 ⚠️ *(nog open)*
+### 10a · Kastscan staat uit de pas met twee normbesluiten van 12-09 ⚠️ *(nog open — en nu de hoofdklus)*
+
+**Sinds 30-09 is dit niet langer "twee waarden gelijkzetten" maar "Kastscan op de motor".**
+De motor heeft Kastscans structuur en namen, maar YourWkbs norminhoud; zodra Kastscan hem
+gebruikt, vervallen deze twee afwijkingen vanzelf. Wat het vraagt: `faseBalans(posities,
+hoofd)` wordt een dunne schil die via de eigen `mkpBouw` een `grp[]` maakt en de motor
+aanroept, `INDICATIEF_KW["zonnepanelen"]` gaat van −3,0 naar positief (anders valt PV weg,
+want `mkpBouw` schrijft `kw` alleen als hij > 0 is), de batterij wordt twee regels, en zo'n
+45 asserties moeten mee. Gedragswijziging in Kastscan: kasten die nu groen zijn kunnen rood
+worden.
 
 - `INDICATIEF_KW["zonnepanelen"] = -3.0` in `components/kastscan/model.js` — teruglevering
   als *negatieve* belasting. Het besluit: positief, en nooit optellen bij de afname.
@@ -419,7 +441,7 @@ Dezelfde kast kan daardoor in Kastscan een ander oordeel geven dan in YourWkb.
 Kastscans `model.js` declareert hem zelf, omdat dat bestand geen imports mag hebben; een
 test bewaakt dat hij gelijk blijft aan het pakket. Geen actie nodig zolang die test bestaat.
 
-### 10c · `WkbApp.jsx` groeit: 6691 regels
+### 10c · `WkbApp.jsx` groeit: 6779 regels
 
 `genereerRapport` (~900 regels HTML) en `MkpViewer` zitten er nog in en zijn ongetest.
 Kandidaten voor `components/wkb/rapport.js` en een eigen viewercomponent.
@@ -487,7 +509,13 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
 
 ## 11 · Waar je verder kunt
 
-**⓪ Dossiercode en uitbreidingsmodus** *(spec ligt klaar)*
+**⓪ Kastscan op de motor** *(begonnen 30-09, helft gedaan)*
+YourWkb draait op `yourwkb-core`; Kastscan nog op zijn eigen kopie. Zolang dat zo is bestaat
+de drift gewoon nog — de motor lost hem pas op als beide apps erin zitten. Zie 10a voor wat
+het precies vraagt. Daarna kunnen de bedrijfs- en onderwijsapp uit de visie er zonder meer
+aan hangen; dat is het `@yourwkb/core` uit dat document.
+
+**① Dossiercode en uitbreidingsmodus** *(spec ligt klaar)*
 `docs/claude_dossiercode-en-uitbreiding-featurespec.md`. Een tweede QR in het rapport met het
 complete dossier (zonder foto's en klantgegevens): een groepenkast tot 36 groepen past in één code
 (versie 37 bij M, 7–9 cm). Scannen → "Verder met dit dossier" → de kast staat klaar; de nieuwe groep
@@ -495,13 +523,10 @@ en zijn aardlek met de bestaande velden meten; het rapport beperkt zich tot het 
 Fasering: dossiercode schrijven (met terugleestest) → inlezen/uitbreidingsmodus → andere disciplines
 nameten.
 
-**① Artikelnummer en productiecode van het typeplaatje** *(maakt terugroepmeldingen scherp)*
+**② Artikelnummer en productiecode van het typeplaatje** *(maakt terugroepmeldingen scherp)*
 `mat[]` schrijven is gedaan (Kastscan, 19-09). Wat ontbreekt is `art` en `pd`: de
 beeldherkenning laten uitlezen wat op het typeplaatje staat, vooral bij aardlekschakelaars.
 Raakt de prompt van R3a. Let op de 105-modulegrens; flow-regel: vooringevuld, niet verplicht.
-
-**② Kastscan gelijktrekken** — 10a oplossen; beter nog: `fasebalans.js` gebruiken in plaats
-van een eigen `faseBalans`.
 
 **③ Echte uitgevers aansluiten** — InstallQ (erkenningsverklaring, `opzoek` met `{nummer}`),
 een eerste fabrikant met een feed. Per uitgever: publieke sleutel in de index → Martin

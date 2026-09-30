@@ -174,4 +174,4 @@ Licht/donker-thema (donker is een bewuste veldkeuze), cloud sync, internationale
 
 - [ ] PostHog-funnel/dashboard aanmaken
 - [ ] Google Search Console instellen
-- [ ] Prijsdiscrepantie beslissen: €2,50 (Aannames-tabblad businesscase) vs €7,50 (landing)
+- [x] **Prijs beslist (30-09-2026): € 9,50 per rapport, bundel 20 × € 8,50 (€ 170)**, uit de presentatie "Drie producten, één fundament". Doorgevoerd op de landing, in de FAQ, in de JSON-LD `offer` en op de AVG-pagina (die stond nog op € 2,50).

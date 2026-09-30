@@ -55,13 +55,13 @@ Gebruik bij nieuw werk de namen van Kastscan, niet je eigen.
 ### Belangrijkste bestanden
 ```
 components/WkbApp.jsx      ← de schermen (~5900 regels)
-components/wkb/model.js    ← de rekenkern: grenswaarden, cross-checks, belastingcheck, belastingPerFase
+components/wkb/model.js    ← normchecks van DÉZE app: gG-kromme + cross-checks over de meetwaarden
+   ↑ belasting en fasen zitten in de dependency `yourwkb-core` (eigen repo, tag v0.1.0) — gedeeld met Kastscan
    ↑ het paspoortformaat zelf zit in de dependency `meterkastpaspoort` (eigen repo, tag v0.3.2)
 components/wkb/mkp-bouw.js ← de vertaling app-gegevens → paspoort (app-specifiek), incl. log[].erk
 components/wkb/mkp-qr.js   ← opleverdata → paspoort-QR (PNG-data-URI) voor app, rapport, PDF en e-mail
 components/wkb/veilig.js   ← esc() en de import-sanering uit de security-audit
 components/wkb/rapport-print.js ← het rapport als zelfstandig document: ontsmetten, titel, printbalk, bestandsnaam
-components/wkb/fasebalans.js ← belasting PER FASE + faseAdvies (waar past een nieuw apparaat); werkt op de paspoort-grp[], dus deelbaar
 app/page.js                ← rendert landing
 app/landing/page.js        ← marketingpagina
 app/app/page.js            ← laadt WkbApp (client-only, ssr:false)
@@ -89,9 +89,12 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 
 ### Regressietests bij élke norm-wijziging
 ```bash
-npm test                  # 410 tests: normlogica, paspoort, ontsmetting, fasebalans, QR terugleestest, bronnen, printdocument
+npm test                  # 264 tests hier: cross-checks, paspoort, ontsmetting, QR terugleestest, bronnen, printdocument
+cd ../yourwkb-core && npm test   # 146 tests daar: belastingcheck, belasting per fase, fasebalans
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
+
+**De rekenkern is een dependency: `yourwkb-core`.** Belasting, fasen en de normkeuzes eromheen (gelijktijdigheid 0,6, reserve 1,0 kW, teruglevering als zwaarste-van-twee-richtingen) staan sinds 30-09-2026 in `github.com/mschut64/yourwkb-core`, gepind op tag `v0.1.0`, en worden gedeeld met Kastscan en straks met de bedrijfs- en onderwijsapp. **Zet nieuwe belasting- of faselogica daar, niet hier** — en bump de tag bewust, want een push naar de motor verandert de apps niet vanzelf. Wat in `components/wkb/model.js` blijft, gaat over de **meting**: de gG-kromme en de cross-checks. De datavorm van de motor is het meterkastpaspoort (`grp[]`, `ha`, `lb`): het enige model dat beide apps al opbouwen.
 
 **Het paspoortformaat is een dependency, `mkp-bouw.js` is van deze app.** Coderen, decoderen, EAN-controle en QR-grens staan sinds 11-09-2026 in de repo `github.com/mschut64/meterkastpaspoort` (waar ook de specificatie staat) en komen binnen als `import { mkpEncode, ... } from "meterkastpaspoort"`, gepind op tag `v0.3.2` — Kastscan staat op dezelfde tag. De vertaling van app-gegevens naar een paspoort verschilt per app en blijft hier, in `mkp-bouw.js`. Zet niets app-specifieks in het pakket, en bump de tag bewust — een push naar de spec-repo verandert de apps niet vanzelf.
 
@@ -122,9 +125,10 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ## 4. Actuele stand (11-09-2026)
 
-**Live:** app `v2026-09-20-A` + security-release + landing + blog (2 artikelen). Testsuite **410 tests** (`npm test`). Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
+**Live:** app `v2026-09-20-A` + security-release + landing + blog (3 artikelen). Testsuite **264 tests** hier + **146** in `yourwkb-core`. Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
 
 Recent afgerond:
+- **De gedeelde motor `yourwkb-core` (30-09-2026) + prijs naar € 9,50.** YourWkb en Kastscan hadden elk een eigen `model.js` met dezelfde begrippen erin — `faseBalans`, `belastingcheck`, `FASE_RESERVE_KW`, de gelijktijdigheidsfactor — en die waren uit elkaar gaan lopen: dezelfde kast kon in de ene app groen zijn en in de andere rood. De belasting- en faselogica staat nu in één repo (`github.com/mschut64/yourwkb-core`, tag `v0.1.0`, publiek leesbaar maar niet vrijgegeven), opgesplitst in zes modules met de **namen van Kastscan**. De datavorm is het **meterkastpaspoort**: Kastscan denkt in modules op een DIN-rail en YourWkb in aardlekgroepen met eindgroepen, maar béíde bouwen al een `grp[]` in hun eigen `mkpBouw` — dus geen van beide hoeft een nieuw datamodel te leren en een P1-meting past er zonder vertaling in. Nieuw in de motor: `faseCapaciteitKw` (stond als losse formule op drie plaatsen). **Geen gedragswijziging in YourWkb:** 264 tests hier + 146 in de motor = dezelfde 410, build groen, voorbeeldrapport opnieuw gegenereerd en de QR teruggelezen. Meegegaan: de **prijs uit de presentatie "Drie producten, één fundament"** — € 9,50 per rapport, bundel 20 × € 8,50 (€ 170) — op de landing, in de FAQ, in de JSON-LD `offer` en op de AVG-pagina (die stond nog op € 2,50). **Nog te doen: Kastscan op dezelfde motor.** Dáár is het wél een gedragswijziging — teruglevering staat er nog als −3,0 kW en de thuisbatterij als één regel.
 - **Printen op iPhone en iPad, en het rapport delen (`v2026-09-20-A`, 20-09-2026).** Melding Maurits: "Openen & opslaan als PDF" gaf een pdf met het app-scherm op pagina 1 en een half rapport op pagina 2. Oorzaak: we printten vanuit een verborgen iframe van 0×0 — WebKit print vanuit een frame het *bovenliggende* document, en van een frame zonder afmetingen komt hooguit één gerenderde pagina mee. Het rapport gaat nu naar een echt tabblad, met een printknop erin voor als de printdialoog niet vanzelf opent; wordt het tabblad geblokkeerd, dan alsnog via het frame (op de desktop werkt dat wél). De opbouw van dat document staat in **`components/wkb/rapport-print.js`** met 29 tests (ontsmetting BEV-03, printbalk, titel, bestandsnaam) — het stond ongetest in `WkbApp.jsx`. De titel bepaalt op iOS de bestandsnaam: `<projectnummer>-<discipline>`. **Nieuw: "Rapport delen of opslaan"** — het rapport als één zelfstandig bestand (metingen, foto's en de paspoort-QR zitten er als data in) via het deel-menu van het toestel: AirDrop, Mail, WhatsApp, Bestanden, Dropbox. Kan het toestel geen bestanden delen (`navigator.canShare` zegt nee — de meeste desktopbrowsers, en mogelijk Android met `text/html`), dan wordt het stil een download van hetzelfde bestand. De knop draagt het **Apple-deelteken als SVG**, niet een emoji: 📤 is een postvakje en wordt per toestel anders getekend. Printen blijft gewoon staan. **Nog te bevestigen door Maurits op de iPad** — WebKit is hier niet na te bootsen.
 - **R1 — design fase 2 (`v2026-08-29-A`, 29-08-2026), volledig afgerond en veldbevestigd.** Meetwaarden overal 20px/700 met tabular-nums en de eenheid via `S.eenheid` in alle zes disciplines; normvlak per meetblok via het nieuwe `StatusVlak` (uitspraak in woorden + grenswaarde, zodat je bij afkeur niet terugscrollt); stapteller "Stap i van n" + voortgangsbalk centraal boven het scherm; schermtitels 15 → 20px; startscherm op `S.rij` met disciplinetegels met kleurvlak; één gele knop per scherm (elf handgemaakte grijze knoppen naar `S.btnGhost`); komma-weergave in app én rapport. Vier fouten meegefixt: `@babel/core` ontbrak in `package.json` (extract-logica faalde op een verse checkout), de toevoeging viel uit het projectnummer (`2691JJ-72` i.p.v. `2691JJ-72a`), de paspoort-import zette `projectId` nooit (rapport toonde "—"), en 15 hardgecodeerde stapnummers waren fout zodra een scherm door meerdere disciplines wordt gebruikt. **Afwijkingen van de design-spec staan onderbouwd in de checklist** — met name: géén `S.inputMeting` (32px) op de meetvelden en géén statuspil in de projectenlijst, beide omdat ze op 375px de meetrasters respectievelijk het projectnummer kapotmaken.
 - **Belastingcheck wordt berekend (`v2026-09-03-A`, roadmap 2.1).** Gelijktijdigheidsfactor 0,6 uit NEN-EN-IEC 61439 over de grote verbruikers (laadpaal, warmtepomp, kookgroep, thuisbatterij); bij een gezamenlijke load balancer factor 1. De app *beschreef* die regel al bij de load balancing maar rekende hem nergens uit — `p.chk` in het paspoort werd alleen getoond, nooit berekend. Rekenkern overgenomen uit Kastscan; 25 nieuwe regressietests (80 → 105).
@@ -141,7 +145,7 @@ Recent afgerond:
 - Landing: dood e-mailveld verwijderd, footer mobiel als kolom, LinkedIn als icoonknop, Blog-link.
 - `public/index.html` (fossiel uit het statische-site-tijdperk) verwijderd; **sw v7**: alleen `/app`-navigaties via de service worker.
 
-**Openstaand handwerk voor Martin (niet door jou te doen):** PostHog-funnel/dashboard aanmaken, Google Search Console instellen, prijsdiscrepantie €2,50 (Aannames-tabblad businesscase) vs €7,50 (landing) beslissen.
+**Openstaand handwerk voor Martin (niet door jou te doen):** PostHog-funnel/dashboard aanmaken, Google Search Console instellen. ~~Prijsdiscrepantie~~ — **beslist 30-09-2026: € 9,50 per rapport, bundel 20 × € 8,50.**
 
 ---
 
@@ -205,7 +209,7 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 ## 8. Werkafspraken met Martin
 
 - Werk in **afgebakende releases** met expliciete scope; vraag niet om toestemming voor stappen die in het releaseplan staan — voer ze uit.
-- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen, nu 410), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
+- Lever bij elke release: gewijzigde bestanden, testresultaat (alle tests groen: 264 hier + 146 in de motor), buildresultaat, en een korte samenvatting van wat de gebruiker merkt. Meld gedragswijzigingen expliciet, ook kleine.
 - Werk `YourWkb-releaseplan-checklist.md` bij (vinkjes zetten) en dit bestand wanneer de stand verandert.
 - Nieuwe features toetsen aan de flow-regel **voordat** je bouwt; als de flow langer wordt, herontwerp.
 - Bij normvragen of twijfel over grenswaarden: leg de vraag voor aan Martin (hij is de expert) in plaats van te gokken.
