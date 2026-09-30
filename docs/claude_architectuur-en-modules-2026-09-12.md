@@ -1,6 +1,6 @@
 # YourWkb · Kastscan · Meterkastpaspoort — architectuur, modules en waar je verder kunt
 
-*Stand 30-09-2026 (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
+*Stand 30-09-2026, eind van de dag (eerste versie 12-09-2026). Tussentijds ontwikkeldocument.*
 
 **Lees dit ná `CLAUDE.md`.** CLAUDE.md zegt wát er moet gebeuren en volgens welke regels;
 dit document zegt **wat waar staat, waarom het daar staat, en waar de scheuren zitten**.
@@ -26,10 +26,12 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
 
 ```
                     ┌────────────────────────────────────────────────┐
-                    │       yourwkb-core  (eigen repo, tag v0.1.0)   │
-                    │       DE MOTOR — belasting, fasen, normkeuzes  │
+                    │       yourwkb-core  (eigen repo, tag v0.2.0)   │
+                    │  DE MOTOR — belasting, fasen, én het kastbeeld  │
                     │  vermogen.js · fasen.js · belasting.js         │
                     │  fasebalans.js — werkt op de paspoort-grp[]    │
+                    │  toestellen · normaliseren · indeling ·        │
+                    │  verklaring · leren · leerlus                  │
                     └──────────┬───────────────────────┬─────────────┘
                     ┌──────────┴───────────────────────┴─────────────┐
                     │     meterkastpaspoort  (eigen repo, tag)       │
@@ -50,8 +52,8 @@ het CO-certificaat heeft in YourWkb een eigen plek. Zie §2, §2b, §5D en §13.
     │  WkbApp.jsx (schermen)       │              │    PaspoortScanner/-Weergave │
     │                              │              │  KastscanApp.jsx (schermen)  │
     └──────────────────────────────┘              └──────────────────────────────┘
-          264 tests groen                                1289 tests groen
-                    └──────── motor: 146 tests ────────┘
+          264 tests groen                                1235 tests groen
+                    └──────── motor: 247 tests ────────┘
                    │                                               │
                    └───────────────────┬───────────────────────────┘
                                        ▼
@@ -72,10 +74,10 @@ los van zijn gebruikers en is de architectuur stuk.
 
 | Repo | Wat het is | Hosting | Afhankelijk van |
 |---|---|---|---|
-| **`mschut64/yourwkb-core`** | **De motor**: belasting per fase, belastingcheck, fasebalans, faseadvies. Publiek leesbaar, alle rechten voorbehouden. | niet gedeployed — alleen dependency | niets |
+| **`mschut64/yourwkb-core`** | **De motor**: belasting per fase, belastingcheck, fasebalans, faseadvies, en sinds v0.2.0 het **kastbeeld** (een foto lezen, de blokindeling, de leerlus). Publiek leesbaar, alle rechten voorbehouden. | niet gedeployed — alleen dependency | niets |
 | **`mschut64/meterkastpaspoort`** | De open standaard: formaat, controle, specificatie, referentielezer, QR-redirect, de index van sleutels. CC BY 4.0. | Vercel, statisch — **geen buildscript** | niets |
-| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.1.0`, meterkastpaspoort `v0.3.2` |
-| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | yourwkb-core `v0.1.0`, meterkastpaspoort `v0.3.2` |
+| **`mschut64/yourwkb`** | Wkb-opleverrapporten, zes disciplines, PWA. Repo is **publiek**. | Vercel `yourwkb-yndu`, auto-deploy op `main` | yourwkb-core `v0.2.0`, meterkastpaspoort `v0.3.2` |
+| **`mschut64/kastscan`** | Van foto naar gelabelde groepenkast. De foto vult in, de installateur bevestigt. | Vercel, **eigen project buiten het team van de connector** — controleer live met `curl`/de browser | yourwkb-core `v0.2.0`, meterkastpaspoort `v0.3.2` |
 
 **Waarom het pakket geen buildscript mag krijgen:** die site draagt de redirects
 `/p` en `/p/:rest*` → `yourwkb.nl/app` waar **elke QR-sticker in het veld** van afhangt.
@@ -367,8 +369,8 @@ Offline: beide apps bewaren de laatst opgehaalde lijsten in `localStorage` en to
 | | Versie | Tests |
 |---|---|---|
 | YourWkb | **`v2026-09-20-A`**, live | 264 |
-| yourwkb-core | **`v0.1.0`** — de motor, onder beide apps | 146 |
-| Kastscan | **`v2026-09-30-A`**, live | 1289 |
+| yourwkb-core | **`v0.2.0`** — de motor, onder beide apps | 247 |
+| Kastscan | **`v2026-09-30-B`**, live | 1235 |
 | meterkastpaspoort | pakket **`v0.3.2`**, spec 0.3, live | 109 |
 
 Sinds de vorige stand (12-09):
@@ -386,6 +388,7 @@ Sinds de vorige stand (12-09):
 | 19-09 | **Featurespec dossiercode + uitbreidingsmodus** (`docs/claude_dossiercode-en-uitbreiding-featurespec.md`) — nog niet gebouwd |
 | 19-09 | YourWkb `-19-D`: **rapportmail minder spamgevoelig** — eigen platte-tekstversie, aanhef met installateur, adres en "namens"; de zin "voldoet aan de geldende normen" uit de aanhef (sprak rapporten met afwijkingen tegen). **`security.txt`** op yourwkb.nl en kastscan.nl. |
 | 19-09 | YourWkb `-19-C`: **erkenningsnummer optioneel voor cv-monteurs** — in de cv-flow volstaat het CO-certificaat; zonder allebei blijft "Volgende" dicht. Andere disciplines ongewijzigd. |
+| 30-09 | **K1 — het kastbeeld naar de motor (`v0.2.0`).** Het lezen van een kastfoto, de blokindeling, de groepenverklaring, het correctielog en heel `leerlus.js`: 34 exports uit Kastscans `model.js` (2684 → 1989 regels) plus `leerlus.js` (452 → 22). `correctieStatistiek` en `correctieStatistiekVoorDelen` waren bijna gelijk en zijn er één, met `ZEKERHEIDSDREMPEL` in plaats van een tweede hardgecodeerde 0,75. Geen gedragswijziging. Ook gefixt: de bevestigingslus las `zekerheid` als object terwijl het een getal is, dus legde "Bevestigen en verder" niets vast — de app leerde wel wat hij fout deed, niet wat hij goed deed. Nu `zekerheidVan()` met tests. **Featurespec voor het hele spoor: `docs/claude_kastbeeld-featurespec.md`.** |
 | 30-09 | **Kastscan op de motor.** `faseBalans`/`belastingcheck`/`faseCapaciteitKw` zijn schillen; `grpRegels()` vertaalt het railmodel naar de paspoortvorm en `mkpBouw` gebruikt diezelfde vertaling. **Drie gedragswijzigingen:** teruglevering positief (PV van −3,0 naar 3,0, en de omvormer komt nu mét `kw` in het paspoort), de thuisbatterij als twee regels, en op een eenfasige aansluiting tellen groepen zonder aangetikte fase gewoon mee. Kasten die groen waren kunnen rood worden. 1275 → 1289 tests. |
 | 30-09 | **De motor `yourwkb-core` v0.1.0.** Belasting, fasen en de normkeuzes eromheen uit YourWkbs `model.js`/`fasebalans.js` naar een eigen repo, in zes modules met de namen van Kastscan. Datavorm = de paspoort-`grp[]`. Nieuw: `faseCapaciteitKw`. YourWkb draait erop, geen gedragswijziging. **Kastscan nog niet** — daar is het er wél een. |
 | 30-09 | **Prijs € 9,50 per rapport, bundel 20 × € 8,50** (presentatie "Drie producten, één fundament"): landing, FAQ, JSON-LD en AVG-pagina gelijkgetrokken. |
@@ -504,11 +507,17 @@ schrijft nog geen `mat[]`. Zie draad ① in §11.
 
 ## 11 · Waar je verder kunt
 
-**⓪ ~~Kastscan op de motor~~** ✅ *(30-09)* — beide apps draaien op `yourwkb-core v0.1.0`.
-Wat er nog ligt: de **bedrijfs- en onderwijsapp** uit de visie kunnen er nu aan hangen (dat
-is het `@yourwkb/core` uit dat document), en de cross-checks over meetwaarden
-(`gkCrossChecks`, `pvCrossChecks`, de gG-kromme) staan nog in YourWkb — die verhuizen zodra
-de onderwijsapp dezelfde meetwaarden moet toetsen.
+**⓪ Het kastbeeld in YourWkb** — `docs/claude_kastbeeld-featurespec.md`, zes releases.
+**K1 is af** (30-09): het lezen van een kastfoto en de leerlus staan in de motor. Volgende:
+**K2** de prompt als data, **K3** `aardlekgroepenUitPosities`, **K4** een gescand paspoort
+met `mat[]` vult stap 6 (grootste tijdwinst, geen model nodig), **K5** de fotostap zelf,
+**K6** de leerlus aan. Vóór K5 moeten er drie dingen beslist zijn: de kosten per scan, de
+privacytekst, en of YourWkb een eigen route krijgt (advies: ja).
+
+**⓪b ~~Kastscan op de motor~~** ✅ *(30-09)* — de **bedrijfs- en onderwijsapp** uit de visie
+kunnen er nu aan hangen (dat is het `@yourwkb/core` uit dat document). De cross-checks over
+meetwaarden (`gkCrossChecks`, `pvCrossChecks`, de gG-kromme) staan nog in YourWkb — die
+verhuizen zodra de onderwijsapp dezelfde meetwaarden moet toetsen.
 
 **① Dossiercode en uitbreidingsmodus** *(spec ligt klaar)*
 `docs/claude_dossiercode-en-uitbreiding-featurespec.md`. Een tweede QR in het rapport met het
