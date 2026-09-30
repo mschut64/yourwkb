@@ -304,9 +304,18 @@ peer dependency, en het koppelt twee apps aan dezelfde schermindeling terwijl ze
 verschillende vraag stellen. De fasebalken laten zien dat het zonder kan: dezelfde balk,
 dezelfde kleuren, twee stukjes JSX van vijftien regels.
 
-**Wanneer:** bij **K4**. Dan heeft YourWkb voor het eerst een kast om te tekenen, en is de
-railstrook meteen de plek waar "+ Groep toevoegen" op zijn plaats valt — je wijst de lege
-module aan waar hij komt. Vóór K4 is er niets om te tonen.
+**Gebouwd op 30-09-2026 (K4).** Twee afwijkingen van het bovenstaande, beide om dezelfde
+reden — een strook die niemand kan lezen helpt niet:
+
+1. **Eén rij per aardlekgroep**, niet één lange rail. Op 375 px moet een rail van twintig
+   modules horizontaal geschoven worden, en in YourWkb wordt er per aardlekgroep gemeten.
+2. **Een tegel is minstens 46 px breed**, ook al is een module 26 px. De verhouding tussen
+   brede en smalle toestellen blijft kloppen, maar "Kookplaat" moet leesbaar zijn zonder te
+   tikken. Kastscan komt met 26 px weg omdat daar afkortingen op de tegels staan en je ze
+   aantikt om ze te lezen; hier is de strook een overzicht.
+
+Een onvolledige tegel krijgt een **stippellijn en een geel vraagteken** in plaats van een rode
+rand: er is niets fout, er ontbreekt iets. `tokens.js` in Kastscan is nog steeds een kopie.
 
 ⚠️ **Nu al opschrijven:** `tokens.js` is een kopie en kan dus uit de pas lopen. Zolang dat
 zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die níét meekomt.
@@ -320,7 +329,7 @@ zo is, is elke kleurwijziging in YourWkb een stille wijziging in Kastscan die n�
 | **K1** ✅ | **Motor v0.2** *(30-09)*: de pure fotologica, het correctielog en de leerlus naar `yourwkb-core`. Kastscan importeert ze; gedrag ongewijzigd. Twee definities van 0,75 worden er één, `correctieStatistiek` en `correctieStatistiekVoorDelen` worden er één. | niets | laag — mechanisch, met ~347 bestaande asserties eroverheen |
 | **K2** ✅ | **Motor v0.3** *(30-09)*: de prompt als data (`prompt.js`, apart pad — 22 kB hoort niet in een browserbundel), `PROMPTVERSIE` mee. Kastscans route ging van 623 naar 314 regels. De drie discrepanties tussen het JSON-voorbeeld en het afgedwongen schema zijn eruit, met 18 tests die ze vangen. ⚠️ **Promptwijziging: vraagt een verse run over de referentieset** (vrijgaveregel). | niets zichtbaar; het model krijgt een voorbeeld dat de API niet meer zou afkeuren | laag, mits de referentierun gedaan wordt |
 | **K3** ✅ | **`aardlekgroepenUitPosities`** *(30-09)*, motor v0.4.0. `mkpType` verhuisde mee. 36 tests op de vertaling, 15 in YourWkb op de doorgang naar het paspoort — gecontroleerd dat die een verkeerde fasemapping ook echt afkeurt. | niets | — |
-| **K4** 🔄 | **Paspoort vult stap 6** (deel 3) *(30-09)*. `mat[]` lezen en de kast voorvullen: **gedaan**, met de herkomst per groep in beeld. De **railstrook** (§5b) en een expliciete "+ Groep toevoegen" staan nog open. | **veel** — wie een sticker scant heeft de kast al staan | midden |
+| **K4** ✅ | **Paspoort vult stap 6** (deel 3) *(30-09)*. `mat[]` lezen en de kast voorvullen, met de herkomst per groep, de **railstrook** in de vormtaal van Kastscan (motor v0.6.0) en **"+"** op de plek waar de nieuwe groep komt te hangen. | **veel** — wie een sticker scant heeft de kast al staan, en ziet hem zoals in Kastscan | midden |
 | **K5** | **Fotostap in YourWkb** (deel 2). Eigen route `/api/kastbeeld`, de fotoafhandeling van Kastscan, de nieuwe stap vóór Groepen, en de vijftien stapnummers in teksten mee. | **veel** | hoog — nieuwe route, kosten per scan, AVG-tekst erbij |
 | **K6** | **De leerlus aan** in YourWkb: catalogus onder een eigen sleutel, `vulAanUitCatalogus` na normaliseren, `catalogusLeer` bij bevestigen, `maakCorrectie` bij elke wijziging. | niets direct; de app wordt beter | laag, maar pas zinvol bij volume |
 
