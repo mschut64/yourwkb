@@ -361,7 +361,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-30-C";
+const APP_VERSIE = "2026-09-30-D";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1184,8 +1184,12 @@ const MiniInput = ({ value, onChange, placeholder, unit, width=96 }) => (
   </div>
 );
 
+// LET OP DE 16 PX. Onder de 16 px zoomt iOS bij het aantikken van een select in
+// op de pagina — en zoomt er niet vanzelf weer uit. Op een telefoon in de
+// meterkast is dat precies het moment waarop je de rest van de kast kwijt bent.
+// De maat is dus geen opmaakkeuze; hij staat er om dat te voorkomen.
 const MiniSelect = ({ value, onChange, options, width=90 }) => (
-  <select style={{ ...S.select, width, padding:"8px 10px", fontSize:13 }}
+  <select style={{ ...S.select, width, padding:"8px 10px", fontSize:16 }}
     value={value||""} onChange={e=>onChange(e.target.value)}>
     <option value="">—</option>
     {options.map(o=><option key={o}>{o}</option>)}
