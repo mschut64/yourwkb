@@ -316,7 +316,7 @@
 //    vervangen door een dynamische lijst "per groep" — met de knop "+ Extra groep"
 //    voeg je een tweede/derde groep enz. toe. 1-fase (≥0,23 MΩ) en 3-fase
 //    per groep instelbaar. Rapport + cross-check + AI-prompt bijgewerkt.
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { trackEvent } from "./analytics";
 // De rekenkern is sinds 30-09-2026 een gedeelde motor: dezelfde belasting- en
@@ -370,7 +370,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-D";
+const APP_VERSIE = "2026-10-02-E";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -484,10 +484,23 @@ const EINDGROEP_TYPES = [
   { id:"wp",     icon:"♨️", label:"Warmtepomp" },
 ];
 
-// Foto's vóór de werkzaamheden (bestaande situatie)
+// Foto's in stap 4 — IN TWEE DELEN, en die scheiding is de werkwijze zelf.
+//
+// De installateur fotografeert eerst de bestaande kast (open en dicht), gaat dan
+// aan de gang, en fotografeert pas daarna de NIEUWE kast. Aan die nieuwe kast
+// wordt gemeten, dus die is het die stap 5 en 6 moet vullen — niet de kast die
+// er lag toen hij binnenkwam. (Correctie Martin, 02-10-2026: eerst stond de
+// uitlezing boven de bestaande situatie, en dan beschrijven het materiaal en de
+// indeling een kast die er niet meer hangt.)
+//
+// `na_open` staat daarom óók in deze stap, en is hier bewust NIET verplicht: wie
+// de app invult vóór hij begint, moet gewoon door kunnen. In stap 9 is dezelfde
+// opname wél verplicht — het is één foto onder één sleutel, in welke stap je hem
+// ook maakt.
 const GK_FOTO_CPS_VOOR = [
-  { id:"voor_dicht", label:"Bestaande situatie — kast dicht", icon:"📦", required:true, optioneelInRapport:true },
-  { id:"voor_open",  label:"Bestaande situatie — kast open",  icon:"🔓", required:true  },
+  { id:"voor_dicht", sectie:"Bestaande situatie — vóór het werk", label:"Bestaande situatie — kast dicht", icon:"📦", required:true, optioneelInRapport:true },
+  { id:"voor_open",  sectie:"Bestaande situatie — vóór het werk", label:"Bestaande situatie — kast open",  icon:"🔓", required:true  },
+  { id:"na_open",    sectie:"Nieuwe situatie — na het opbouwen",  label:"Nieuwe situatie — kast open (bedrading)", icon:"🔌", required:false },
 ];
 // Foto's ná de werkzaamheden (nieuwe situatie)
 const GK_FOTO_CPS_NA = [
@@ -2348,11 +2361,17 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
 
 // ─── DE KAST UIT DE FOTO ──────────────────────────────────────────────────────
 //
-// De foto van de open kast is al verplicht in deze stap — de installateur maakt
-// hem toch. Hij hoeft hem dus niet nóg een keer te maken om de kast te laten
-// inlezen: één opname, en de app vult stap 6 vast in. ⚓ De flow wordt hier niet
-// langer van, hij wordt korter: wie dit gebruikt tikt geen twintig groepen meer
-// met de hand in.
+// ⚓ DE KAST DIE GELEZEN WORDT IS DE NIEUWE. Dat is de kast waaraan gemeten wordt
+// en die het rapport beschrijft. De werkwijze is: eerst de bestaande situatie
+// vastleggen, dan bouwen, dan de nieuwe kast fotograferen — en pas die laatste
+// vult stap 5 en 6. Stond de uitlezing boven de bestaande situatie (zoals in de
+// eerste opzet), dan beschrijven het materiaal en de indeling een kast die er na
+// het werk niet meer hangt. Correctie Martin, 02-10-2026.
+//
+// De foto van de nieuwe open kast is tóch al een verplichte opname (stap 9), dus
+// er komt geen handeling bij: één opname, en de app vult twee stappen. ⚓ De flow
+// wordt hier niet langer van maar korter — wie dit gebruikt tikt geen twintig
+// groepen meer met de hand in.
 //
 // Twee resoluties uit dezelfde opname, en dat is het hele punt:
 //  • naar de ANALYSE gaat het origineel, op volle resolutie. De opdruk op de
@@ -2511,7 +2530,7 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
         onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
 
       <div style={{ fontWeight:700, fontSize:15, color:K.yellow, marginBottom:4 }}>
-        {vergelijken ? "🔍 Is de kast gewijzigd?" : "📷 Lees de kast uit de foto"}
+        {vergelijken ? "🔍 Is de kast gewijzigd?" : "📷 Lees de nieuwe kast uit de foto"}
       </div>
       <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:12 }}>
         {vergelijken ? (<>
@@ -2520,9 +2539,10 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
           en 6 niet een kast beschrijven die er niet meer hangt. Dezelfde foto telt meteen als de verplichte
           opname hieronder.
         </>) : (<>
-          Maak hier de foto van de <strong style={{color:K.text}}>open kast</strong>. De app leest de automaten,
-          de aardlekschakelaars en hun opdruk in en vult stap 5 en 6 vast voor je in — je hoeft ze dan alleen nog
-          na te lopen. Dezelfde foto gaat gewoon mee in het rapport.
+          Maak deze foto <strong style={{color:K.text}}>nadat je de kast hebt opgebouwd</strong>. De app leest de
+          automaten, de aardlekschakelaars en hun opdruk in en vult stap 5 en 6 vast voor je in — je hoeft ze dan
+          alleen nog na te lopen. Het is de kast waaraan je straks meet, dus deze en niet de bestaande. Dezelfde
+          opname telt meteen als de verplichte foto van de nieuwe situatie.
         </>)}
       </div>
 
@@ -2607,11 +2627,12 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
       {!vergelijken && uitPaspoort && !gelezen && (
         <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
-            ✓ De kast staat al in het gescande paspoort
+            ✓ De bestaande kast stond al in het gescande paspoort
           </div>
           <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
-            Het materiaal en de indeling kwamen van de sticker en staan in stap 5 en 6. Een foto hoeft
-            alleen als de kast sinds de vorige klus is veranderd — dan leest hij hem opnieuw in.
+            Het materiaal en de indeling kwamen van de sticker en staan in stap 5 en 6. Blijft de kast zoals
+            hij is, dan hoef je hier niets te doen. Bouw je hem om of zet je er iets bij, maak dan deze foto —
+            dan staat er straks in het rapport wat er écht hangt.
           </div>
         </div>
       )}
@@ -2700,11 +2721,9 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
         <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Foto's</div><div style={{fontSize:12,color:K.muted}}>{done}/{checkpoints.length} gemaakt</div></div>
       </div>
       <div style={S.body}>
-        {/* Bij de groepenkast: vóór de werkzaamheden leest dit de bestaande kast
-            in, erna vergelijkt het de nieuwe met de oude. De vergelijking heeft
-            alleen zin als er iets is om mee te vergelijken. */}
-        {kastLezer && (kastLezer !== "vergelijken"
-            || (data.kastbeeld||{}).posities
+        {/* In stap 9 staat de vergelijking boven de opnamen; in stap 4 hoort de
+            lezer onder de kop "Nieuwe situatie" en dus niet hier. */}
+        {kastLezer === "vergelijken" && ((data.kastbeeld||{}).posities
             || (data.mkpImport && paspoortDraagtKast(data.mkpImport))) && (
           <KastLezer data={data} onChange={onChange}
             modus={kastLezer === "vergelijken" ? "vergelijken" : "vullen"}
@@ -2726,8 +2745,25 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
                   [kastLezer === "vergelijken" ? "na_open" : "voor_open"]: klein }));
             }}/>
         )}
-        {checkpoints.map(cp=>(
-          <div key={cp.id} style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green+"66":K.border}`}}>
+        {checkpoints.map((cp,i)=>(
+          <Fragment key={"s"+cp.id}>
+          {/* EEN KOP PER SECTIE. De scheiding tussen de bestaande en de nieuwe
+              kast is geen opmaak maar de volgorde van het werk: eerst vastleggen
+              wat er lag, dan bouwen, dan vastleggen wat er hangt. Wie dat door
+              elkaar haalt, rapporteert de verkeerde kast. */}
+          {cp.sectie && cp.sectie !== (checkpoints[i-1]||{}).sectie && (
+            <div style={{ ...S.sTitle, marginTop:i?18:0 }}>{cp.sectie}</div>
+          )}
+          {/* De uitlezing hoort bij de NIEUWE kast: die wordt gemeten, en dus is
+              die het die stap 5 en 6 moet vullen. */}
+          {kastLezer === "vullen" && cp.id === "na_open" && (
+            <KastLezer data={data} onChange={onChange} modus="vullen"
+              onFoto={(dataUrl)=>{
+                verkleinIndienNodig(dataUrl, 900).then(klein=>
+                  onChange("fotos", { ...(data.fotos||{}), na_open: klein }));
+              }}/>
+          )}
+          <div style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green+"66":K.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}
               onClick={()=>!fotos[cp.id]&&setKiesVoor(kiesVoor===cp.id?null:cp.id)}>
               {/* Thumbnail of icoon */}
@@ -2779,6 +2815,7 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
               </div>
             )}
           </div>
+          </Fragment>
         ))}
         {!verplichtDone&&<div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
           <div style={{fontSize:12,color:K.red,fontWeight:600}}>⚠️ Maak alle verplichte foto's</div>
@@ -7410,7 +7447,7 @@ export default function App() {
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev} kastLezer/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev} kastLezer="vullen"/>,
     <GK_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapGroepen     key="groepen"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
