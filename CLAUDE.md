@@ -35,6 +35,24 @@ Elke toevoeging is **automatisch**, **optioneel**, of **vervangt handwerk**. Com
 - Mail: **Resend** (afzender `YourWkb <rapport@yourwkb.nl>`). AI-analyse: **Anthropic API** (server-side).
 - Contactadres: **info@yourwkb.nl** (bestaat en werkt).
 
+### De drie andere apps op dezelfde motor
+
+**`~/projects/yourwkb-bedrijf`** (bedrijf.yourwkb.nl) en **`~/projects/yourwkb-leren`**
+(leren.yourwkb.nl), sinds 02-10-2026. Variant 2 en 3 uit het concept *"YourWkb Onderwijsapp —
+concept en visie"* op Drive: het installatiebedrijf met een dashboard, in-house begeleiding en
+fasecheck-monitoring, en de white-label leeromgeving voor opleiders. Eigen repo, eigen
+Vercel-project, eigen risicoprofiel — en dezelfde motor eronder. **De ZZP-app hangt hier bewust
+buiten**: die blijft accountloos en database-loos, en dat is geen tekortkoming maar het product.
+
+Lees hun `LEESMIJ.md` voor je eraan werkt. Twee dingen die je daar moet weten:
+
+- **Ze draaien in demo-stand zolang er geen database is**, met een zichtbare balk. In productie
+  weigeren ze te starten zonder database (tenzij `YWKB_DEMO=1`). De databasekeuze uit het
+  concept (Supabase EU) is een **voorstel**, nog niet besloten — daarom zit er een laag tussen
+  (`lib/winkel.js`) en is `db/schema.sql` gewoon Postgres.
+- **De motor staat er als `file:../yourwkb-core`**, want tag v0.9.0 bestaat nog niet op GitHub.
+  Bij de eerste deploy wordt dat de tarball, zoals hier.
+
 ### ⚠️ Kastscan — het zusterproject dat je moet kennen
 
 **`~/projects/kastscan`** (kastscan.nl). Van foto naar gelabelde groepenkast: de foto vult in, de installateur bevestigt. Geen los experiment maar de tweede helft van hetzelfde plan — **de modules zijn zo gebouwd dat delen 1-op-1 naar YourWkb kunnen.** De belastingcheck uit `v2026-09-03-A` is daar al vandaan gekomen.
@@ -91,11 +109,13 @@ tests/test.js              ← 128 regressietests; importeert components/wkb/mod
 ### Regressietests bij élke norm-wijziging
 ```bash
 npm test                  # 304 tests hier: cross-checks, paspoort, ontsmetting, QR terugleestest, bronnen, printdocument
-cd ../yourwkb-core && npm test   # 449 tests daar: belastingcheck, belasting per fase, fasebalans
+cd ../yourwkb-core && npm test       # 673 tests daar: belasting, fasen, kastbeeld, meting, organisatie, leerlijn, fasecheck
+cd ../yourwkb-bedrijf && npm test    # 153 tests: invoer, winkel, en de routes van buiten naar binnen
+cd ../yourwkb-leren && npm test      # 127 tests
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 
-**De rekenkern is een dependency: `yourwkb-core`.** Belasting, fasen en de normkeuzes eromheen (gelijktijdigheid 0,6, reserve 1,0 kW, teruglevering als zwaarste-van-twee-richtingen) staan sinds 30-09-2026 in `github.com/mschut64/yourwkb-core`, gepind op tag `v0.8.1` (sinds K1 ook het kastbeeld: een foto lezen, de blokindeling, de leerlus; sinds K2 ook **de prompt** — apart te importeren via `yourwkb-core/prompt.js`, want 22 kB hoort niet in een browserbundel), en worden gedeeld met Kastscan en straks met de bedrijfs- en onderwijsapp. **Zet nieuwe belasting- of faselogica daar, niet hier** — en bump de tag bewust, want een push naar de motor verandert de apps niet vanzelf. Wat in `components/wkb/model.js` blijft, gaat over de **meting**: de gG-kromme en de cross-checks. De datavorm van de motor is het meterkastpaspoort (`grp[]`, `ha`, `lb`): het enige model dat beide apps al opbouwen.
+**De rekenkern is een dependency: `yourwkb-core`.** Belasting, fasen en de normkeuzes eromheen (gelijktijdigheid 0,6, reserve 1,0 kW, teruglevering als zwaarste-van-twee-richtingen) staan sinds 30-09-2026 in `github.com/mschut64/yourwkb-core`, gepind op tag `v0.8.1` (sinds K1 ook het kastbeeld: een foto lezen, de blokindeling, de leerlus; sinds K2 ook **de prompt** — apart te importeren via `yourwkb-core/prompt.js`, want 22 kB hoort niet in een browserbundel), en worden gedeeld met Kastscan en straks met de bedrijfs- en onderwijsapp. **Zet nieuwe belasting- of faselogica daar, niet hier** — en bump de tag bewust, want een push naar de motor verandert de apps niet vanzelf. **⚠️ De meting-logica is sinds 02-10-2026 óók in de motor (`meting.js`), en staat voorlopig op twee plaatsen.** Dat is bewust en tijdelijk: de onderwijsapp moet dezelfde meetwaarden toetsen als het veld, dus is `components/wkb/model.js` woordelijk naar `yourwkb-core/meting.js` verhuisd — precies zoals het commentaar in dat bestand zelf voorschreef. De kopie hier kan pas weg als tag v0.9.0 gepubliceerd is: dan wordt `components/wkb/model.js` een re-export van drie regels, in één commit, met de 304 tests als vangnet. **Doe dat bij de eerstvolgende push van de veldapp**, en haal daarna deze alinea weg. Wat daarna in `model.js` staat, gaat over de **meting**: de gG-kromme en de cross-checks. De datavorm van de motor is het meterkastpaspoort (`grp[]`, `ha`, `lb`): het enige model dat beide apps al opbouwen.
 
 **Het paspoortformaat is een dependency, `mkp-bouw.js` is van deze app.** Coderen, decoderen, EAN-controle en QR-grens staan sinds 11-09-2026 in de repo `github.com/mschut64/meterkastpaspoort` (waar ook de specificatie staat) en komen binnen als `import { mkpEncode, ... } from "meterkastpaspoort"`, gepind op tag `v0.3.2` — Kastscan staat op dezelfde tag. De vertaling van app-gegevens naar een paspoort verschilt per app en blijft hier, in `mkp-bouw.js`. Zet niets app-specifieks in het pakket, en bump de tag bewust — een push naar de spec-repo verandert de apps niet vanzelf.
 
@@ -124,11 +144,17 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ---
 
-## 4. Actuele stand (11-09-2026)
+## 4. Actuele stand (02-10-2026)
 
-**Live:** app `v2026-10-02-F` + security-release + landing + blog (3 artikelen). Testsuite **304 tests** hier + **449** in `yourwkb-core` (v0.8.1); Kastscan 1238. Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
+**Live:** app `v2026-10-02-F` + security-release + landing + blog (3 artikelen). Testsuite **304 tests** hier + **673** in `yourwkb-core` (v0.9.0, nog niet getagd) + **153** in de bedrijfsmodule + **127** in de leeromgeving = 1257 over het eigen spoor, plus 1238 in Kastscan. Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
 
 Recent afgerond:
+- **De bedrijfs- en de onderwijsapp (`yourwkb-bedrijf` B1 + `yourwkb-leren` L1, motor `v0.9.0`, 02-10-2026).** Vraag Martin: *"maak nu ook de leer en bedrijfs app conform de ontwikkeldocumenten op de drive"*. Twee nieuwe repo's, conform het concept *"YourWkb Onderwijsapp — concept en visie"* (Drive, 28/29-09-2026) en de door Martin goedgekeurde mock-up van het meester-dashboard.
+  - **Bedrijf** (variant 2, licentie): de drie niveaus uit de mock-up — projectoverzicht, één klus beoordelen, en fasecheck-monitoring per adres met een 24-uursgrafiek, een oordeel en een herverdelingsadvies. Plus inleveren van een opleverset uit de veldapp, een kastje koppelen, en een meetrapport als zelfstandig document. **De flow van de veldapp wordt er niet langer van**: de monteur levert in met het bestand dat hij toch al kan delen, en er verandert niets in de meterkast.
+  - **Leren** (variant 3, white-label): een leerlijn met skills, punten, levels, streaks en badges; oefenklussen waarin de leerling aan een echte kast meet en zijn waarden door **dezelfde normcheck** gaan als een oplevering; de fout van de dag; de keten leerling → docent → meester; en bijsturen met vinkjes (welke disciplines open staan, hoe streng, eigen onderdelen). De hostnaam bepaalt het instituut — naam, letters, accentkleur.
+  - **In de motor** (v0.9.0, 223 tests erbij → 673): `meting.js` (verhuisd uit déze app), `organisatie.js`, `beoordeling.js`, `leerlijn.js`, `fasecheck-monitor.js` en `palet.js`. ⚓ Vier regels liggen daar vast en niet in een scherm: **niemand beoordeelt zijn eigen werk** (ook de baas niet — dat is het vier-ogenprincipe waar de licentie om verkocht wordt), **de app geeft geen cijfer** (zij zet de feiten op een rij, de meester typt het getal), **punten komen alleen uit beoordeeld werk** (en een kennisvraag kan nooit een meting- of klus-skill aftekenen), en **oefendata komt nooit in een Wkb-archief** — bewaakt vóór de opslag én door een trigger in de database.
+  - **Wat nog van Martin is:** de databasekeuze (het concept noemt Supabase EU als *voorstel*), twee Vercel-projecten met DNS, en de **leerstof** — de vragen en oefenklussen zijn voorbeelden met de juiste vorm, gemarkeerd met `voorbeeld: true`, en de inhoud is vakwerk.
+  - **Eén vergissing in de mock-up niet overgenomen:** daar staat *"aardlek 38 ms, norm ≤ 30 ms, afwijking"*. De apparaatnorm van EN 61008 is 300 ms bij 1× IΔn; 38 ms is dus goed. De demo gebruikt 320 ms, zodat het scherm toont wat het hoort te doen.
 - **De kast op meerdere rails, een meeschalende kolom en een licht thema (`v2026-10-02-F`, motor `v0.8.0`, 02-10-2026).** Drie wensen van Martin, alle drie "zoals Kastscan".
   - **Meerdere rails.** Een kast van twintig modules hangt op twee of drie rails, en een blok loopt vaak over de overgang heen: de aardlek onderaan rail 1, de laatste groepen bovenaan rail 2. De strook tekende alles als één rij — dan klopt het beeld niet met de kast waar de installateur voor staat, en dat is precies waar hij hem mee vergelijkt. `aardlekgroepenUitPosities` draagt nu `rail` en `plek` mee, `strookUitAardlekgroepen` geeft `rails[]`, en binnen een rail staan de modules **op plek en niet op blokvolgorde**. De kleurband houdt de blokken uit elkaar — loopt een blok door op de volgende rail, dan draagt hij daar dezelfde kleur, en dát is hoe je ziet dat het één blok is. Een met de hand ingevoerde kast heeft geen plaatsen en valt terug op één rail; een verzonnen plaats is erger dan geen. Het kopje "Rail 1" verschijnt alleen als er écht meer dan één rail is.
   - **Schalen naar tablet, laptop en desktop.** `APP_BREEDTE = { telefoon: 430, tablet: 720, laptop: 1080 }`, dezelfde maten als Kastscan, met een haak die de vensterbreedte volgt. **Géén tweede layout** — dezelfde schermen, meer kolombreedte. Dat is bewust: een tweede indeling moet onderhouden worden, en daarom stond "tablet-layout" als slotstap in het releaseplan. Op een tablet past een kast van twintig modules nu gewoon in beeld.
@@ -185,6 +211,20 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 
 **Nu te doen in R3b zelfs zonder de fasecheck-spec:** de rekenkern een `bron: 'geschat' | 'gemeten'` laten accepteren, zodat er later niets herbouwd hoeft te worden.
 
+### Het tweede spoor: bedrijf en leren (sinds 02-10-2026)
+
+Naast de releaseketen van de veldapp loopt nu een tweede spoor, met een eigen nummering omdat
+het andere repo's zijn.
+
+| # | Release | Stand |
+|---|---------|-------|
+| **B1** | Bedrijfsmodule: projectoverzicht, beoordelen, fasecheck-monitoring, inleveren, meetrapport | ✅ 02-10-2026 |
+| **L1** | Leeromgeving: leerlijn, oefenklussen, fout van de dag, beoordelingsketen, bijsturen met vinkjes, white-label | ✅ 02-10-2026 |
+| **B2/L2** | De database erin: Supabase (of Neon, of eigen Postgres) met het schema dat klaarligt, en de identiteitsdienst. **Wacht op het besluit van Martin** — en op een verwerkersovereenkomst. |
+| **B3** | De MQTT-brug voor de P1-kastjes: een broker buiten Vercel die naar `/api/telegram` post. De route werkt, de brug moet gebouwd. |
+| **L3** | De leerstof: echte vragen en oefenklussen per discipline, en de leerlijn langs een mbo-kwalificatiedossier leggen. Vakwerk, geen bouwwerk. |
+| **B4/L4** | De koppeling tussen de twee: een leerling die stage loopt bij een bedrijf terwijl de school meekijkt. In het datamodel is dat een relatie tussen twee organisaties — het is er niet voor niets één database. |
+
 **Bewust vervallen:** cloud sync, internationale expansie, community-laag. ~~licht/donker-thema~~ — **teruggedraaid 02-10-2026**: donker blijft de standaard en de veldkeuze, licht komt erbij voor kantoor en tablet.
 
 ---
@@ -218,6 +258,8 @@ Fasering: **fase 0** spike bij Martin thuis (referentie-installatie 3×25 A met 
 8. **`S.btn` zet `width:100%`.** Een rij keuzeknoppen met `flex:"0 0 auto"` erover valt daardoor uit elkaar: flex-basis auto pakt die 100% en elke knop vult een hele regel. Gebruik voor een rij compacte keuzes een `grid` met vaste kolommen, niet een flexrij met wrap. (Vijf ampèrekeuzes stonden zo maandenlang als vijf volle knoppen onder elkaar.)
 9. **Bouw nooit na wat `mkp-bouw.js` al schrijft.** De paspoortstap had een eigen kopie van het "eigen apparaat"; die is twee keer uiteengelopen met de echte QR-inhoud. Voorvertoningen halen hun regels uit `eigenApparaatRegels`, en een test bewaakt dat ze gelijk blijven. Hetzelfde geldt voor de belastingcheck, die al op `mkpBouw` draait.
 10. De app kan zich **niet** als bestands-opener registreren op Android; deelbestanden gaan als `.txt`/`text-plain` (Android weigert `application/json` in het deelmenu).
+16. **Demo-gegevens met een vaste datum verouderen, en dan lijkt de app stuk.** De eerste opzet van de bedrijfsmodule zette de meetadressen op 28 september. Vier dagen later stond élk kastje op "offline" en was elke grafiek leeg — niet omdat er iets mis was, maar omdat de data niet meeschoof. Demo-tijden zijn daarom **relatief** ("drie uur stil", "dag 4 van 7") en worden bij het lezen omgerekend naar de klok. Zelfde regel voor de ruis in een gegenereerde reeks: laat die van het *tijdvak van de dag* afhangen en niet van de absolute tijd, anders is de demo elke draai anders en kan een test er niet op rekenen.
+17. **Een dashboard met verzonnen gegevens is gevaarlijker dan een foutmelding.** Iemand gaat ernaar handelen. Demo-stand draagt daarom een balk bovenaan, en in productie weigert de app te starten zonder database tenzij het expliciet een demo-omgeving is (`YWKB_DEMO=1`). Hetzelfde geldt voor inloggen zonder wachtwoord: dat mag alleen bestaan in een stand die in productie niet kan draaien.
 11. **Een inline `gridTemplateColumns` wint van elke mediaquery.** Op de landing stonden drie rasters met `style={{ gridTemplateColumns:'1fr 1fr' }}`; de mobiele regel `.price-grid { 1fr }` greep nooit omdat die klasse er niet op zat. Op een 375-px-scherm werd de prijskaart 462 px breed, de pagina rekte mee, en de `position: fixed`-nav rekte mee buiten beeld — "Gratis starten" viel weg. `body { overflow-x: hidden }` verbergt dat: er is geen horizontale scrollbalk, alleen een afgekapte balk bovenin. Kolommen horen in een klasse (`.twee-kol`), niet inline. Controleer op telefoonformaat altijd `document.documentElement.scrollWidth` tegen de schermbreedte.
 
 ---
