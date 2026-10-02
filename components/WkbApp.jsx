@@ -329,8 +329,15 @@ import {
   // Het kastbeeld: een gescand paspoort terug naar groepen (K4), en de vormtaal
   // waarmee Kastscan een kast tekent.
   positiesUitPaspoort, aardlekgroepenUitPosities, paspoortDraagtKast,
-  strookUitAardlekgroepen, MODULE_PX,
+  strookUitAardlekgroepen, MODULE_PX, isGroepsoort,
+  // Een kast lezen uit een foto (K5): dezelfde keten als in Kastscan.
+  positiesUitAnalyse, ONBRUIKBAAR_ADVIES, ONBRUIKBAAR_STANDAARD,
 } from "yourwkb-core";
+// De browserkant van het versturen van een kastfoto — welke resolutie waarheen
+// gaat, en waarom dat uitmaakt. Staat in de motor omdat beide apps hem delen.
+import {
+  bereidFotoVoor, naarBlob, verzoekTeGroot, verkleinIndienNodig, OPEN_MIN_PX,
+} from "yourwkb-core/foto-client.js";
 // Wat alleen deze app doet: de gG-kromme en de cross-checks over de meetwaarden.
 import { GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
          zMaxVoorBeveiliging, maxAfschakeltijdVoor, veldBeveiliging } from "./wkb/model";
@@ -362,7 +369,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-A";
+const APP_VERSIE = "2026-10-02-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1936,9 +1943,10 @@ function StrookTegel({ m, open, zwaarst, onTik }) {
                borderStyle:open || !faseKleur ? "solid" : FASE_PATROON[m.fase],
                display:"flex", flexDirection:"column", alignItems:"center",
                justifyContent:"space-between", gap:2, overflow:"hidden", position:"relative" }}>
-      {/* Uit een gescand paspoort, dus nog niet door deze installateur bevestigd.
-          Klein en in de hoek: het is een aandachtspunt, geen waarschuwing. */}
-      {m.bron === "paspoort" && (
+      {/* Uit een gescand paspoort of uit de foto, dus nog niet door deze
+          installateur bevestigd. Klein en in de hoek: het is een aandachtspunt,
+          geen waarschuwing. */}
+      {(m.bron === "paspoort" || m.bron === "foto") && (
         <span style={{ position:"absolute", top:3, right:3, width:5, height:5,
                        borderRadius:3, background:K.yellow }}/>
       )}
@@ -1999,9 +2007,11 @@ function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind,
                        textTransform:"uppercase" }}>
           {eg ? "Eindgroep" : "Aardlekschakelaar"}
         </span>
-        {ag.bron === "paspoort" && (
+        {(ag.bron === "paspoort" || ag.bron === "foto") && (
           <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20,
-                         background:K.yellowDim, color:K.yellow }}>uit paspoort</span>
+                         background:K.yellowDim, color:K.yellow }}>
+            uit {ag.bron === "foto" ? "foto" : "paspoort"}
+          </span>
         )}
       </div>
       {kop}
@@ -2178,6 +2188,10 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   // aanraakt blijft `bron` staan — dat is geen fout: hij bevestigt dan wat er al
   // stond, en de herkomst van het GEGEVEN verandert daar niet door.
   const uitPaspoort = aardlekgroepen.filter(a=>a.bron==="paspoort").length;
+  // Sinds K5 kan de kast ook uit een FOTO komen. Het verschil telt: een paspoort
+  // draagt wat een vakman eerder heeft bevestigd, een foto is een aflezing. Dus
+  // twee meldingen, met een andere mate van stelligheid.
+  const uitFoto = aardlekgroepen.filter(a=>a.bron==="foto").length;
 
   // Automatisch de hoogst belaste eindgroep bepalen (vuistregel: hoogste ampèrewaarde)
   const autoHoogst = (ag) => {
@@ -2215,6 +2229,18 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
               De kast stond al op de sticker — merk, type, karakteristiek en stroom komen daarvandaan.
               <strong style={{color:K.text}}> Loop ze na</strong> en voeg toe wat er bij deze klus bij komt.
               Het aardleksoort en de aanspreekstroom staan niet in een paspoort; die zijn op type A / 30 mA gezet.
+            </div>
+          </div>
+        )}
+        {uitFoto > 0 && (
+          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+              📷 {uitFoto} groep{uitFoto===1?"":"en"} uit de foto van de kast
+            </div>
+            <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
+              Dit is een <strong style={{color:K.text}}>aflezing</strong>, geen vaststelling.
+              <strong style={{color:K.text}}> Loop ze na</strong> en vul aan wat de foto niet kon lezen — dat is
+              leeg gelaten en niet geraden. De fase staat er niet bij: die komt nooit uit een kastfoto.
             </div>
           </div>
         )}
@@ -2284,7 +2310,180 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
   );
 }
 
-function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
+// ─── DE KAST UIT DE FOTO ──────────────────────────────────────────────────────
+//
+// De foto van de open kast is al verplicht in deze stap — de installateur maakt
+// hem toch. Hij hoeft hem dus niet nóg een keer te maken om de kast te laten
+// inlezen: één opname, en de app vult stap 6 vast in. ⚓ De flow wordt hier niet
+// langer van, hij wordt korter: wie dit gebruikt tikt geen twintig groepen meer
+// met de hand in.
+//
+// Twee resoluties uit dezelfde opname, en dat is het hele punt:
+//  • naar de ANALYSE gaat het origineel, op volle resolutie. De opdruk op de
+//    modules ("B16", "C20") is het kenmerk waar alles om draait; terugschalen
+//    maakt die onleesbaar en dan leest het model met evenveel stelligheid iets
+//    verkeerds.
+//  • naar het RAPPORT gaat de bestaande 900px-versie. Die hoeft alleen te laten
+//    zien hoe de kast erbij stond.
+//
+// ⚓ EEN VOORSTEL, GEEN VASTSTELLING. Alles komt binnen met `bron: "foto"`, niets
+// is bevroren, en wat de foto niet zag blijft leeg in plaats van geraden. De
+// installateur loopt het na — dat is de regel uit de featurespec en de reden dat
+// de melding "controleer" zegt en niet "overgenomen".
+function KastLezer({ data, onChange, onFoto }) {
+  const [bezig, setBezig] = useState("");
+  const [fout, setFout] = useState(null);
+  const bestandRef = useRef(null);
+  const galerijRef = useRef(null);
+
+  const gelezen = data.kastbeeld;
+  const heeftKast = (data.aardlekgroepen || []).some(a => (a.eindgroepen || []).length);
+
+  const lees = async (bestand) => {
+    if (!bestand) return;
+    setFout(null);
+    try {
+      setBezig("De foto wordt klaargemaakt…");
+      // Volle resolutie voor de analyse; de ondergrens weigert een doorgestuurde
+      // thumbnail in plaats van er half iets uit te lezen.
+      const voorbereid = await bereidFotoVoor(bestand, { minBreedte: OPEN_MIN_PX });
+      const blob = naarBlob(voorbereid.dataUrl);
+      const teGroot = verzoekTeGroot([blob]);
+      if (teGroot) throw new Error(teGroot);
+
+      // De foto hoort óók gewoon in het rapport. Dat gebeurt hier en niet pas na
+      // een geslaagde analyse: lukt het lezen niet, dan heeft de installateur in
+      // elk geval zijn verplichte foto gemaakt.
+      onFoto(voorbereid.dataUrl);
+
+      setBezig("De kast wordt gelezen… dit duurt ongeveer een halve minuut.");
+      const form = new FormData();
+      form.append("open", blob, "open.jpg");
+      const antwoord = await fetch("/api/kastbeeld", { method: "POST", body: form });
+
+      // Een weigering van de hostinglaag komt NIET als JSON terug; `json()` valt
+      // dan om op een HTML-foutpagina en de gebruiker ziet alleen "het lukte
+      // niet". Vandaar deze omweg.
+      let json;
+      try { json = await antwoord.json(); }
+      catch {
+        throw new Error(antwoord.status === 413
+          ? "De foto is te groot voor de server. Maak hem opnieuw met een iets lagere resolutie-instelling."
+          : `De server antwoordde onverwacht (${antwoord.status}). Probeer het opnieuw, of vul de kast met de hand in.`);
+      }
+      if (!antwoord.ok) throw new Error(json.error || "Het lezen lukte niet");
+
+      if (json.bruikbaar === false) {
+        setFout({
+          titel: json.redenSoort === "geen-groepenkast" ? "Dit lijkt geen groepenkast" : "Foto niet bruikbaar",
+          tekst: `${json.reden || ""} ${ONBRUIKBAAR_ADVIES[json.redenSoort] || ONBRUIKBAAR_STANDAARD}`.trim(),
+        });
+        return;
+      }
+
+      const { posities } = positiesUitAnalyse(json, "kast");
+      if (!posities.length) {
+        setFout({ titel: "Niets gelezen", tekst: "Op deze foto zijn geen modules herkend. " + ONBRUIKBAAR_STANDAARD });
+        return;
+      }
+      onChange("kastbeeld", {
+        posities,
+        promptversie: json.promptversie || "",
+        gelezenOp: new Date().toISOString(),
+      });
+      // De groepen alleen invullen als er nog niets staat. Wat de installateur
+      // zelf heeft ingetikt of uit een paspoort heeft gescand is bevestigd; dat
+      // overschrijven met een voorstel uit een foto is precies verkeerd om.
+      if (!heeftKast) {
+        onChange("aardlekgroepen", aardlekgroepenUitPosities(posities, { bron: "foto" }));
+      }
+    } catch (err) {
+      setFout({ titel: "Lezen lukte niet", tekst: err.message || "Onbekende fout" });
+    } finally {
+      setBezig("");
+    }
+  };
+
+  const groepen = gelezen ? (gelezen.posities || []).filter(p => isGroepsoort(p.soort)).length : 0;
+
+  return (
+    <div style={{ ...S.card, border:`1px solid ${K.yellow}55`, background:K.yellowDim, marginBottom:14 }}>
+      <input ref={bestandRef} type="file" accept="image/*" capture="environment" style={{display:"none"}}
+        onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
+      {/* De galerij noemt heic en heif expliciet: `image/*` dekt ze op iOS wel,
+          maar op Android verdwijnen ze dan uit de kiezer. */}
+      <input ref={galerijRef} type="file" accept="image/*,image/heic,image/heif,.heic,.heif" style={{display:"none"}}
+        onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
+
+      <div style={{ fontWeight:700, fontSize:15, color:K.yellow, marginBottom:4 }}>
+        📷 Lees de kast uit de foto
+      </div>
+      <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:12 }}>
+        Maak hier de foto van de <strong style={{color:K.text}}>open kast</strong>. De app leest de automaten,
+        de aardlekschakelaars en hun opdruk in en vult stap 6 vast voor je in — je hoeft ze dan alleen nog na te
+        lopen. Dezelfde foto gaat gewoon mee in het rapport.
+      </div>
+
+      {gelezen && !bezig && (
+        <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
+            ✓ {groepen} groep{groepen===1?"":"en"} gelezen
+          </div>
+          <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
+            {gelezen.vulde === false
+              ? "De kast in stap 6 stond al ingevuld en is niet overschreven — wat je zelf hebt ingevoerd of gescand telt zwaarder dan een voorstel uit een foto."
+              : "Ze staan klaar in stap 6, met het label “uit foto”. Loop ze na: wat de foto niet kon lezen is leeg gelaten, niet geraden."}
+          </div>
+        </div>
+      )}
+
+      {bezig && (
+        <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12,
+                      fontSize:12, color:K.textSoft }}>
+          ⏳ {bezig}
+        </div>
+      )}
+
+      {fout && !bezig && (
+        <div style={{ background:K.redDim, border:`1px solid ${K.red}44`, borderRadius:10,
+                      padding:"10px 12px", marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:K.red, marginBottom:2 }}>{fout.titel}</div>
+          <div style={{ fontSize:11, color:K.textSoft, lineHeight:1.5 }}>{fout.tekst}</div>
+          <div style={{ fontSize:11, color:K.muted, lineHeight:1.5, marginTop:6 }}>
+            Je kunt gewoon verder: vul de kast in stap 6 met de hand in.
+          </div>
+        </div>
+      )}
+
+      {!bezig && (
+        <div style={{ display:"flex", gap:8, marginBottom:10 }}>
+          <button onClick={()=>bestandRef.current?.click()}
+            style={{ flex:1, padding:"12px", borderRadius:10, border:"none", background:K.yellow, color:"#000",
+                     fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+            📷 {gelezen ? "Opnieuw lezen" : "Foto maken en lezen"}
+          </button>
+          <button onClick={()=>galerijRef.current?.click()}
+            style={{ flex:"0 0 auto", padding:"12px 14px", borderRadius:10, border:`1px solid ${K.border}`,
+                     background:K.surface, color:K.text, fontFamily:"'IBM Plex Sans',sans-serif",
+                     fontWeight:600, fontSize:13, cursor:"pointer" }}>
+            🖼️
+          </button>
+        </div>
+      )}
+
+      {/* PRIVACY. De hele app draait erop dat projectdata op het toestel blijft;
+          dit is de ene plek waar iets het toestel verlaat. Dan hoort het er ook
+          te staan, vóór de knop en niet in een voetnoot. */}
+      <div style={{ fontSize:10, color:K.muted, lineHeight:1.5 }}>
+        🔒 Deze foto wordt eenmalig naar onze analyse-server gestuurd om de kast te lezen, en daarna niet
+        bewaard. Er gaan geen klant- of adresgegevens mee. Zonder internet werkt het lezen niet — vul de kast
+        dan met de hand in.
+      </div>
+    </div>
+  );
+}
+
+function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
   // Gebruik data.fotos direct (geen lokale kopie) — zo overschrijven
   // de VOOR- en NA-stappen elkaars foto's nooit.
   const fotos = data.fotos||{};
@@ -2339,6 +2538,19 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints }) {
         <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Foto's</div><div style={{fontSize:12,color:K.muted}}>{done}/{checkpoints.length} gemaakt</div></div>
       </div>
       <div style={S.body}>
+        {/* Alleen bij de groepenkast, en alleen vóór de werkzaamheden: dit leest
+            de BESTAANDE kast in. */}
+        {kastLezer && (
+          <KastLezer data={data} onChange={onChange}
+            onFoto={(dataUrl)=>{
+              // De analyse krijgt het origineel; het rapport de kleine versie.
+              // 900 px is wat deze stap zelf ook bewaart — genoeg om te laten
+              // zien hoe de kast erbij stond, te weinig om de opdruk te lezen,
+              // en dat laatste hoeft hier ook niet meer.
+              verkleinIndienNodig(dataUrl, 900).then(klein=>
+                onChange("fotos", { ...(data.fotos||{}), voor_open: klein }));
+            }}/>
+        )}
         {checkpoints.map(cp=>(
           <div key={cp.id} style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green+"66":K.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}
@@ -7014,7 +7226,7 @@ export default function App() {
     <StapKlant          key="klant"      data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={()=>setScreen("home")}/>,
     <StapInstallateur   key="inst"       data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapMeetapparatuur key="apparat"    data={job} onChange={upd} discipline="groepenkast" onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_voor" data={job} onChange={upd} checkpoints={GK_FOTO_CPS_VOOR} onNext={next} onBack={prev} kastLezer/>,
     <GK_StapMateriaal   key="mat"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapGroepen     key="groepen"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
