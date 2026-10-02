@@ -370,25 +370,184 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-E";
+const APP_VERSIE = "2026-10-02-F";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
-const K = {
-  bg:"#111318", surface:"#1A1D25", card:"#20242F", border:"#2E3347",
-  borderStrong:"#3E4459",                    // rand van invoervelden en ghost-knoppen
-  yellow:"#F5C518", yellowDim:"#2A240A",
-  yellowPress:"#D9AE0F",                     // :active van de primaire knop
-  green:"#27AE60",  greenDim:"#0C2418",
-  orange:"#F59E0B", orangeDim:"#2A1E08",
-  red:"#FF5A52",    redDim:"#2A0C0C",        // was #E53935 — haalde AA niet (design-spec §6)
-  blue:"#2196F3",   blueDim:"#0A1A2A",
-  purple:"#9B59B6", purpleDim:"#1E0A2A",
-  text:"#ECEEF5",
-  textSoft:"#C2C8D8",                        // tweede regel in een kaart
-  muted:"#9BA3B8",                           // was #636880 — 2,82:1, onder AA (design-spec §6)
-  tap:52, radius:14, radiusSm:10,            // maten als token
+// ─── HOE BREED DE APP IS ──────────────────────────────────────────────────────
+//
+// Dezelfde maten als Kastscan. De app is mobiel-eerst en blijft dat: op een
+// telefoon verandert er niets. Maar wie hem op een tablet in de meterkast legt of
+// op kantoor een rapport nakijkt, keek tot nu toe naar een kolom van 430 px met
+// aan weerszijden een halve meter leegte — en in stap 6 moest hij een kast van
+// twintig modules horizontaal schuiven terwijl er ruimte zat.
+//
+// Géén tweede layout: dezelfde schermen, meer kolombreedte. Dat is de hele
+// wijziging, en het is bewust zo klein — "tablet-layout" stond in het releaseplan
+// als slotstap juist omdat een tweede indeling onderhouden moet worden.
+const APP_BREEDTE = { telefoon: 430, tablet: 720, laptop: 1080 };
+
+function formaatVanBreedte(px) {
+  if (px >= 1100) return "laptop";
+  if (px >= 760) return "tablet";
+  return "telefoon";
+}
+
+// Het gekozen thema, bewaard op het toestel. Standaard DONKER — dat is de
+// veldkeuze en die blijft het uitgangspunt; licht is er voor wie de app op
+// kantoor of op een tablet gebruikt. Bewust niet `prefers-color-scheme` volgen:
+// de meeste telefoons staan 's avonds automatisch op donker en overdag op licht,
+// en een app die in de meterkast ineens wit wordt is precies wat we niet willen.
+const THEMA_KEY = "ywkb_thema";
+
+function useThema() {
+  const [thema, zetThema] = useState("donker");
+  useEffect(() => {
+    let bewaard = "donker";
+    try { bewaard = localStorage.getItem(THEMA_KEY) || "donker"; } catch {}
+    zetThema(bewaard === "licht" ? "licht" : "donker");
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.thema = thema;
+    // De adresbalk van de browser mee laten kleuren; anders staat er een zwarte
+    // balk boven een wit scherm.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", thema === "licht" ? "#F2F4F7" : "#111318");
+  }, [thema]);
+  const wissel = () => {
+    const nieuw = thema === "licht" ? "donker" : "licht";
+    zetThema(nieuw);
+    try { localStorage.setItem(THEMA_KEY, nieuw); } catch {}
+  };
+  return { thema, wissel };
+}
+
+// Volgt de vensterbreedte. Begint bewust op "telefoon": op de server bestaat er
+// geen venster, en een eerste tekening op laptopbreedte die daarna terugspringt
+// is erger dan andersom.
+function useFormaat() {
+  const [formaat, setFormaat] = useState("telefoon");
+  useEffect(() => {
+    const meet = () => setFormaat(formaatVanBreedte(window.innerWidth));
+    meet();
+    window.addEventListener("resize", meet);
+    return () => window.removeEventListener("resize", meet);
+  }, []);
+  return { formaat, appBreedte: APP_BREEDTE[formaat] };
+}
+
+// ─── TWEE THEMA'S ─────────────────────────────────────────────────────────────
+//
+// Donker was een bewuste veldkeuze en blijft de standaard: in een meterkast, een
+// kruipruimte of een schuur is een wit scherm een lamp in je gezicht. Licht komt
+// erbij omdat de app ook op kantoor en op een tablet gebruikt wordt, en omdat een
+// rapport nakijken op een donker scherm anders leest dan op papier. Besluit
+// Martin, 02-10-2026 — en dat draait de regel "licht/donker bewust vervallen" uit
+// het releaseplan terug.
+//
+// WAAROM CSS-VARIABELEN EN GEEN TWEEDE PALET-OBJECT: `S` wordt één keer uit `K`
+// opgebouwd, bij het laden van de module. Een tweede object zou betekenen dat
+// élke stijl een functie van het thema wordt — 765 verwijzingen diep. Met
+// variabelen blijft `K.bg` gewoon een string, en wisselt de BROWSER de waarde.
+//
+// ⚓ EEN VARIABELE IS GEEN HEX. `${K.yellow55}` werkte omdat er een hexwaarde
+// stond; `var(--k-yellow)55` is onzin. Elke doorzichtige tint die in de code
+// voorkwam heeft daarom een eigen token (yellow55, red44, …) en per thema een
+// eigen waarde — in het lichte thema bewust dekkender, want een pasteltint van
+// 33% op wit is geen rand maar een vermoeden.
+const PALET = {
+  donker: {
+    bg:"#111318", surface:"#1A1D25", card:"#20242F", border:"#2E3347",
+    borderStrong:"#3E4459",                  // rand van invoervelden en ghost-knoppen
+    yellow:"#F5C518", yellowDim:"#2A240A",
+    yellowPress:"#D9AE0F",                   // :active van de primaire knop
+    // De accentkleur voor TEKST en lijnen. Op donker is dat gewoon het geel van
+    // het merk; op wit haalt dat geen enkele contrasteis, vandaar de splitsing.
+    accent:"#F5C518",
+    green:"#27AE60",  greenDim:"#0C2418",
+    orange:"#F59E0B", orangeDim:"#2A1E08",
+    red:"#FF5A52",    redDim:"#2A0C0C",      // was #E53935 — haalde AA niet (design-spec §6)
+    blue:"#2196F3",   blueDim:"#0A1A2A",
+    purple:"#9B59B6", purpleDim:"#1E0A2A",
+    text:"#ECEEF5",
+    textSoft:"#C2C8D8",                      // tweede regel in een kaart
+    muted:"#9BA3B8",                         // was #636880 — 2,82:1, onder AA (design-spec §6)
+    yellow33:"#F5C51833", yellow44:"#F5C51844", yellow55:"#F5C51855", yellow66:"#F5C51866",
+    yellow77:"#F5C51877", yellow88:"#F5C51888",
+    red44:"#FF5A5244", red66:"#FF5A5266",
+    orange44:"#F59E0B44", orange55:"#F59E0B55", orange66:"#F59E0B66",
+    green44:"#27AE6044", green66:"#27AE6066",
+    blue33:"#2196F333", blue44:"#2196F344",
+    purple44:"#9B59B644", purple55:"#9B59B655",
+    // De zes disciplines. Ook dit zijn TEKSTkleuren (het normlabel op de tegel),
+    // dus ook deze moeten in het lichte thema donkerder — en hun vlaktint, die
+    // als `${d.colorTint}` aan de kleur werd geplakt, kan dat niet meer.
+    gk:"#F5C518",  gkDim:"#2A240A",  gkTint:"#F5C51822",
+    pv:"#F97316",  pvDim:"#2A1000",  pvTint:"#F9731622",
+    cv:"#EF4444",  cvDim:"#2A0808",  cvTint:"#EF444422",
+    wp:"#06B6D4",  wpDim:"#042020",  wpTint:"#06B6D422",
+    lp:"#22C55E",  lpDim:"#06200D",  lpTint:"#22C55E22",
+    bat:"#8B5CF6", batDim:"#1A0A30", batTint:"#8B5CF622",
+  },
+  licht: {
+    bg:"#F2F4F7", surface:"#FFFFFF", card:"#FFFFFF", border:"#DFE3EA",
+    borderStrong:"#B9C0CC",
+    // Het geel van het merk blijft het VLAK van de primaire knop — daar staat
+    // zwarte tekst op en dat haalt ruim AA, ook op wit.
+    yellow:"#F5C518", yellowDim:"#FFF4CF",
+    yellowPress:"#D9AE0F",
+    // Maar als TEKST moet het geel donkerder: #F5C518 op wit is 1,7:1. Dit is
+    // 5,4:1 en voldoet dus ook voor kleine tekst.
+    accent:"#8A6A00",
+    green:"#1C7A42",  greenDim:"#E6F5EC",
+    orange:"#9A5B00", orangeDim:"#FDF0DC",
+    red:"#C62828",    redDim:"#FCE9E9",
+    blue:"#1565C0",   blueDim:"#E6F0FB",
+    purple:"#6B3E8F", purpleDim:"#F1E8F7",
+    text:"#14171F",
+    textSoft:"#3C4452",
+    muted:"#5A6273",
+    // Dekkender dan op donker: een tint van 33% op wit is niet te zien.
+    yellow33:"#8A6A0033", yellow44:"#8A6A0055", yellow55:"#8A6A0066", yellow66:"#8A6A0077",
+    yellow77:"#8A6A0088", yellow88:"#8A6A0099",
+    red44:"#C6282855", red66:"#C6282877",
+    orange44:"#9A5B0055", orange55:"#9A5B0066", orange66:"#9A5B0077",
+    green44:"#1C7A4255", green66:"#1C7A4277",
+    blue33:"#1565C044", blue44:"#1565C055",
+    purple44:"#6B3E8F55", purple55:"#6B3E8F66",
+    gk:"#8A6A00",  gkDim:"#FFF4CF",  gkTint:"#8A6A0018",
+    pv:"#B44A00",  pvDim:"#FDEDE1",  pvTint:"#B44A0018",
+    cv:"#B3261E",  cvDim:"#FCE9E8",  cvTint:"#B3261E18",
+    wp:"#06697A",  wpDim:"#E2F5F8",  wpTint:"#06697A18",
+    lp:"#15803D",  lpDim:"#E7F6EC",  lpTint:"#15803D18",
+    bat:"#6D28D9", batDim:"#F0EAFD", batTint:"#6D28D918",
+  },
 };
+
+// De variabelen van beide thema's als één stuk CSS. `data-thema` op <html>
+// bepaalt welke gelden; de standaard is donker, ook zonder attribuut.
+const THEMA_CSS = (() => {
+  const regels = (naam) => Object.entries(PALET[naam])
+    .map(([k, v]) => `--k-${k.replace(/[A-Z0-9]+/g, (m) => "-" + m.toLowerCase())}:${v}`)
+    .join(";");
+  // Ook de PAGINA zelf, niet alleen de appkolom. Zolang de app 430 px breed was
+  // viel het nauwelijks op; nu hij tot 1080 px meeschaalt staat er anders een
+  // witte rand van de browser om een donkere app heen.
+  return `:root{${regels("donker")}}` +
+         `:root[data-thema="licht"]{${regels("licht")}}` +
+         `html,body{background:var(--k-bg);margin:0}`;
+})();
+
+// `K` wijst nu naar de variabelen in plaats van naar hexwaarden. De maten blijven
+// gewoon getallen — die veranderen niet met het thema.
+const K = (() => {
+  const uit = {};
+  for (const k of Object.keys(PALET.donker)) {
+    uit[k] = `var(--k-${k.replace(/[A-Z0-9]+/g, (m) => "-" + m.toLowerCase())})`;
+  }
+  return { ...uit, tap: 52, radius: 14, radiusSm: 10 };
+})();
 const S = {
   app:    { background:K.bg, minHeight:"100vh", maxWidth:430, margin:"0 auto", fontFamily:"'IBM Plex Sans',sans-serif", color:K.text },
   hdr:    { padding:"12px 18px 12px", display:"flex", alignItems:"center", gap:12, background:K.surface, borderBottom:`1px solid ${K.border}`, position:"sticky", top:0, zIndex:20 },
@@ -417,12 +576,12 @@ const S = {
 
 // ─── DISCIPLINE DEFINITIES ────────────────────────────────────────────────────
 const DISCIPLINES = [
-  { id:"groepenkast", label:"Groepenkast",    icon:"⚡", sub:"Plaatsen of vervangen",     color:K.yellow,  colorDim:K.yellowDim, norm:"NEN1010",     available:true  },
-  { id:"pv",          label:"Zonnepanelen",   icon:"☀️", sub:"PV installatie",            color:"#F97316", colorDim:"#2A1000",   norm:"NEN1010:712", available:true  },
-  { id:"cv",          label:"Combiketel",     icon:"🔥", sub:"Plaatsen of vervangen",     color:"#EF4444", colorDim:"#2A0808",   norm:"BRL6000-25",  available:true  },
-  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water · split-airco · bodem", color:"#06B6D4", colorDim:"#042020",   norm:"BRL100 / 6000-21",  available:true  },
-  { id:"laadpaal",    label:"Laadpaal",       icon:"🔌", sub:"EV-laadvoorziening",        color:"#22C55E", colorDim:"#06200D",   norm:"NEN1010:2020", available:true },
-  { id:"batterij",    label:"Thuisbatterij",  icon:"🔋", sub:"Energieopslag",             color:"#8B5CF6", colorDim:"#1A0A30",   norm:"NEN1010:2020", available:true },
+  { id:"groepenkast", label:"Groepenkast",    icon:"⚡", sub:"Plaatsen of vervangen",     color:K.gk,  colorDim:K.gkDim,  colorTint:K.gkTint,  norm:"NEN1010",     available:true  },
+  { id:"pv",          label:"Zonnepanelen",   icon:"☀️", sub:"PV installatie",            color:K.pv,  colorDim:K.pvDim,  colorTint:K.pvTint,  norm:"NEN1010:712", available:true  },
+  { id:"cv",          label:"Combiketel",     icon:"🔥", sub:"Plaatsen of vervangen",     color:K.cv,  colorDim:K.cvDim,  colorTint:K.cvTint,  norm:"BRL6000-25",  available:true  },
+  { id:"wp",          label:"Warmtepomp",     icon:"🌡️", sub:"Lucht/water · split-airco · bodem", color:K.wp, colorDim:K.wpDim, colorTint:K.wpTint, norm:"BRL100 / 6000-21",  available:true  },
+  { id:"laadpaal",    label:"Laadpaal",       icon:"🔌", sub:"EV-laadvoorziening",        color:K.lp,  colorDim:K.lpDim,  colorTint:K.lpTint,  norm:"NEN1010:2020", available:true },
+  { id:"batterij",    label:"Thuisbatterij",  icon:"🔋", sub:"Energieopslag",             color:K.bat, colorDim:K.batDim, colorTint:K.batTint, norm:"NEN1010:2020", available:true },
 ];
 
 // ─── GROEPENKAST DATA ─────────────────────────────────────────────────────────
@@ -543,7 +702,7 @@ const PV_FOTO_CPS = [...PV_FOTO_CPS_VOOR, ...PV_FOTO_CPS_NA];
 const Pill = ({ active, onClick, children, small }) => (
   <button onClick={onClick} style={{
     minHeight: small ? 40 : 48, padding: small ? "0 12px" : "0 16px", borderRadius:20,
-    border:`1px solid ${active ? K.yellow : K.border}`,
+    border:`1px solid ${active ? K.accent : K.border}`,
     background: active ? K.yellowDim : "transparent",
     color: active ? K.yellow : K.muted,
     fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:600,
@@ -1069,7 +1228,7 @@ const LeerIcoon = ({ onderwerp }) => {
           background:K.purpleDim, color:K.purple,
           fontSize:11, fontWeight:700, textDecoration:"none",
           marginLeft:5, flexShrink:0, verticalAlign:"middle",
-          border:`1px solid ${K.purple}55`, cursor:"pointer", padding:0,
+          border:`1px solid ${K.purple55}`, cursor:"pointer", padding:0,
           fontFamily:"inherit",
         }}>
         ⓘ
@@ -1129,7 +1288,7 @@ const TesterIcoon = ({ info }) => {
           background:K.purpleDim, color:K.purple,
           fontSize:11, fontWeight:700, textDecoration:"none",
           marginLeft:5, flexShrink:0, verticalAlign:"middle",
-          border:`1px solid ${K.purple}55`, cursor:"pointer", padding:0,
+          border:`1px solid ${K.purple55}`, cursor:"pointer", padding:0,
           fontFamily:"inherit",
         }}>
         ⓘ
@@ -1220,12 +1379,12 @@ const MiniSelect = ({ value, onChange, options, width=90 }) => (
 
 const WarnBox = ({ warnings }) => {
   if (!warnings || warnings.length === 0) return (
-    <div style={{ ...S.card, background:K.greenDim, border:`1px solid ${K.green}44`, marginBottom:12 }}>
+    <div style={{ ...S.card, background:K.greenDim, border:`1px solid ${K.green44}`, marginBottom:12 }}>
       <div style={{ fontSize:13, color:K.green, fontWeight:600 }}>✅ Alle cross-checks geslaagd — installatie ziet er goed uit</div>
     </div>
   );
   return (
-    <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange}44`, marginBottom:12 }}>
+    <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange44}`, marginBottom:12 }}>
       <div style={{ fontSize:12, color:K.orange, fontWeight:700, marginBottom:8 }}>⚠️ {warnings.length} aandachtspunt{warnings.length > 1 ? "en" : ""} gevonden</div>
       {warnings.map((w,i) => (
         <div key={i} style={{ fontSize:12, color: w.level==="red" ? K.red : K.orange, marginBottom:4, paddingLeft:8, borderLeft:`2px solid ${w.level==="red"?K.red:K.orange}` }}>
@@ -1267,28 +1426,28 @@ function AIAnalyseBox({ aiData, discipline, analyse, onAnalyse }) {
   return (
     <div style={{marginBottom:12}}>
       {status==="idle" && (
-        <button style={{...S.btn,background:K.purpleDim,color:K.purple,border:`1px solid ${K.purple}55`,marginBottom:0}} onClick={analyseer}>
+        <button style={{...S.btn,background:K.purpleDim,color:K.purple,border:`1px solid ${K.purple55}`,marginBottom:0}} onClick={analyseer}>
           🤖 Analyseer installatie (AI)
         </button>
       )}
       {status==="busy" && (
-        <div style={{...S.card,background:K.purpleDim,border:`1px solid ${K.purple}44`,textAlign:"center",padding:20,marginBottom:0}}>
+        <div style={{...S.card,background:K.purpleDim,border:`1px solid ${K.purple44}`,textAlign:"center",padding:20,marginBottom:0}}>
           <div style={{fontSize:24,marginBottom:8}}>🤖</div>
           <div style={{fontWeight:600,fontSize:13,color:K.purple}}>Installatie wordt geanalyseerd…</div>
         </div>
       )}
       {status==="error" && (
-        <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`,marginBottom:0}}>
+        <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red44}`,marginBottom:0}}>
           <div style={{fontSize:12,color:K.red,marginBottom:4,fontWeight:600}}>⚠️ Analyse mislukt</div>
           {errMsg && <div style={{fontSize:11,color:K.red,marginBottom:8,opacity:0.85,fontFamily:"monospace"}}>{errMsg}</div>}
           <button style={{...S.btnGhost,marginBottom:0}} onClick={analyseer}>Opnieuw proberen</button>
         </div>
       )}
       {status==="done" && analyse && (
-        <div style={{...S.card,background:K.purpleDim,border:`1px solid ${K.purple}44`,marginBottom:0}}>
+        <div style={{...S.card,background:K.purpleDim,border:`1px solid ${K.purple44}`,marginBottom:0}}>
           <div style={{fontSize:12,color:K.purple,fontWeight:700,marginBottom:8}}>🤖 Technische beoordeling</div>
           <div style={{fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{analyse}</div>
-          <button style={{marginTop:10,padding:"7px 12px",borderRadius:8,border:`1px solid ${K.purple}55`,background:"transparent",color:K.purple,fontFamily:"'IBM Plex Sans',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer"}} onClick={analyseer}>
+          <button style={{marginTop:10,padding:"7px 12px",borderRadius:8,border:`1px solid ${K.purple55}`,background:"transparent",color:K.purple,fontFamily:"'IBM Plex Sans',sans-serif",fontSize:12,fontWeight:600,cursor:"pointer"}} onClick={analyseer}>
             🔄 Opnieuw analyseren
           </button>
         </div>
@@ -1418,11 +1577,11 @@ function StapKlant({ data, onChange, onNext, onBack, discipline }) {
           Vul hieronder de gegevens van de klant/het adres in waar je dit project uitvoert. Je hoeft je zelf nergens voor te registreren.
         </div>
         {pid && (
-          <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow}55`, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow55}`, padding:"12px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
             <span style={{ fontSize:20 }}>📁</span>
             <div>
-              <div style={{ fontSize:10, color:K.yellow, fontWeight:700, textTransform:"uppercase" }}>Projectnummer</div>
-              <div style={{ fontSize:20, fontWeight:800, color:K.yellow, letterSpacing:1 }}>{pid}</div>
+              <div style={{ fontSize:10, color:K.accent, fontWeight:700, textTransform:"uppercase" }}>Projectnummer</div>
+              <div style={{ fontSize:20, fontWeight:800, color:K.accent, letterSpacing:1 }}>{pid}</div>
             </div>
           </div>
         )}
@@ -1570,7 +1729,7 @@ function StapInstallateur({ data, onChange, onNext, onBack, discipline }) {
       </div>
       <div style={S.body}>
         {/* Info banner */}
-        <div style={{ ...S.card, background:K.blueDim, border:`1px solid ${K.blue}33`, marginBottom:16, padding:"10px 14px" }}>
+        <div style={{ ...S.card, background:K.blueDim, border:`1px solid ${K.blue33}`, marginBottom:16, padding:"10px 14px" }}>
           <div style={{ fontSize:12, color:K.blue }}>
             💡 Tik <strong>"Onthouden"</strong> om je gegevens op te slaan. De volgende keer zijn ze automatisch ingevuld.
           </div>
@@ -1606,7 +1765,7 @@ function StapInstallateur({ data, onChange, onNext, onBack, discipline }) {
                       padding:"10px 4px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer",
                       fontFamily:"'IBM Plex Sans',sans-serif",
                       background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text,
-                      border:`1px solid ${actief ? K.yellow : K.border}`,
+                      border:`1px solid ${actief ? K.accent : K.border}`,
                     }}>{naam}</button>
                   );
                 })}
@@ -1794,8 +1953,8 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
             een aflezing. Dat verschil hoort zichtbaar te zijn vóór je gaat
             aanvullen. */}
         {ingelezen > 0 && (
-          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+          <div style={{border:`1px solid ${K.yellow55}`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.accent,marginBottom:4}}>
               {uitFotoMat ? "📷" : "📥"} {ingelezen} soort{ingelezen===1?"":"en"} materiaal {uitFotoMat ? "uit de foto van de kast" : "uit het meterkastpaspoort"}
             </div>
             <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
@@ -1815,7 +1974,7 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
             <div style={{marginBottom:12}}>
               <label style={S.label}>Merknaam</label>
               <input style={{...S.input,marginBottom:8}} placeholder="bijv. Legrand" value={fabAnders} onChange={e=>{setFabAnders(e.target.value);onChange("fabAnders",e.target.value);}}/>
-              <button onClick={addAutHandmatig} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Automaat toevoegen</button>
+              <button onClick={addAutHandmatig} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${K.yellow66}`,background:K.yellowDim,color:K.accent,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Automaat toevoegen</button>
             </div>
           )}
           {fab && fab!=="Anders" && <><label style={S.label}>Serie</label>
@@ -1825,7 +1984,7 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           {serie && <><label style={S.label}>Type — tik om toe te voegen</label>
             <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
               {types.map(t=>(
-                <button key={t} onClick={()=>addAut(t)} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:14,cursor:"pointer"}}>+ {t}</button>
+                <button key={t} onClick={()=>addAut(t)} style={{padding:"9px 14px",borderRadius:10,border:`1px solid ${K.yellow66}`,background:K.yellowDim,color:K.accent,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:14,cursor:"pointer"}}>+ {t}</button>
               ))}
             </div></>}
         </div>
@@ -1833,13 +1992,13 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           <div style={{...S.sTitle,marginBottom:8}}>Geselecteerd ({automaten.reduce((s,a)=>s+a.aantal,0)}×)</div>
           {automaten.map((a,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${K.border}`}}>
-              <div style={{width:34,height:34,borderRadius:8,background:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,color:K.yellow}}>{a.aantal}×</div>
+              <div style={{width:34,height:34,borderRadius:8,background:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,color:K.accent}}>{a.aantal}×</div>
               <div style={{flex:1}}>
                 <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                   {a.fab} {a.type!=="handmatig"?a.type:""}
                   {a.bron && (
                     <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,
-                                  background:K.yellowDim,color:K.yellow}}>uit {a.bron}</span>
+                                  background:K.yellowDim,color:K.accent}}>uit {a.bron}</span>
                   )}
                 </div>
                 <div style={{fontSize:11,color:K.muted}}>{a.serie}</div>
@@ -1878,9 +2037,10 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
 // twee weergaven uit elkaar gaan lopen, en de lijst gaf een tweede keer wat de
 // rail al toont.
 
-// De ruimte die de strook heeft: de appkolom (S.app maxWidth) min de padding van
-// S.body. Dezelfde rekensom als in Kastscan.
-const STROOK_BESCHIKBAAR = 430 - 36;
+// De ruimte die de strook heeft: de appkolom min de padding van S.body. Dezelfde
+// rekensom als in Kastscan — en sinds de app meeschaalt is dat geen vaste 430
+// meer: op een tablet past een kast van twintig modules gewoon in beeld en hoeft
+// er niet geschoven te worden.
 // De klikplek waar de volgende groep komt te hangen, even breed als in Kastscan.
 const PLEK_PX = 22;
 
@@ -1889,6 +2049,8 @@ function Railstrook({ aardlekgroepen, kaart, setKaart, hoogstVan, onGroepErbij,
   // Welke module openstaat — `kaart` is { agId, eindId|null }. De toestand staat
   // in de stap zelf: wie een groep bijzet wil hem meteen open zien, en die knop
   // staat hierbuiten.
+  const { appBreedte } = useFormaat();
+  const beschikbaar = appBreedte - 36;
   const strook = strookUitAardlekgroepen(aardlekgroepen);
 
   const staatOpen = (m) => !!kaart && kaart.agId === m.agId && kaart.eindId === m.eindId;
@@ -1898,64 +2060,90 @@ function Railstrook({ aardlekgroepen, kaart, setKaart, hoogstVan, onGroepErbij,
   const egOpen = agOpen && kaart.eindId != null
     ? (agOpen.eindgroepen || []).find(e => e.id === kaart.eindId) : null;
 
-  // Past de kast in beeld? De klikplekken tellen mee, want ze staan op de rail.
-  const plekken = strook.modules.filter(m => m.laatsteVanBlok).length;
-  const railPx = strook.breedtePx + plekken * (PLEK_PX + 2);
-  const breed = railPx > STROOK_BESCHIKBAAR;
-
   // De tegels en de kleurband staan in DEZELFDE schuifruimte en met dezelfde
   // rij-opbouw: voor elke module een vlak, en op de plek van een klikplek een
   // even brede lege plek. Met een afwijkende opbouw loopt de band per module een
   // paar pixels weg van de tegel waar hij bij hoort — over veertien modules een
   // halve tegel scheef.
-  const rij = [];
-  for (const m of strook.modules) {
-    rij.push({ m });
-    if (m.laatsteVanBlok) rij.push({ plek:m.agId, naam:m.naam });
-  }
+  const rijVan = (modules) => {
+    const uit = [];
+    for (const m of modules) {
+      uit.push({ m });
+      if (m.laatsteVanBlok) uit.push({ plek:m.agId, naam:m.naam });
+    }
+    return uit;
+  };
 
   return (
     <div style={{ ...S.card, padding:12, marginBottom:14 }}>
       <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:6 }}>
         <div style={{ fontSize:13, fontWeight:700 }}>De kast</div>
         <div style={{ fontSize:11, color:K.muted }}>
-          {breed ? "← schuif →  ·  " : ""}{strook.breedte} modules
+          {strook.breedte} modules{strook.rails.length > 1 ? ` · ${strook.rails.length} rails` : ""}
         </div>
       </div>
       <div style={{ fontSize:11, color:K.muted, marginBottom:8, lineHeight:1.4 }}>
-        Tik op een module om hem in te vullen; tik op <span style={{color:K.yellow,fontWeight:700}}>+</span> om
+        Tik op een module om hem in te vullen; tik op <span style={{color:K.accent,fontWeight:700}}>+</span> om
         een groep achter die aardlek bij te zetten.
       </div>
 
-      <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
-        <div style={{ minWidth:railPx }}>
-          <div style={{ display:"flex", gap:2 }}>
-            {rij.map((x, i) => x.plek ? (
-              <button key={`p${i}`} onClick={() => onGroepErbij(x.plek)}
-                aria-label={`Groep toevoegen achter ${x.naam}`}
-                style={{ flex:`0 0 ${PLEK_PX}px`, minHeight:92, borderRadius:6, cursor:"pointer",
-                         border:`1px dashed ${K.yellow}77`, background:"transparent",
-                         color:K.yellow, fontFamily:"inherit", fontSize:17, fontWeight:700,
-                         display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>+</button>
-            ) : (
-              <StrookTegel key={x.m.id} m={x.m} open={staatOpen(x.m)}
-                zwaarst={x.m.soort === "eind" && hoogstVan(x.m.agId) === x.m.eindId}
-                onTik={() => wissel(x.m)} />
-            ))}
+      {/* EEN STROOK PER RAIL. Een kast van twintig modules hangt op twee of drie
+          rails, en een blok kan over de overgang heen lopen: de aardlek onderaan
+          de ene, de laatste groepen bovenaan de volgende. Als één lange rij
+          getekend klopt het beeld niet meer met de kast waar de installateur voor
+          staat — en dat is precies waar hij hem mee vergelijkt. */}
+      {strook.rails.map((r) => {
+        const rij = rijVan(r.modules);
+        const plekken = r.modules.filter(m => m.laatsteVanBlok).length;
+        const railPx = r.breedtePx + plekken * (PLEK_PX + 2);
+        const breed = railPx > beschikbaar;
+        return (
+          <div key={r.rail} style={{ marginBottom:10 }}>
+            {/* Het kopje alleen als er écht meer dan één rail is: bij een kast
+                van tien modules is "Rail 1" alleen maar ruis. */}
+            {strook.rails.length > 1 && (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:3 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:K.muted }}>Rail {r.rail}</div>
+                {breed && <span style={{ fontSize:10, color:K.muted, fontWeight:600 }}>← schuif →</span>}
+              </div>
+            )}
+            {strook.rails.length === 1 && breed && (
+              <div style={{ fontSize:10, color:K.muted, fontWeight:600, textAlign:"right", marginBottom:3 }}>← schuif →</div>
+            )}
+            <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch", paddingBottom:4 }}>
+              <div style={{ minWidth:railPx }}>
+                <div style={{ display:"flex", gap:2 }}>
+                  {rij.map((x, i) => x.plek ? (
+                    <button key={`p${i}`} onClick={() => onGroepErbij(x.plek)}
+                      aria-label={`Groep toevoegen achter ${x.naam}`}
+                      style={{ flex:`0 0 ${PLEK_PX}px`, minHeight:92, borderRadius:6, cursor:"pointer",
+                               border:`1px dashed ${K.yellow77}`, background:"transparent",
+                               color:K.accent, fontFamily:"inherit", fontSize:17, fontWeight:700,
+                               display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>+</button>
+                  ) : (
+                    <StrookTegel key={x.m.id} m={x.m} open={staatOpen(x.m)}
+                      zwaarst={x.m.soort === "eind" && hoogstVan(x.m.agId) === x.m.eindId}
+                      onTik={() => wissel(x.m)} />
+                  ))}
+                </div>
+                {/* De kleurband onder de strook: hij onderscheidt de blokken, en is
+                    bewust NIET de fasekleur — die betekent iets anders en mag hier
+                    niet meeliften. Loopt een blok door op de volgende rail, dan
+                    draagt hij daar dezelfde kleur, en dát is hoe je ziet dat het
+                    één blok is. */}
+                <div style={{ display:"flex", gap:2, marginTop:3 }}>
+                  {rij.map((x, i) => (
+                    <div key={`b${i}`} style={{
+                      flex:`0 0 ${x.plek ? PLEK_PX : x.m.breedtePx - 2}px`, height:7, borderRadius:3,
+                      background:x.plek ? "transparent" : x.m.band,
+                    }}/>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
-          {/* De kleurband onder de strook: hij onderscheidt de blokken, en is
-              bewust NIET de fasekleur — die betekent iets anders en mag hier niet
-              meeliften. */}
-          <div style={{ display:"flex", gap:2, marginTop:3 }}>
-            {rij.map((x, i) => (
-              <div key={`b${i}`} style={{
-                flex:`0 0 ${x.plek ? PLEK_PX : x.m.breedtePx - 2}px`, height:7, borderRadius:3,
-                background:x.plek ? "transparent" : x.m.band,
-              }}/>
-            ))}
-          </div>
-        </div>
-      </div>
+        );
+      })}
 
       {/* DE MODULEKAART. Eén blad per module, met de naam bovenaan en de velden
           eronder — zoals in Kastscan. Bewust één blad en niet twee: een tweede tik
@@ -1983,7 +2171,7 @@ function StrookTegel({ m, open, zwaarst, onTik }) {
       style={{ flex:`0 0 ${m.breedtePx - 2}px`, minHeight:92, padding:"6px 4px",
                borderRadius:8, cursor:"pointer", fontFamily:"inherit", color:K.text,
                background:isRcd ? K.surface : K.card,
-               border:`1px solid ${open ? K.yellow : (faseKleur || (isRcd ? K.borderStrong : K.border))}`,
+               border:`1px solid ${open ? K.accent : (faseKleur || (isRcd ? K.borderStrong : K.border))}`,
                // De rand draagt de FASE, niet de volledigheid: naast het label en
                // de kleur is het patroon de derde drager, zodat de fase ook klopt
                // voor wie kleuren niet onderscheidt (Kastscan-spec › Interactie 4).
@@ -2050,7 +2238,7 @@ function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind,
 
   return (
     <div style={{ background:K.surface, borderRadius:10, padding:12, marginTop:10,
-                  border:`1px solid ${K.yellow}44` }}>
+                  border:`1px solid ${K.yellow44}` }}>
       <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
         <span style={{ fontSize:10, fontWeight:700, color:K.muted, letterSpacing:0.5,
                        textTransform:"uppercase" }}>
@@ -2058,7 +2246,7 @@ function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind,
         </span>
         {(ag.bron === "paspoort" || ag.bron === "foto") && (
           <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:20,
-                         background:K.yellowDim, color:K.yellow }}>
+                         background:K.yellowDim, color:K.accent }}>
             uit {ag.bron === "foto" ? "foto" : "paspoort"}
           </span>
         )}
@@ -2101,7 +2289,7 @@ function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind,
             <input type="radio" name={`hoogst-${ag.id}`} checked={hoogstId === eg.id}
               onClick={() => updAG(ag.id, "hoogstId", ag.hoogstId === eg.id ? null : eg.id)}
               onChange={() => {}}/>
-            <span style={{ fontSize:11, color:hoogstId === eg.id ? K.yellow : K.muted }}>
+            <span style={{ fontSize:11, color:hoogstId === eg.id ? K.accent : K.muted }}>
               Zwaarst belast in dit cluster{ag.hoogstId === eg.id ? " — tik voor terug naar automatisch" : ""}
             </span>
           </label>
@@ -2175,7 +2363,7 @@ function Modulekaart({ ag, eg, hoogstId, onSluiten, updAG, updAGvelden, updEind,
         {weghalen ? (
           <div style={{ display:"flex", gap:8 }}>
             <button onClick={onAGWeg} style={{ ...S.btnGhost, marginBottom:0, color:K.red,
-                                               borderColor:`${K.red}66`, flex:1 }}>
+                                               borderColor:`${K.red66}`, flex:1 }}>
               Ja, met alle {(ag.eindgroepen || []).length} groepen
             </button>
             <button onClick={() => setWeghalen(false)} style={{ ...S.btnGhost, marginBottom:0, flex:1 }}>
@@ -2253,7 +2441,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
         <div style={{flex:1}}><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Aardlekgroepen ({aardlekgroepen.length})</div><div style={{fontSize:12,color:K.muted}}>gemeten per RCD-cluster</div></div>
-        <button onClick={addAG} style={{padding:"7px 12px",borderRadius:8,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Aardlek</button>
+        <button onClick={addAG} style={{padding:"7px 12px",borderRadius:8,border:`1px solid ${K.yellow66}`,background:K.yellowDim,color:K.accent,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Aardlek</button>
       </div>
       <div style={S.body}>
         <div style={{fontSize:11,color:K.muted,marginBottom:14,lineHeight:1.5}}>
@@ -2270,8 +2458,8 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
             vorige klus veranderd zijn, en het RCD-type staat niet in het
             paspoort. Daarom "controleer" en niet "overgenomen". */}
         {uitPaspoort > 0 && (
-          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+          <div style={{border:`1px solid ${K.yellow55}`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.accent,marginBottom:4}}>
               📥 {uitPaspoort} groep{uitPaspoort===1?"":"en"} uit het meterkastpaspoort
             </div>
             <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
@@ -2282,8 +2470,8 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
           </div>
         )}
         {uitFoto > 0 && (
-          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+          <div style={{border:`1px solid ${K.yellow55}`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.accent,marginBottom:4}}>
               📷 {uitFoto} groep{uitFoto===1?"":"en"} uit de foto van de kast
             </div>
             <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
@@ -2306,7 +2494,7 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
         {aardlekgroepen.length === 0 ? (
           <div style={{...S.card, textAlign:"center", padding:24}}>
             <p style={{...S.hint, marginBottom:0}}>
-              Nog geen aardlekgroepen. Tik rechtsboven op <strong style={{color:K.yellow}}>+ Aardlek</strong>,
+              Nog geen aardlekgroepen. Tik rechtsboven op <strong style={{color:K.accent}}>+ Aardlek</strong>,
               of scan de sticker van de kast — dan staat de bestaande kast er meteen.
             </p>
           </div>
@@ -2521,7 +2709,7 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
   const uitPaspoort = data.mkpImport && paspoortDraagtKast(data.mkpImport);
 
   return (
-    <div style={{ ...S.card, border:`1px solid ${K.yellow}55`, background:K.yellowDim, marginBottom:14 }}>
+    <div style={{ ...S.card, border:`1px solid ${K.yellow55}`, background:K.yellowDim, marginBottom:14 }}>
       <input ref={bestandRef} type="file" accept="image/*" capture="environment" style={{display:"none"}}
         onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
       {/* De galerij noemt heic en heif expliciet: `image/*` dekt ze op iOS wel,
@@ -2529,7 +2717,7 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
       <input ref={galerijRef} type="file" accept="image/*,image/heic,image/heif,.heic,.heif" style={{display:"none"}}
         onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
 
-      <div style={{ fontWeight:700, fontSize:15, color:K.yellow, marginBottom:4 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:K.accent, marginBottom:4 }}>
         {vergelijken ? "🔍 Is de kast gewijzigd?" : "📷 Lees de nieuwe kast uit de foto"}
       </div>
       <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:12 }}>
@@ -2585,7 +2773,7 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
             </div>
             {magOvernemen && (
               <button onClick={neemOver}
-                style={{ ...S.btnGhost, marginTop:10, marginBottom:0, borderColor:`${K.orange}66`, color:K.orange }}>
+                style={{ ...S.btnGhost, marginTop:10, marginBottom:0, borderColor:`${K.orange66}`, color:K.orange }}>
                 Neem de nieuwe kast over in stap 5 en 6
               </button>
             )}
@@ -2614,7 +2802,7 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
       )}
 
       {fout && !bezig && (
-        <div style={{ background:K.redDim, border:`1px solid ${K.red}44`, borderRadius:10,
+        <div style={{ background:K.redDim, border:`1px solid ${K.red44}`, borderRadius:10,
                       padding:"10px 12px", marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:700, color:K.red, marginBottom:2 }}>{fout.titel}</div>
           <div style={{ fontSize:11, color:K.textSoft, lineHeight:1.5 }}>{fout.tekst}</div>
@@ -2763,7 +2951,7 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
                   onChange("fotos", { ...(data.fotos||{}), na_open: klein }));
               }}/>
           )}
-          <div style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green+"66":K.border}`}}>
+          <div style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green66:K.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}
               onClick={()=>!fotos[cp.id]&&setKiesVoor(kiesVoor===cp.id?null:cp.id)}>
               {/* Thumbnail of icoon */}
@@ -2795,7 +2983,7 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
               </div>
               {fotos[cp.id]
                 ? <button onClick={e=>{e.stopPropagation();verwijderFoto(cp.id);}} style={{background:"transparent",border:`1px solid ${K.border}`,borderRadius:8,color:K.muted,cursor:"pointer",fontSize:12,padding:"6px 10px"}}>✕</button>
-                : <div style={{padding:"7px 12px",borderRadius:8,background:K.yellowDim,color:K.yellow,fontSize:12,fontWeight:600}}>📷</div>}
+                : <div style={{padding:"7px 12px",borderRadius:8,background:K.yellowDim,color:K.accent,fontSize:12,fontWeight:600}}>📷</div>}
             </div>
 
             {/* Camera / galerij keuze */}
@@ -2817,7 +3005,7 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
           </div>
           </Fragment>
         ))}
-        {!verplichtDone&&<div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
+        {!verplichtDone&&<div style={{...S.card,background:K.redDim,border:`1px solid ${K.red44}`}}>
           <div style={{fontSize:12,color:K.red,fontWeight:600}}>⚠️ Maak alle verplichte foto's</div>
         </div>}
         <button style={{...S.btn,background:verplichtDone?K.yellow:K.border,color:verplichtDone?"#000":K.muted}} onClick={verplichtDone?onNext:undefined}>Volgende →</button>
@@ -2919,7 +3107,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
         <div style={S.card}>
           <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
             <div><label style={S.label}>Stelsel<LeerIcoon onderwerp="stelsel_tn_tt"/></label>
-              <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.yellow,minWidth:90,textAlign:"center"}}>{stelsel}</div>
+              <div style={{padding:"8px 10px",borderRadius:8,background:K.surface,fontSize:13,fontWeight:600,color:K.accent,minWidth:90,textAlign:"center"}}>{stelsel}</div>
             </div>
             <div>
               <label style={S.label}>Hoofdzekering</label>
@@ -3051,7 +3239,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             ))}
           </div>
           {(inst.isoTotFA || inst.isoTotNA) && (toNum(inst.isoTotFA)<0.23 || toNum(inst.isoTotNA)<0.23) && (
-            <div style={{marginTop:10,padding:"10px 12px",background:K.orangeDim,borderRadius:10,border:`1px solid ${K.orange}44`}}>
+            <div style={{marginTop:10,padding:"10px 12px",background:K.orangeDim,borderRadius:10,border:`1px solid ${K.orange44}`}}>
               <div style={{fontSize:11,color:K.orange,lineHeight:1.6}}>
                 ⚠ <strong>Waarde onder 0,23 MΩ.</strong> Zet de groepen één voor één uit en meet steeds opnieuw, tot de waarde weer ≥ 0,23 MΩ wordt — de laatst uitgezette groep is de boosdoener. Leg die (of alle groepen) hieronder per groep vast.
               </div>
@@ -3229,7 +3417,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
             const gd = ag.rcdType==="geen" || gv(ag.id,"dt");
             const gOk = gd && (ag.rcdType==="geen" || dtOk(gv(ag.id,"dt")));
             return (
-              <button key={ag.id} onClick={()=>setActiveAG(ag.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeAG===ag.id?K.yellow:K.border}`,background:activeAG===ag.id?K.yellowDim:K.card,color:activeAG===ag.id?K.yellow:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+              <button key={ag.id} onClick={()=>setActiveAG(ag.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeAG===ag.id?K.accent:K.border}`,background:activeAG===ag.id?K.yellowDim:K.card,color:activeAG===ag.id?K.accent:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
                 {gd?(gOk?"✅":"⚠️"):"○"} {ag.naam.length>14?ag.naam.slice(0,14)+"…":ag.naam}
               </button>
             );
@@ -3248,7 +3436,7 @@ function GK_StapMeten({ data, onChange, onNext, onBack }) {
               {cagRcd.rcdType==="geen"?"Geen RCD":`RCD ${cagRcd.rcdMa}mA type-${cagRcd.rcdType}`} · {is3fase?"3-fase 400V":"1-fase 230V"}
             </div>
             {hoogst && (
-              <div style={{fontSize:11,color:K.yellow,marginBottom:14,padding:"6px 10px",background:K.yellowDim,borderRadius:8}}>
+              <div style={{fontSize:11,color:K.accent,marginBottom:14,padding:"6px 10px",background:K.yellowDim,borderRadius:8}}>
                 ⭐ Hoogst afgaande groep: <strong>{hoogst.naam}</strong> ({hoogst.kar}{hoogst.ampere})
               </div>
             )}
@@ -3360,8 +3548,8 @@ CROSS-CHECK SIGNALEN: ${warnings.length>0?warnings.map(w=>w.msg).join("; "):"gee
         {/* Samenvatting: welke groepen zijn geselecteerd voor de veldmeting in stap 8
             (verste/buitengroep-metingen Z L-N/L-PE, kabellengte-indicatie) */}
         {aardlekgroepen.some(ag=>ag.veldmetingSelectie) && (
-          <div style={{marginTop:14,padding:"10px 12px",background:K.yellowDim,borderRadius:10,border:`1px solid ${K.yellow}44`}}>
-            <div style={{fontSize:11,fontWeight:700,color:K.yellow,marginBottom:6}}>📋 Veldmeting — geselecteerde groepen</div>
+          <div style={{marginTop:14,padding:"10px 12px",background:K.yellowDim,borderRadius:10,border:`1px solid ${K.yellow44}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:K.accent,marginBottom:6}}>📋 Veldmeting — geselecteerde groepen</div>
             <div style={{fontSize:11,color:K.text}}>
               {aardlekgroepen.filter(ag=>ag.veldmetingSelectie).map(ag=>ag.naam).join(", ")}
             </div>
@@ -3606,8 +3794,8 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
             <div style={{flex:1}}><label style={S.label}>Aantal panelen</label><input style={S.input} type="text" inputMode="decimal" placeholder="12" value={data.aantalPanelen||""} onChange={e=>onChange("aantalPanelen",e.target.value)}/></div>
           </div>
           {totaalWp > 0 && (
-            <div style={{marginTop:12,padding:"8px 12px",borderRadius:8,background:K.yellowDim,border:`1px solid ${K.yellow}44`}}>
-              <span style={{fontSize:13,color:K.yellow,fontWeight:700}}>Totaalvermogen: {(totaalWp/1000).toFixed(2).replace(".",",")} kWp</span>
+            <div style={{marginTop:12,padding:"8px 12px",borderRadius:8,background:K.yellowDim,border:`1px solid ${K.yellow44}`}}>
+              <span style={{fontSize:13,color:K.accent,fontWeight:700}}>Totaalvermogen: {(totaalWp/1000).toFixed(2).replace(".",",")} kWp</span>
             </div>
           )}
         </div>
@@ -3656,12 +3844,12 @@ function PV_StapMateriaal({ data, onChange, onNext, onBack }) {
         {/* Strings */}
         <div style={{...S.sTitle,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>Strings ({strings.length})</span>
-          <button onClick={addString} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${K.yellow}66`,background:K.yellowDim,color:K.yellow,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ String</button>
+          <button onClick={addString} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${K.yellow66}`,background:K.yellowDim,color:K.accent,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ String</button>
         </div>
         {strings.map((s,i)=>(
           <div key={s.id} style={S.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-              <div style={{fontWeight:700,color:K.yellow}}>String {i+1}</div>
+              <div style={{fontWeight:700,color:K.accent}}>String {i+1}</div>
               {strings.length>1&&<button onClick={()=>remStr(s.id)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:16}}>×</button>}
             </div>
             <div style={{display:"flex",gap:10}}>
@@ -3782,7 +3970,7 @@ function PV_StapMeten({ data, onChange, onNext, onBack }) {
             const done = gv(s.id,"iso") && gv(s.id,"spanning");
             const ok   = done && isoOk(gv(s.id,"iso")) && spanOk(gv(s.id,"spanning"));
             return (
-              <button key={s.id} onClick={()=>setActiveStr(s.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeStr===s.id?K.yellow:K.border}`,background:activeStr===s.id?K.yellowDim:K.card,color:activeStr===s.id?K.yellow:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+              <button key={s.id} onClick={()=>setActiveStr(s.id)} style={{padding:"7px 13px",borderRadius:10,border:`1px solid ${activeStr===s.id?K.accent:K.border}`,background:activeStr===s.id?K.yellowDim:K.card,color:activeStr===s.id?K.accent:K.text,fontFamily:"'IBM Plex Sans',sans-serif",fontWeight:600,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
                 {done?(ok?"✅":"⚠️"):"○"} String {i+1}
               </button>
             );
@@ -3904,7 +4092,7 @@ function MkpScanner({ onResult, onSluit }) {
     <div style={{ position:"fixed", inset:0, zIndex:1000, background:"#000", display:"flex", flexDirection:"column" }}>
       <video ref={videoRef} playsInline muted style={{ flex:1, width:"100%", objectFit:"cover" }}/>
       <div style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
-        width:230, height:230, border:`3px solid ${K.yellow}`, borderRadius:16, boxShadow:"0 0 0 9999px rgba(0,0,0,0.35)" }}/>
+        width:230, height:230, border:`3px solid ${K.accent}`, borderRadius:16, boxShadow:"0 0 0 9999px rgba(0,0,0,0.35)" }}/>
       <div style={{ position:"absolute", top:16, left:0, right:0, textAlign:"center", color:"#fff", fontSize:14, fontWeight:700, textShadow:"0 1px 4px #000" }}>
         Richt op de meterkastpaspoort-sticker
       </div>
@@ -3980,7 +4168,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
             )}
             {n.handeling && <div style={{fontSize:12, marginTop:6}}><strong>Handeling:</strong> {n.handeling}</div>}
             <div style={{fontSize:11, color:K.muted, marginTop:6}}>
-              Uitgegeven door {t.uitgever}{bron ? <> · <a href={bron} target="_blank" rel="noopener noreferrer" style={{color:K.yellow}}>bron</a></> : null}
+              Uitgegeven door {t.uitgever}{bron ? <> · <a href={bron} target="_blank" rel="noopener noreferrer" style={{color:K.accent}}>bron</a></> : null}
             </div>
             <Vlag st={t.feedStatus}/>
           </div>
@@ -4057,7 +4245,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
               {erk && (
                 <div style={{fontSize:11, color:K.muted, marginTop:2}}>
                   Erkenning {erk.naam} {erk.nummer}{opzoek
-                    ? <> — <a href={opzoek} target="_blank" rel="noopener noreferrer" style={{color:K.yellow}}>controleer bij {erk.naam}</a></>
+                    ? <> — <a href={opzoek} target="_blank" rel="noopener noreferrer" style={{color:K.accent}}>controleer bij {erk.naam}</a></>
                     : ` — controleer in het openbare register van ${erk.naam}`}
                 </div>
               )}
@@ -4190,7 +4378,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
       </p>
 
       {data.mkpImport && (
-        <div style={{...S.card, background:K.yellowDim, border:`1px solid ${K.yellow}55`, marginBottom:12, fontSize:12}}>
+        <div style={{...S.card, background:K.yellowDim, border:`1px solid ${K.yellow55}`, marginBottom:12, fontSize:12}}>
           📥 Vooringevuld vanuit gescand paspoort — <strong>opgave vorige installateur, controleer bij twijfel.</strong>
         </div>
       )}
@@ -4278,7 +4466,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
               {({lp:"🔌",bat:"🔋",pv:"☀️",wp:"🌡️"}[g.t])||"⚙️"} {g.n || ({lp:"Laadpaal",bat:"Thuisbatterij",pv:"PV-omvormer",wp:"Warmtepomp"}[g.t]) || g.t}
               {/* "deze klus" hoort er één keer te staan, ook als het apparaat
                   twee regels vult — anders leest het als twee apparaten. */}
-              {i === 0 && <span style={{color:K.yellow, fontSize:11}}> · deze klus</span>}
+              {i === 0 && <span style={{color:K.accent, fontSize:11}}> · deze klus</span>}
               <span style={{color:K.muted, fontSize:11}}>
                 {g.kw ? ` · ${String(g.kw).replace(".", ",")} kW` : ""}
                 {g.t === "bat" ? (g.rol === "voed" ? " ↩︎ ontladen" : " laden") : (g.rol === "voed" ? " · ↩︎ voedend" : "")}
@@ -4300,7 +4488,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
           <div key={`ex${i}`} style={{border:`1px solid ${K.border}`, borderRadius:10, padding:8, marginTop:8}}>
             <div style={{display:"flex", gap:6, alignItems:"center"}}>
               <button style={{flex:1, minWidth:0, textAlign:"left", padding:"9px 10px", background:K.card, color:K.text,
-                      border:`1px solid ${extraOpen===i?K.yellow:K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
+                      border:`1px solid ${extraOpen===i?K.accent:K.border}`, borderRadius:8, fontSize:13, fontFamily:"inherit"}}
                 onClick={()=>setExtraOpen(extraOpen===i?null:i)}>
                 {gek ? `${gek[1]} ${gek[2]}` : "— kies type —"}
               </button>
@@ -4314,7 +4502,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
               <div style={{display:"flex", flexWrap:"wrap", gap:6, marginTop:8}}>
                 {EXTRA_TYPES.map(([v,ic,l])=>(
                   <button key={v} style={{padding:"8px 10px", borderRadius:8, fontSize:12, fontFamily:"inherit", cursor:"pointer",
-                          background:g.t===v?K.yellow:K.card, color:g.t===v?"#000":K.text, border:`1px solid ${g.t===v?K.yellow:K.border}`}}
+                          background:g.t===v?K.yellow:K.card, color:g.t===v?"#000":K.text, border:`1px solid ${g.t===v?K.accent:K.border}`}}
                     onClick={()=>{const n=[...extraGrp]; n[i]={...n[i], t:v, rol:(v==="pv"||v==="bat")?"voed":"af"}; zet("extraGrp",n); setExtraOpen(null);}}>
                     {ic} {l}
                   </button>
@@ -4364,7 +4552,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
               value={m.lbReg||""} onChange={e=>zet("lbReg",e.target.value)}/>
           </div>
           {dubbeleBalancerRisico && (
-            <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange}66`, marginTop:8, marginBottom:0, fontSize:12}}>
+            <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange66}`, marginTop:8, marginBottom:0, fontSize:12}}>
               ⚠️ <strong>Laadpaal én thuisbatterij aanwezig, maar geen regisseur ingevuld.</strong> Twee
               onafhankelijke begrenzers weten niets van elkaar en kunnen samen alsnog de aansluiting of
               kam overbelasten. Vul in wélk systeem de regie voert, of leg vast dat sturing ontbreekt.
@@ -4471,7 +4659,7 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
         )}
       </div>
 
-      {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red}66`, marginBottom:12, fontSize:12}}>{fout}</div>}
+      {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginBottom:12, fontSize:12}}>{fout}</div>}
 
       <div style={{display:"flex", gap:10}}>
         <button style={S.btnGhost} onClick={onBack}>← Terug</button>
@@ -5634,18 +5822,18 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
       </div>
       <div style={S.body}>
         {/* ProjectId */}
-        <div style={{...S.card,background:K.yellowDim,border:`1px solid ${K.yellow}55`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{...S.card,background:K.yellowDim,border:`1px solid ${K.yellow55}`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:22}}>📁</span>
           <div>
-            <div style={{fontSize:10,color:K.yellow,fontWeight:700,textTransform:"uppercase"}}>Bestandsnaam</div>
-            <div style={{fontSize:18,fontWeight:800,color:K.yellow}}>{data.projectId||"—"}-{discipline}.pdf</div>
+            <div style={{fontSize:10,color:K.accent,fontWeight:700,textTransform:"uppercase"}}>Bestandsnaam</div>
+            <div style={{fontSize:18,fontWeight:800,color:K.accent}}>{data.projectId||"—"}-{discipline}.pdf</div>
           </div>
         </div>
 
         {/* Hoofdstuk 6: werd het paspoort ingekort om leesbaar te blijven, dan staat
             hier in één regel wat er niet in de QR zit. */}
         {data.mkpMelding && (
-          <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange}55`, fontSize:13, lineHeight:1.5, marginBottom:16}}>
+          <div style={{...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`, fontSize:13, lineHeight:1.5, marginBottom:16}}>
             ⚠ <strong>Meterkastpaspoort ingekort.</strong> {data.mkpMelding}
           </div>
         )}
@@ -5704,14 +5892,14 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           </button>
         )}
         {status==="generating" && (
-          <div style={{...S.card,background:K.blueDim,border:`1px solid ${K.blue}44`,textAlign:"center",padding:28}}>
+          <div style={{...S.card,background:K.blueDim,border:`1px solid ${K.blue44}`,textAlign:"center",padding:28}}>
             <div style={{fontSize:32,marginBottom:12}}>📄</div>
             <div style={{fontWeight:700,marginBottom:4}}>Rapport wordt opgesteld…</div>
             <div style={{fontSize:12,color:K.muted}}>Even geduld</div>
           </div>
         )}
         {status==="error" && (
-          <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
+          <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red44}`}}>
             <div style={{fontSize:13,color:K.red,fontWeight:700}}>⚠️ Fout. Probeer opnieuw.</div>
             <button style={{...S.btn,background:K.yellow,color:"#000",marginTop:12}} onClick={genereerRapport}>Opnieuw</button>
           </div>
@@ -5755,17 +5943,17 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
               </button>
             )}
             {mailStatus==="sending" && (
-              <div style={{...S.card,background:K.blueDim,border:`1px solid ${K.blue}44`,textAlign:"center",padding:16}}>
+              <div style={{...S.card,background:K.blueDim,border:`1px solid ${K.blue44}`,textAlign:"center",padding:16}}>
                 <div style={{fontSize:13,color:K.blue,fontWeight:600}}>📧 Bezig met versturen…</div>
               </div>
             )}
             {mailStatus==="sent" && (
-              <div style={{...S.card,background:K.greenDim,border:`1px solid ${K.green}44`,textAlign:"center",padding:16}}>
+              <div style={{...S.card,background:K.greenDim,border:`1px solid ${K.green44}`,textAlign:"center",padding:16}}>
                 <div style={{fontSize:13,color:K.green,fontWeight:700}}>✅ Verstuurd naar {data.email}</div>
               </div>
             )}
             {mailStatus==="error" && (
-              <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red}44`}}>
+              <div style={{...S.card,background:K.redDim,border:`1px solid ${K.red44}`}}>
                 <div style={{fontSize:12,color:K.red,fontWeight:600,marginBottom:4}}>⚠️ Versturen mislukt</div>
                 {mailError && <div style={{fontSize:11,color:K.red,opacity:0.85,fontFamily:"monospace",marginBottom:8}}>{mailError}</div>}
                 <button style={{...S.btnGhost,marginBottom:0}} onClick={verstuurEmail}>Opnieuw proberen</button>
@@ -5795,8 +5983,8 @@ function KlaarScreen({ data, discipline, onDone }) {
         <div style={{display:"flex",alignItems:"center",gap:10,background:K.yellowDim,borderRadius:10,padding:"10px 12px",marginBottom:12}}>
           <span style={{fontSize:20}}>📁</span>
           <div>
-            <div style={{fontSize:10,color:K.yellow,fontWeight:700,textTransform:"uppercase"}}>Opgeslagen als</div>
-            <div style={{fontSize:16,fontWeight:800,color:K.yellow}}>{data.projectId}-{discipline}.pdf</div>
+            <div style={{fontSize:10,color:K.accent,fontWeight:700,textTransform:"uppercase"}}>Opgeslagen als</div>
+            <div style={{fontSize:16,fontWeight:800,color:K.accent}}>{data.projectId}-{discipline}.pdf</div>
           </div>
         </div>
         <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>{data.naam}</div>
@@ -5987,7 +6175,7 @@ function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
               {importLijst.map((p,i)=>(
                 <div key={i} style={{fontSize:12, padding:"7px 0", borderBottom:`1px solid ${K.border}`, display:"flex", justifyContent:"space-between", gap:8}}>
                   <span style={{flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
-                    {omschrijf(p)}{p._gedeeld && <span style={{color:K.yellow}}> · gedeeld (geanonimiseerd)</span>}
+                    {omschrijf(p)}{p._gedeeld && <span style={{color:K.accent}}> · gedeeld (geanonimiseerd)</span>}
                   </span>
                   <span style={{color:K.muted, flexShrink:0}}>{fmt(p.updatedAt)}</span>
                 </div>
@@ -6031,7 +6219,7 @@ function DisciplineKiezer({ onKies, onBack }) {
             background:`linear-gradient(135deg,${d.colorDim},${K.card})`,
           }} onClick={()=>onKies(d.id)}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:48,height:48,borderRadius:12,flexShrink:0,background:`${d.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>
+              <div style={{width:48,height:48,borderRadius:12,flexShrink:0,background:`${d.colorTint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>
                 {d.icon}
               </div>
               <div style={{flex:1}}>
@@ -6049,7 +6237,7 @@ function DisciplineKiezer({ onKies, onBack }) {
 }
 
 // ─── HOME SCHERM ──────────────────────────────────────────────────────────────
-function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
+function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup, thema, onThema }) {
   const [projecten, setProjecten] = useState([]);
 
   useEffect(() => {
@@ -6088,7 +6276,7 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
           {isDone?"✅":disc?.icon||"📄"}
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:800,fontSize:13,color:K.yellow,letterSpacing:0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.job?.projectId||"Nieuw project"}</div>
+          <div style={{fontWeight:800,fontSize:13,color:K.accent,letterSpacing:0.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.job?.projectId||"Nieuw project"}</div>
           <div style={{fontWeight:500,fontSize:16,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.job?.naam||"—"}</div>
           <div style={{fontSize:13,color:K.muted}}>{disc?.label}{!isDone?` · stap ${(p.step||0)+1}`:""}</div>
         </div>
@@ -6106,14 +6294,28 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
         <div><div style={{fontWeight:700,fontSize:16}}>YourWkb</div><div style={{fontSize:12,color:K.muted}}>Installatie opleverrapporten</div></div>
         {/* Versie rechts in de kop — bij een melding uit het veld weet je meteen
             welke versie de installateur draait. Alleen weergave, geen knop. */}
-        <div style={{marginLeft:"auto",fontSize:12,color:K.muted,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
-          v{APP_VERSIE}
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>
+          {/* Licht of donker. Eén tik, en de keuze blijft op het toestel staan.
+              Hij hoort hier en niet in een instellingenscherm: dit is iets wat je
+              per klus anders wilt — in een kruipruimte donker, aan de keukentafel
+              licht. */}
+          <button onClick={onThema} aria-label={thema === "licht" ? "Donker thema" : "Licht thema"}
+            title={thema === "licht" ? "Donker thema" : "Licht thema"}
+            style={{width:36,height:36,borderRadius:10,border:`1px solid ${K.border}`,
+                    background:"transparent",color:K.muted,cursor:"pointer",fontSize:15,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    WebkitTapHighlightColor:"transparent"}}>
+            {thema === "licht" ? "🌙" : "☀️"}
+          </button>
+          <div style={{fontSize:12,color:K.muted,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
+            v{APP_VERSIE}
+          </div>
         </div>
       </div>
       <div style={S.body}>
 
         {/* Snelkeuze disciplines — dé ingang voor een nieuwe klus */}
-        <div style={{fontSize:13,color:K.yellow,fontWeight:700,marginBottom:8}}>+ NIEUWE REGISTRATIE</div>
+        <div style={{fontSize:13,color:K.accent,fontWeight:700,marginBottom:8}}>+ NIEUWE REGISTRATIE</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
           {/* Het icoon zit in een gekleurd vlak van 28px, zodat de zes tegels
               op vorm én kleur te onderscheiden zijn zonder te lezen. De spec
@@ -6121,7 +6323,7 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup }) {
               het snelste herkenpunt, dus die blijft — in het vlak. */}
           {DISCIPLINES.map(d=>(
             <div key={d.id} style={{...S.card,padding:14,minHeight:92,marginBottom:0,cursor:"pointer",border:`1px solid ${d.colorDim}`,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:10}} onClick={()=>onNew(d.id)}>
-              <div style={{width:28,height:28,borderRadius:8,background:`${d.color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{d.icon}</div>
+              <div style={{width:28,height:28,borderRadius:8,background:`${d.colorTint}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{d.icon}</div>
               <div>
                 <div style={{fontWeight:700,fontSize:15}}>{d.label}</div>
                 <div style={{fontSize:12,color:d.color,fontWeight:600,marginTop:2}}>{d.norm}</div>
@@ -6593,7 +6795,7 @@ function CV_StapMeten({ data, onChange, onNext, onBack }) {
 
         <div style={S.sTitle}>CO meting omgeving — verplicht</div>
         <div style={S.card}>
-          <div style={{...S.card,background:K.orangeDim,border:`1px solid ${K.orange}44`,padding:"10px 14px",marginBottom:12}}>
+          <div style={{...S.card,background:K.orangeDim,border:`1px solid ${K.orange44}`,padding:"10px 14px",marginBottom:12}}>
             <div style={{fontSize:12,color:K.orange,fontWeight:600}}>⚠️ Meet CO vóór én ná werkzaamheden — wettelijk verplicht (Gasketelwet)</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -6922,7 +7124,7 @@ function LP_StapMateriaal({ data, onChange, onNext, onBack }) {
   const v = (k) => data[k] || "";
   const zet = (k,val) => onChange(k, val);
   const knop = (actief) => ({ flex:1, padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
-    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.yellow : K.border}` });
+    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.accent : K.border}` });
   return (
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
@@ -7093,7 +7295,7 @@ function BAT_StapMateriaal({ data, onChange, onNext, onBack }) {
   const v = (k) => data[k] || "";
   const zet = (k,val) => onChange(k, val);
   const knop = (actief) => ({ flex:1, padding:"10px 6px", fontSize:13, borderRadius:8, cursor:"pointer", fontFamily:"inherit",
-    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.yellow : K.border}` });
+    background: actief ? K.yellow : K.card, color: actief ? "#000" : K.text, border:`1px solid ${actief ? K.accent : K.border}` });
   return (
     <div style={{padding:16}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
@@ -7221,6 +7423,10 @@ export default function App() {
 
   // Service worker registreren (offline-werking) + update-signalering.
   const [swUpdate, setSwUpdate] = useState(null);   // wachtende nieuwe versie
+  // De kolombreedte volgt het scherm: telefoon 430, tablet 720, laptop 1080.
+  // Dezelfde schermen, meer ruimte — geen tweede layout.
+  const { formaat, appBreedte } = useFormaat();
+  const { thema, wissel: wisselThema } = useThema();
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").then(reg => {
@@ -7527,7 +7733,11 @@ export default function App() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-      <div style={S.app}>
+      {/* De kleuren van beide thema's als variabelen. Eigen, vaste tekst — geen
+          invoer van buiten, dus hier is dangerouslySetInnerHTML precies wat het
+          zegt en niet wat het suggereert. */}
+      <style dangerouslySetInnerHTML={{ __html: THEMA_CSS }}/>
+      <div style={{ ...S.app, maxWidth: appBreedte }}>
         {swUpdate && (
           <button onClick={activeerUpdate} style={{width:"100%", padding:"10px", background:K.yellow, color:"#000", border:"none", fontSize:13, fontWeight:700, cursor:"pointer"}}>
             ⬆️ Nieuwe versie beschikbaar — tik om te verversen
@@ -7538,11 +7748,11 @@ export default function App() {
         {!mkpScan && !scannerOpen && screen==="home" && (
           <button onClick={()=>setScannerOpen(true)}
             style={{ margin:"12px 16px 0", width:"calc(100% - 32px)", padding:"12px", borderRadius:12,
-                     background:K.card, border:`1px dashed ${K.yellow}88`, color:K.text, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+                     background:K.card, border:`1px dashed ${K.yellow88}`, color:K.text, fontSize:13, fontWeight:600, cursor:"pointer" }}>
             📷 Scan meterkastpaspoort <span style={{color:K.muted, fontWeight:400}}>· werkt ook zonder bereik</span>
           </button>
         )}
-        {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject} onBackup={()=>setScreen("backup")}/>}
+        {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject} onBackup={()=>setScreen("backup")} thema={thema} onThema={wisselThema}/>}
         {!mkpScan && screen==="backup" && <BackupScherm onBack={()=>setScreen("home")} onGewijzigd={()=>{}} startBestand={gedeeldBestand} naVerwerkt={()=>setGedeeldBestand(null)}/>}
         {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
         {!mkpScan && screen==="job"    && (
