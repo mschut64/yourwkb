@@ -7,10 +7,11 @@
     "build": "next build",
     "start": "next start",
     "vercel-build": "next build",
-    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-mkp-qr.js && node tests/test-mkp-bronnen.js && node tests/test-rapport-print.js && node tests/test-kastbeeld-naar-groepen.js",
+    "test": "node tests/test.js && node tests/test-mkp.js && node tests/test-veilig.js && node tests/test-mkp-qr.js && node tests/test-mkp-bronnen.js && node tests/test-rapport-print.js && node tests/test-kastbeeld-naar-groepen.js && node tests/test-routes.js",
     "demo-rapport": "node scripts/demo-opleverrapport.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
     "jsqr": "^1.4.0",
     "meterkastpaspoort": "https://github.com/mschut64/meterkastpaspoort/archive/refs/tags/v0.3.2.tar.gz",
     "next": "14.2.35",

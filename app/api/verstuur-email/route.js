@@ -2,7 +2,7 @@
 // De client levert nog de rapport-HTML (structurele server-side bouw volgt bij de
 // betaalrelease); tot die tijd: origin-check, rate limits, strikte adresvalidatie,
 // vast afzender/onderwerp, groottecap en het strippen van actieve content.
-import { rateLimit, origineOk, fout } from "../_lib/guard";
+import { rateLimit, origineOk, fout } from "../_lib/guard.js";
 
 const MAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,24}$/;
 

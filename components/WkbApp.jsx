@@ -1,5 +1,21 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-10-02-G (de fotoroute gaf 500 op elke scan):
+//   • Melding Martin, vlak na de release: "foto lezen geeft 500 fout bij het lezen".
+//     In de Vercel-logs: `TypeError: s is not a constructor`, bij élke POST naar
+//     /api/kastbeeld.
+//   • Oorzaak: `@anthropic-ai/sdk` stond niet in package.json. De motor importeert
+//     hem — de analyse draait erop — maar hij is daar een OPTIONELE peerDependency,
+//     dus npm installeert hem niet mee. Kastscan had hem als gewone afhankelijkheid
+//     staan en werkte daarom wél; bij het verhuizen van de route naar de motor is
+//     die regel niet meegekomen.
+//   • Waarom niets het tegenhield: Next.js laat een import uit node_modules als
+//     "external" staan in plaats van hem te bundelen, dus `next build` bleef groen —
+//     ook nu nog, met de SDK weggehaald, getest. En `npm test` raakte de route niet.
+//     Nu wel: tests/test-routes.js laadt elke route en valt om als er iets ontbreekt.
+//     ⚓ Een groene build bewijst niet dat een serverroute kan starten.
+//   • Geen enkele wijziging in het scherm. De versie en de service-worker-cache
+//     gaan toch mee, zodat te zien blijft welke versie de scan repareert.
 // 2026-09-20-A (printen werkte niet op iPhone en iPad):
 //   • Melding Maurits: "Openen & opslaan als PDF" gaf een pdf met het app-scherm
 //     op pagina 1 en een half rapport op pagina 2. Oorzaak: we printten vanuit een
@@ -370,7 +386,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-F";
+const APP_VERSIE = "2026-10-02-G";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────

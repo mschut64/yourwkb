@@ -11,7 +11,7 @@
 //
 // De prompt blijft server-side (audit BEV-02): de client stuurt alleen de foto.
 import { maakKastbeeldRoute } from "yourwkb-core/kastbeeld-route.js";
-import { rateLimit, origineOk, fout } from "../_lib/guard";
+import { rateLimit, origineOk, fout } from "../_lib/guard.js";
 
 export const POST = maakKastbeeldRoute({ rateLimit, origineOk, fout, logNaam: "kastbeeld" });
 
