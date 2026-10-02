@@ -330,6 +330,7 @@ import {
   // waarmee Kastscan een kast tekent.
   positiesUitPaspoort, aardlekgroepenUitPosities, paspoortDraagtKast,
   strookUitAardlekgroepen, MODULE_PX, isGroepsoort, materiaalUitPosities,
+  vergelijkKastbeelden,
   // Een kast lezen uit een foto (K5): dezelfde keten als in Kastscan.
   positiesUitAnalyse, ONBRUIKBAAR_ADVIES, ONBRUIKBAAR_STANDAARD,
 } from "yourwkb-core";
@@ -369,7 +370,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-C";
+const APP_VERSIE = "2026-10-02-D";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2365,7 +2366,8 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
 // is bevroren, en wat de foto niet zag blijft leeg in plaats van geraden. De
 // installateur loopt het na — dat is de regel uit de featurespec en de reden dat
 // de melding "controleer" zegt en niet "overgenomen".
-function KastLezer({ data, onChange, onFoto }) {
+function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null }) {
+  const vergelijken = modus === "vergelijken";
   const [bezig, setBezig] = useState("");
   const [fout, setFout] = useState(null);
   const bestandRef = useRef(null);
@@ -2421,6 +2423,20 @@ function KastLezer({ data, onChange, onFoto }) {
         setFout({ titel: "Niets gelezen", tekst: "Op deze foto zijn geen modules herkend. " + ONBRUIKBAAR_STANDAARD });
         return;
       }
+      // ── VERGELIJKEN. Stap 5 en 6 komen uit de foto van de BESTAANDE situatie,
+      //    en het rapport beschrijft de OPGELEVERDE installatie. Is er sinds die
+      //    eerste foto iets bijgezet of vervangen, dan beschrijft het rapport een
+      //    kast die er niet meer hangt. Deze stap vult dus niets in — hij stelt
+      //    één vraag en laat het antwoord zien.
+      if (vergelijken) {
+        onChange("kastVergelijking", {
+          ...vergelijkKastbeelden(referentie || [], posities),
+          posities,
+          gelezenOp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const materiaal = materiaalUitPosities(posities);
       onChange("kastbeeld", {
         posities,
@@ -2454,6 +2470,28 @@ function KastLezer({ data, onChange, onFoto }) {
     }
   };
 
+  const vergelijking = vergelijken ? data.kastVergelijking : null;
+  // Overnemen vervangt de aardlekgroepen, en de metingen hangen aan hún
+  // identiteit. Zijn die er al, dan zou overnemen ze van hun groep losmaken —
+  // dan is bijwerken met de hand het enige eerlijke antwoord.
+  const heeftMetingen = Object.keys(data.grpMeet || {}).length > 0
+    || Object.keys(data.veldmeting || {}).length > 0;
+  const magOvernemen = vergelijken && vergelijking && !vergelijking.gelijk && !heeftMetingen;
+  const neemOver = () => {
+    const nieuwePosities = (vergelijking && vergelijking.posities) || [];
+    if (!nieuwePosities.length) return;
+    onChange("aardlekgroepen", aardlekgroepenUitPosities(nieuwePosities, { bron: "foto" }));
+    const mat = materiaalUitPosities(nieuwePosities);
+    onChange("automaten", mat.lijst.map(r => ({
+      fab: r.fabrikant || "Onbekend", serie: "", type: r.type, aantal: r.aantal, bron: "foto",
+    })));
+    onChange("kastbeeld", {
+      posities: nieuwePosities, promptversie: (data.kastbeeld||{}).promptversie || "",
+      gelezenOp: new Date().toISOString(), vulde: true, zonderMerk: mat.zonderMerk,
+    });
+    onChange("kastVergelijking", { ...vergelijking, overgenomen: true, gelijk: true });
+  };
+
   const groepen = gelezen ? (gelezen.posities || []).filter(p => isGroepsoort(p.soort)).length : 0;
   const materiaalRegels = gelezen ? materiaalUitPosities(gelezen.posities || []).lijst.length : 0;
 
@@ -2473,15 +2511,69 @@ function KastLezer({ data, onChange, onFoto }) {
         onChange={e=>{ lees(e.target.files[0]); e.target.value=""; }}/>
 
       <div style={{ fontWeight:700, fontSize:15, color:K.yellow, marginBottom:4 }}>
-        📷 Lees de kast uit de foto
+        {vergelijken ? "🔍 Is de kast gewijzigd?" : "📷 Lees de kast uit de foto"}
       </div>
       <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:12 }}>
-        Maak hier de foto van de <strong style={{color:K.text}}>open kast</strong>. De app leest de automaten,
-        de aardlekschakelaars en hun opdruk in en vult stap 6 vast voor je in — je hoeft ze dan alleen nog na te
-        lopen. Dezelfde foto gaat gewoon mee in het rapport.
+        {vergelijken ? (<>
+          Maak hier de foto van de <strong style={{color:K.text}}>open kast na het werk</strong>. De app legt
+          hem naast de kast van vóór de werkzaamheden en zegt wat er is bijgekomen of vervangen — zodat stap 5
+          en 6 niet een kast beschrijven die er niet meer hangt. Dezelfde foto telt meteen als de verplichte
+          opname hieronder.
+        </>) : (<>
+          Maak hier de foto van de <strong style={{color:K.text}}>open kast</strong>. De app leest de automaten,
+          de aardlekschakelaars en hun opdruk in en vult stap 5 en 6 vast voor je in — je hoeft ze dan alleen nog
+          na te lopen. Dezelfde foto gaat gewoon mee in het rapport.
+        </>)}
       </div>
 
-      {gelezen && !bezig && (
+      {/* DE UITSLAG VAN DE VERGELIJKING. Geen oordeel: een gewijzigde kast is
+          normaal — daar kwam de installateur voor. De melding zegt alleen wat er
+          anders is en wat dat betekent voor wat er al ingevuld staat. */}
+      {vergelijken && vergelijking && !bezig && (
+        <div style={{ background:vergelijking.gelijk?K.greenDim:K.orangeDim, borderRadius:10,
+                      border:`1px solid ${(vergelijking.gelijk?K.green:K.orange)}44`,
+                      padding:"10px 12px", marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:2,
+                        color:vergelijking.gelijk?K.green:K.orange }}>
+            {vergelijking.overgenomen
+              ? "✓ De nieuwe kast is overgenomen"
+              : vergelijking.gelijk
+                ? "✓ De kast is onveranderd"
+                : "⚠ De kast is gewijzigd t.o.v. de eerste foto"}
+          </div>
+          {vergelijking.gelijk ? (
+            <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
+              {vergelijking.overgenomen
+                ? `Stap 5 en 6 beschrijven nu de kast van deze foto — ${vergelijking.aantalNieuw} modules. Loop ze na.`
+                : `Dezelfde ${vergelijking.aantalNieuw} modules als op de eerste foto. Wat in stap 5 en 6 staat klopt dus nog met wat er hangt.`}
+            </div>
+          ) : (<>
+            <div style={{ fontSize:11, color:K.textSoft, lineHeight:1.6 }}>
+              {vergelijking.erbij.map((r,i)=>(
+                <div key={"b"+i}>+ {r.aantal}× {r.tekst}</div>
+              ))}
+              {vergelijking.weg.map((r,i)=>(
+                <div key={"w"+i}>− {r.aantal}× {r.tekst}</div>
+              ))}
+            </div>
+            <div style={{ fontSize:11, color:K.muted, lineHeight:1.5, marginTop:6 }}>
+              {magOvernemen
+                ? "Stap 5 en 6 komen nog uit de eerste foto. Neem de nieuwe kast over, of werk ze met de hand bij."
+                : "Stap 5 en 6 komen nog uit de eerste foto. Er hangen al metingen aan de huidige groepen, " +
+                  "dus overnemen kan hier niet — die metingen zouden hun groep kwijtraken. Werk stap 6 bij met " +
+                  "de + op de rail."}
+            </div>
+            {magOvernemen && (
+              <button onClick={neemOver}
+                style={{ ...S.btnGhost, marginTop:10, marginBottom:0, borderColor:`${K.orange}66`, color:K.orange }}>
+                Neem de nieuwe kast over in stap 5 en 6
+              </button>
+            )}
+          </>)}
+        </div>
+      )}
+
+      {!vergelijken && gelezen && !bezig && (
         <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
             ✓ {groepen} groep{groepen===1?"":"en"} en {materiaalRegels} soort{materiaalRegels===1?"":"en"} materiaal gelezen
@@ -2512,7 +2604,7 @@ function KastLezer({ data, onChange, onFoto }) {
         </div>
       )}
 
-      {uitPaspoort && !gelezen && (
+      {!vergelijken && uitPaspoort && !gelezen && (
         <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
             ✓ De kast staat al in het gescande paspoort
@@ -2528,7 +2620,9 @@ function KastLezer({ data, onChange, onFoto }) {
           <button onClick={()=>bestandRef.current?.click()}
             style={{ flex:1, padding:"12px", borderRadius:10, border:"none", background:K.yellow, color:"#000",
                      fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:700, fontSize:13, cursor:"pointer" }}>
-            📷 {gelezen ? "Opnieuw lezen" : uitPaspoort ? "Kast opnieuw inlezen" : "Foto maken en lezen"}
+            📷 {vergelijken
+                  ? (vergelijking ? "Opnieuw vergelijken" : "Foto maken en vergelijken")
+                  : gelezen ? "Opnieuw lezen" : uitPaspoort ? "Kast opnieuw inlezen" : "Foto maken en lezen"}
           </button>
           <button onClick={()=>galerijRef.current?.click()}
             style={{ flex:"0 0 auto", padding:"12px 14px", borderRadius:10, border:`1px solid ${K.border}`,
@@ -2606,17 +2700,30 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
         <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Foto's</div><div style={{fontSize:12,color:K.muted}}>{done}/{checkpoints.length} gemaakt</div></div>
       </div>
       <div style={S.body}>
-        {/* Alleen bij de groepenkast, en alleen vóór de werkzaamheden: dit leest
-            de BESTAANDE kast in. */}
-        {kastLezer && (
+        {/* Bij de groepenkast: vóór de werkzaamheden leest dit de bestaande kast
+            in, erna vergelijkt het de nieuwe met de oude. De vergelijking heeft
+            alleen zin als er iets is om mee te vergelijken. */}
+        {kastLezer && (kastLezer !== "vergelijken"
+            || (data.kastbeeld||{}).posities
+            || (data.mkpImport && paspoortDraagtKast(data.mkpImport))) && (
           <KastLezer data={data} onChange={onChange}
+            modus={kastLezer === "vergelijken" ? "vergelijken" : "vullen"}
+            // Waarmee vergeleken wordt: het kastbeeld uit de eerste foto, of —
+            // als er geen foto is gelezen — de kast zoals die in het gescande
+            // paspoort stond. Allebei beschrijven ze de bestaande situatie.
+            referentie={
+              (data.kastbeeld||{}).posities
+              || (data.mkpImport && paspoortDraagtKast(data.mkpImport)
+                    ? positiesUitPaspoort(data.mkpImport) : null)
+            }
             onFoto={(dataUrl)=>{
               // De analyse krijgt het origineel; het rapport de kleine versie.
               // 900 px is wat deze stap zelf ook bewaart — genoeg om te laten
               // zien hoe de kast erbij stond, te weinig om de opdruk te lezen,
               // en dat laatste hoeft hier ook niet meer.
               verkleinIndienNodig(dataUrl, 900).then(klein=>
-                onChange("fotos", { ...(data.fotos||{}), voor_open: klein }));
+                onChange("fotos", { ...(data.fotos||{}),
+                  [kastLezer === "vergelijken" ? "na_open" : "voor_open"]: klein }));
             }}/>
         )}
         {checkpoints.map(cp=>(
@@ -7308,7 +7415,7 @@ export default function App() {
     <GK_StapGroepen     key="groepen"    data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapMeten       key="meten"      data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <GK_StapVeldmeting  key="veldmeting" data={job} onChange={upd} onNext={next} onBack={prev}/>,
-    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={GK_FOTO_CPS_NA} onNext={next} onBack={prev}/>,
+    <StapFotos          key="fotos_na"   data={job} onChange={upd} checkpoints={GK_FOTO_CPS_NA} onNext={next} onBack={prev} kastLezer="vergelijken"/>,
     <StapMkp            key="mkp"        data={job} onChange={upd} onNext={next} onBack={prev}/>,
     <StapVersturen      key="verstuur"   data={job} onChange={upd} discipline="groepenkast" onSend={markeerOpgeleverd} onBack={prev}/>,
   ];
