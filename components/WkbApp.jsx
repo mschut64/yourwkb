@@ -541,6 +541,27 @@ const THEMA_CSS = (() => {
 
 // `K` wijst nu naar de variabelen in plaats van naar hexwaarden. De maten blijven
 // gewoon getallen — die veranderen niet met het thema.
+// De knop om van thema te wisselen. Eén component, want hij staat op meer dan
+// één plek: in de kop van het startscherm, en in de stapbalk die bij elke stap
+// in beeld staat. Dat laatste is de reden dat hij bestaat — wie in een donkere
+// meterkast begint en daarna aan de keukentafel het rapport nakijkt, wil niet
+// eerst terug naar het startscherm.
+function ThemaKnop({ thema, onThema, klein }) {
+  const maat = klein ? 28 : 36;
+  return (
+    <button onClick={onThema}
+      aria-label={thema === "licht" ? "Donker thema" : "Licht thema"}
+      title={thema === "licht" ? "Donker thema" : "Licht thema"}
+      style={{ width:maat, height:maat, borderRadius:klein ? 8 : 10,
+               border:`1px solid ${K.border}`, background:"transparent", color:K.muted,
+               cursor:"pointer", fontSize:klein ? 13 : 15, lineHeight:1, padding:0,
+               display:"flex", alignItems:"center", justifyContent:"center",
+               WebkitTapHighlightColor:"transparent", flexShrink:0 }}>
+      {thema === "licht" ? "🌙" : "☀️"}
+    </button>
+  );
+}
+
 const K = (() => {
   const uit = {};
   for (const k of Object.keys(PALET.donker)) {
@@ -6204,12 +6225,13 @@ function BackupScherm({ onBack, onGewijzigd, startBestand, naVerwerkt }) {
   );
 }
 
-function DisciplineKiezer({ onKies, onBack }) {
+function DisciplineKiezer({ onKies, onBack, thema, onThema }) {
   return (
     <div>
       <div style={S.hdr}>
         <button style={S.backBtn} onClick={onBack}>←</button>
-        <div><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Kies discipline</div><div style={{fontSize:12,color:K.muted}}>Wat ga je registreren?</div></div>
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:20,lineHeight:1.15}}>Kies discipline</div><div style={{fontSize:12,color:K.muted}}>Wat ga je registreren?</div></div>
+        <ThemaKnop thema={thema} onThema={onThema}/>
       </div>
       <div style={S.body}>
         <div style={{fontSize:12,color:K.muted,marginBottom:16}}>Kies de discipline voor deze registratie. Elke discipline heeft eigen velden, normen en rapport.</div>
@@ -6298,15 +6320,9 @@ function HomeScreen({ onNew, onDoorgaan, onVerwijder, idbKlaar, onBackup, thema,
           {/* Licht of donker. Eén tik, en de keuze blijft op het toestel staan.
               Hij hoort hier en niet in een instellingenscherm: dit is iets wat je
               per klus anders wilt — in een kruipruimte donker, aan de keukentafel
-              licht. */}
-          <button onClick={onThema} aria-label={thema === "licht" ? "Donker thema" : "Licht thema"}
-            title={thema === "licht" ? "Donker thema" : "Licht thema"}
-            style={{width:36,height:36,borderRadius:10,border:`1px solid ${K.border}`,
-                    background:"transparent",color:K.muted,cursor:"pointer",fontSize:15,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    WebkitTapHighlightColor:"transparent"}}>
-            {thema === "licht" ? "🌙" : "☀️"}
-          </button>
+              licht. Dezelfde knop staat in de stapbalk, zodat je hem ook midden
+              in een klus kunt omzetten. */}
+          <ThemaKnop thema={thema} onThema={onThema}/>
           <div style={{fontSize:12,color:K.muted,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>
             v{APP_VERSIE}
           </div>
@@ -7754,7 +7770,7 @@ export default function App() {
         )}
         {!mkpScan && !scannerOpen && screen==="home" && <HomeScreen idbKlaar={idbKlaar} onNew={startNew} onDoorgaan={doorgaan} onVerwijder={verwijderProject} onBackup={()=>setScreen("backup")} thema={thema} onThema={wisselThema}/>}
         {!mkpScan && screen==="backup" && <BackupScherm onBack={()=>setScreen("home")} onGewijzigd={()=>{}} startBestand={gedeeldBestand} naVerwerkt={()=>setGedeeldBestand(null)}/>}
-        {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")}/>}
+        {!mkpScan && screen==="kiezen" && <DisciplineKiezer onKies={kiesDiscipline} onBack={()=>setScreen("home")} thema={thema} onThema={wisselThema}/>}
         {!mkpScan && screen==="job"    && (
           <div>
             <StepBar step={step} steps={stepLabels} onJump={(i) => {
@@ -7770,8 +7786,14 @@ export default function App() {
                 10 is. Alleen weergave — de bolletjes erboven blijven de
                 klikbare navigatie. */}
             <div style={{background:K.surface, padding:"8px 18px 10px", borderBottom:`1px solid ${K.border}`}}>
-              <div style={{...S.sTitle, marginBottom:6}}>
-                Stap {step+1} van {stepLabels.length} · {stepLabels[step]}
+              <div style={{display:"flex", alignItems:"center", gap:10, marginBottom:6}}>
+                <div style={{...S.sTitle, marginBottom:0, flex:1, minWidth:0}}>
+                  Stap {step+1} van {stepLabels.length} · {stepLabels[step]}
+                </div>
+                {/* Hier, en niet in de kop van elk scherm: dit is de enige balk
+                    die bij élke stap in beeld staat, en de enige plek waar geen
+                    schermeigen knop al zit. */}
+                <ThemaKnop thema={thema} onThema={wisselThema} klein/>
               </div>
               <div style={S.bar}><div style={{...S.barFill, width:`${((step+1)/stepLabels.length)*100}%`}}/></div>
             </div>
