@@ -95,7 +95,7 @@ cd ../yourwkb-core && npm test   # 449 tests daar: belastingcheck, belasting per
 ```
 De suite importeert `components/wkb/model.js` rechtstreeks, dus tests en implementatie kúnnen niet uit sync lopen.
 
-**De rekenkern is een dependency: `yourwkb-core`.** Belasting, fasen en de normkeuzes eromheen (gelijktijdigheid 0,6, reserve 1,0 kW, teruglevering als zwaarste-van-twee-richtingen) staan sinds 30-09-2026 in `github.com/mschut64/yourwkb-core`, gepind op tag `v0.8.0` (sinds K1 ook het kastbeeld: een foto lezen, de blokindeling, de leerlus; sinds K2 ook **de prompt** — apart te importeren via `yourwkb-core/prompt.js`, want 22 kB hoort niet in een browserbundel), en worden gedeeld met Kastscan en straks met de bedrijfs- en onderwijsapp. **Zet nieuwe belasting- of faselogica daar, niet hier** — en bump de tag bewust, want een push naar de motor verandert de apps niet vanzelf. Wat in `components/wkb/model.js` blijft, gaat over de **meting**: de gG-kromme en de cross-checks. De datavorm van de motor is het meterkastpaspoort (`grp[]`, `ha`, `lb`): het enige model dat beide apps al opbouwen.
+**De rekenkern is een dependency: `yourwkb-core`.** Belasting, fasen en de normkeuzes eromheen (gelijktijdigheid 0,6, reserve 1,0 kW, teruglevering als zwaarste-van-twee-richtingen) staan sinds 30-09-2026 in `github.com/mschut64/yourwkb-core`, gepind op tag `v0.8.1` (sinds K1 ook het kastbeeld: een foto lezen, de blokindeling, de leerlus; sinds K2 ook **de prompt** — apart te importeren via `yourwkb-core/prompt.js`, want 22 kB hoort niet in een browserbundel), en worden gedeeld met Kastscan en straks met de bedrijfs- en onderwijsapp. **Zet nieuwe belasting- of faselogica daar, niet hier** — en bump de tag bewust, want een push naar de motor verandert de apps niet vanzelf. Wat in `components/wkb/model.js` blijft, gaat over de **meting**: de gG-kromme en de cross-checks. De datavorm van de motor is het meterkastpaspoort (`grp[]`, `ha`, `lb`): het enige model dat beide apps al opbouwen.
 
 **Het paspoortformaat is een dependency, `mkp-bouw.js` is van deze app.** Coderen, decoderen, EAN-controle en QR-grens staan sinds 11-09-2026 in de repo `github.com/mschut64/meterkastpaspoort` (waar ook de specificatie staat) en komen binnen als `import { mkpEncode, ... } from "meterkastpaspoort"`, gepind op tag `v0.3.2` — Kastscan staat op dezelfde tag. De vertaling van app-gegevens naar een paspoort verschilt per app en blijft hier, in `mkp-bouw.js`. Zet niets app-specifieks in het pakket, en bump de tag bewust — een push naar de spec-repo verandert de apps niet vanzelf.
 
@@ -126,7 +126,7 @@ Bij elke wijziging van een grenswaarde of toets: **(1) berekening, (2) invoersch
 
 ## 4. Actuele stand (11-09-2026)
 
-**Live:** app `v2026-10-02-F` + security-release + landing + blog (3 artikelen). Testsuite **304 tests** hier + **449** in `yourwkb-core` (v0.8.0); Kastscan 1238. Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
+**Live:** app `v2026-10-02-F` + security-release + landing + blog (3 artikelen). Testsuite **304 tests** hier + **449** in `yourwkb-core` (v0.8.1); Kastscan 1238. Alles t/m `v2026-09-03-A` veldbevestigd door Martin.
 
 Recent afgerond:
 - **De kast op meerdere rails, een meeschalende kolom en een licht thema (`v2026-10-02-F`, motor `v0.8.0`, 02-10-2026).** Drie wensen van Martin, alle drie "zoals Kastscan".
