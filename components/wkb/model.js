@@ -60,6 +60,66 @@ export function ggIaVoorTijd(ampere, tijd) {
   return { ia: rij[tijd], inGebruikt: dichtstbij };
 }
 
+// ─── Z_max: WELKE BEVEILIGING SCHAKELT DÍT PUNT AF ───────────────────────────
+//
+// Z_max = U0 / Ia: de hoogste lusimpedantie waarbij de beveiliging nog binnen de
+// vereiste tijd afschakelt. Voor B/C/D is Ia een vaste factor × In; voor gG een
+// opzoeking in de tijd-stroomkromme, want die is niet lineair.
+//
+// ⚓ DE BEVEILIGING IS DIE VAN HET GEMETEN CIRCUIT, en niet die van de installatie
+// als geheel. Dat lijkt vanzelfsprekend en ging toch mis: stap 8 legde élke
+// veldmeting langs de hoogst afgaande groep uit sectie A. Die is per definitie de
+// zwaarste, dus de strengste norm. Een correcte 1,8 Ω op de verste wandcontactdoos
+// van een B16-lichtgroep (norm 2,88 Ω) werd zo afgekeurd tegen de 1,15 Ω van een
+// B40-kookgroep — een "Afwijking" die nooit wegging, hoe goed je ook mat.
+// Gemeld door Martin na een oplevering, 02-10-2026.
+export const KAR_FACTOR = { B: 5, C: 10, D: 20 };
+
+export function zMaxVoorBeveiliging(kar, ampere, maxAfschakeltijd) {
+  const amp = toNum(ampere);
+  if (String(kar || "") === "gG") {
+    const g = ggIaVoorTijd(amp, maxAfschakeltijd);
+    return g ? Math.round((230 / g.ia) * 100) / 100 : null;
+  }
+  const factor = KAR_FACTOR[kar];
+  if (!factor || isNaN(amp) || amp <= 0) return null;
+  // Afronden bij de bron, niet pas bij het tonen: anders keurt de app een waarde
+  // af die op het scherm precies op de norm lijkt te staan.
+  return Math.round((230 / (factor * amp)) * 100) / 100;
+}
+
+// De maximale afschakeltijd uit NEN 1010 tabel 41.1, afgeleid uit stelsel en
+// kastklasse. Stond op drie plaatsen als dezelfde reeks vraagtekens.
+export function maxAfschakeltijdVoor(kastType, stelsel) {
+  const tt = stelsel === "TT";
+  return kastType === "klasse1" ? (tt ? 1 : 5) : (tt ? 0.2 : 0.4);
+}
+
+// Welke eindgroep hoort bij de veldmeting van dit cluster. De installateur kiest
+// hem; zolang hij dat niet heeft gedaan nemen we de ZWAARSTE van het cluster.
+// Dat is dezelfde vuistregel als bij de RCD-test, en hij is veilig: de zwaarste
+// automaat geeft binnen dit cluster de strengste Z_max, dus deze keuze kan een
+// meting nooit ten onrechte goedkeuren.
+export function zwaarsteEindgroep(ag) {
+  const lijst = (ag && Array.isArray(ag.eindgroepen)) ? ag.eindgroepen : [];
+  if (!lijst.length) return null;
+  return lijst.reduce((best, e) =>
+    (toNum(String(e.ampere || "").replace("A", "")) || 0) >
+    (toNum(String(best.ampere || "").replace("A", "")) || 0) ? e : best, lijst[0]);
+}
+
+// De beveiliging waaraan een veldmeting in dit cluster getoetst wordt.
+// `eindId` is de keuze van de installateur; zonder keuze de zwaarste groep.
+// Levert `null` als de groep geen karakteristiek of stroom draagt — dan valt het
+// scherm terug op sectie A en zegt dat er ook bij.
+export function veldBeveiliging(ag, eindId) {
+  const lijst = (ag && Array.isArray(ag.eindgroepen)) ? ag.eindgroepen : [];
+  const gekozen = eindId != null ? lijst.find((e) => String(e.id) === String(eindId)) : null;
+  const eg = gekozen || zwaarsteEindgroep(ag);
+  if (!eg || !eg.kar || !eg.ampere) return null;
+  return { id: eg.id, naam: eg.naam || "", kar: eg.kar, ampere: String(eg.ampere).replace("A", "") };
+}
+
 // ─── CROSS-CHECK LOGICA ───────────────────────────────────────────────────────
 
 // Groepenkast cross-checks — werkt op aardlekgroepen (RCD-clusters), elk met 1+ eindgroepen.

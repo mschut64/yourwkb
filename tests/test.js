@@ -20,7 +20,9 @@
 // tests/logica.js, een bestand dat met een Babel-extractor uit WkbApp.jsx werd
 // gepeuterd omdat die app één groot bestand was en er niets te importeren viel.
 // Nu is de rekenkern een gewone module en kan die omweg weg.
-import { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks } from "../components/wkb/model.js";
+import { toNum, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
+         zMaxVoorBeveiliging, maxAfschakeltijdVoor, veldBeveiliging,
+         zwaarsteEindgroep } from "../components/wkb/model.js";
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -252,6 +254,69 @@ bevat(sKapot, "Testknop RCD geeft NOK",        "12.2d defect: testknop NOK");
 bevat(sKapot, "Z L-N 2.5Ω boven Z_max",        "12.2e defect: Z L-N te hoog");
 bevat(sKapot, "Z L-PE 200Ω boven 166Ω",        "12.2f defect: Z L-PE boven aanraakspanningsnorm");
 bevat(sKapot, "potentiaalvereffening",         "12.2g defect: potentiaalvereffening NOK");
+
+// ═════════════════════════════════════════════════════════════════════════════
+console.log("▶ CATEGORIE 13: de veldmeting wordt getoetst aan de GEMETEN groep");
+// Gemeld door Martin na een oplevering (02-10-2026): bij de veldmeting bleef
+// "✗ Afwijking" staan bij waarden die prima waren, en die ging niet meer weg.
+// Oorzaak: stap 8 legde elke veldmeting langs de hoogst afgaande groep van de
+// installatie uit sectie A. Die is per definitie de zwaarste, dus de strengste
+// norm — terwijl de verste wandcontactdoos achter zijn EIGEN automaat hangt.
+
+eq(zMaxVoorBeveiliging("B", 16, 0.4), 2.88, "13.1 B16 → Z_max 2,88Ω");
+eq(zMaxVoorBeveiliging("B", 40, 0.4), 1.15, "13.2 B40 → Z_max 1,15Ω");
+eq(zMaxVoorBeveiliging("C", 16, 0.4), 1.44, "13.3 C16 → Z_max 1,44Ω (factor 10)");
+eq(zMaxVoorBeveiliging("D", 16, 0.4), 0.72, "13.4 D16 → Z_max 0,72Ω (factor 20)");
+// gG loopt via de tijd-stroomkromme, niet via een factor.
+eq(zMaxVoorBeveiliging("gG", 25, 0.4), 1.4,  "13.5 gG25 @0,4s → 1,40Ω uit de tabel");
+eq(zMaxVoorBeveiliging("gG", 25, 5),   2.5,  "13.6 gG25 @5s → 2,50Ω — de tijd telt mee");
+eq(zMaxVoorBeveiliging("Anders", 16, 0.4), null, "13.7 onbekende karakteristiek → geen oordeel");
+eq(zMaxVoorBeveiliging("B", "", 0.4), null,      "13.8 zonder stroom → geen oordeel");
+eq(zMaxVoorBeveiliging("B", 0, 0.4), null,       "13.9 nul ampère → geen oordeel");
+// Komma als decimaalteken: de iPhone geeft er een, niet een punt.
+eq(zMaxVoorBeveiliging("B", "16", 0.4), 2.88, "13.10 stroom als tekst leest hetzelfde");
+
+// DIT IS DE FOUT ZELF: 1,8 Ω op de verste WCD van een B16-lichtgroep.
+{
+  const tijd = maxAfschakeltijdVoor("klasse2", "TN-C-S");
+  eq(tijd, 0.4, "13.11 klasse 2 op TN → 0,4s");
+  eq(maxAfschakeltijdVoor("klasse1", "TN-C-S"), 5,   "13.12 klasse 1 op TN → 5s");
+  eq(maxAfschakeltijdVoor("klasse2", "TT"),     0.2, "13.13 klasse 2 op TT → 0,2s");
+  eq(maxAfschakeltijdVoor("klasse1", "TT"),     1,   "13.14 klasse 1 op TT → 1s");
+
+  const gemeten = 1.8;
+  eq(gemeten <= zMaxVoorBeveiliging("B", 16, tijd), true,
+     "13.15 1,8Ω voldoet aan de B16 waar hij achter hangt");
+  eq(gemeten <= zMaxVoorBeveiliging("B", 40, tijd), false,
+     "13.16 en zou zijn afgekeurd tegen de B40-voorzekering — de gemelde fout");
+}
+
+// Welke groep levert de norm: de keuze van de installateur, anders de zwaarste.
+{
+  const ag = { id:1, naam:"Aardlek A", eindgroepen:[
+    { id:"e1", naam:"Tuinhuis",  kar:"B", ampere:"16A" },
+    { id:"e2", naam:"Licht BG",  kar:"B", ampere:"10A" },
+  ]};
+  eq(zwaarsteEindgroep(ag).id, "e1", "13.17 de zwaarste groep van het cluster");
+  eq(veldBeveiliging(ag, null).kar + veldBeveiliging(ag, null).ampere, "B16",
+     "13.18 zonder keuze geldt de zwaarste — binnen het cluster de strengste norm");
+  eq(veldBeveiliging(ag, "e2").ampere, "10", "13.19 met keuze geldt die groep");
+  eq(veldBeveiliging(ag, "bestaat-niet").ampere, "16",
+     "13.20 een keuze die niet meer bestaat valt terug op de zwaarste");
+  // De strengste-binnen-het-cluster-regel mag nooit iets ten onrechte goedkeuren.
+  eq(zMaxVoorBeveiliging("B", 16, 0.4) <= zMaxVoorBeveiliging("B", 10, 0.4), true,
+     "13.21 de zwaarste automaat geeft de kleinste Z_max");
+}
+
+// Een groep zonder karakteristiek of stroom levert geen norm — dan valt het
+// scherm terug op sectie A en zegt dat erbij. Niet stilletjes iets aannemen.
+{
+  const kaal = { id:2, eindgroepen:[{ id:"x", naam:"Zolder", kar:"", ampere:"" }] };
+  eq(veldBeveiliging(kaal, null), null, "13.22 geen beveiliging bekend → geen norm");
+  eq(veldBeveiliging({ id:3, eindgroepen:[] }, null), null, "13.23 cluster zonder groepen ook niet");
+  eq(veldBeveiliging(null, null), null, "13.24 en geen cluster valt niet om");
+  eq(zwaarsteEindgroep(null), null, "13.25 idem voor de zwaarste");
+}
 
 // ═════════════════════════════════════════════════════════════════════════════
 console.log("\n═══════════════════════════════════════════════");

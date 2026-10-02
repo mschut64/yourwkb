@@ -1,4 +1,4 @@
-// YourWkb service worker — v11 (2026-09-30)
+// YourWkb service worker — v12 (2026-10-02)
 // Network-first voor pagina's (actueel mét verbinding, cache als vangnet offline),
 // cache-first voor onveranderlijke build-assets. Gehard voor iOS:
 // - navigaties matchen met ignoreSearch (start_url met queryparam ≠ cache-miss)
@@ -13,7 +13,7 @@
 // Dat is op 30-09-2026 gebeurd: de naam stond sinds 13-08 op v7 terwijl de app
 // er zeven releases overheen kreeg. Wie de app in die periode één keer had
 // geopend, hield een schil van weken oud.
-const CACHE = "yourwkb-v11";
+const CACHE = "yourwkb-v12";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam

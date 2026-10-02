@@ -332,7 +332,8 @@ import {
   strookUitAardlekgroepen, MODULE_PX,
 } from "yourwkb-core";
 // Wat alleen deze app doet: de gG-kromme en de cross-checks over de meetwaarden.
-import { GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks } from "./wkb/model";
+import { GG_TABEL, GG_IN_WAARDEN, ggIaVoorTijd, gkCrossChecks, pvCrossChecks,
+         zMaxVoorBeveiliging, maxAfschakeltijdVoor, veldBeveiliging } from "./wkb/model";
 // Het paspoortformaat komt uit de standaard zelf, niet uit een kopie hier:
 // github.com/mschut64/meterkastpaspoort, waar ook de specificatie staat.
 import {
@@ -361,7 +362,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-09-30-D";
+const APP_VERSIE = "2026-10-02-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2963,23 +2964,23 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
   const RHO = 0.023; // Ω·mm²/m — koperweerstand bij bedrijfstemperatuur (praktijkwaarde)
   const KABELDIKTES = ["1.5","2.5","4","6","10"];
 
-  // Zelfde Z_max-berekening als Sectie A (hoogst afgaande groep) — de verste WCD
-  // zit achter dezelfde automaat/zekering, dus dezelfde norm geldt hier ook.
+  // ⚓ DE NORM KOMT VAN DE GEMETEN GROEP, NIET VAN SECTIE A.
+  // Hier stond tot 02-10-2026 de Z_max van de hoogst afgaande groep van de hele
+  // installatie, met het argument dat de verste WCD "achter dezelfde automaat"
+  // zou zitten. Dat klopt niet: je meet hier juist de verste of buitengroep, en
+  // die hangt achter zijn eigen automaat. De hoogst afgaande groep is per
+  // definitie de zwaarste, dus de strengste norm — een correcte 1,8 Ω op een
+  // B16-lichtgroep (norm 2,88 Ω) werd afgekeurd tegen de 1,15 Ω van een
+  // B40-kookgroep, en die afwijking ging nooit meer weg. Gemeld door Martin na
+  // een oplevering.
   const instM = data.instMetingen || {};
   const hoogstKar = instM.hoogstKar || "B";
   const hoogstAmpere = instM.hoogstAmpere || "";
   const stelsel = instM.stelsel || data.stelsel || "TN-C-S";
-  const isTT = stelsel === "TT";
-  const isKlasse1 = data.kastType === "klasse1";
-  const maxAfschakeltijd = isKlasse1 ? (isTT ? 1 : 5) : (isTT ? 0.2 : 0.4);
-  const karFactorV = { B:5, C:10, D:20 };
-  let zMaxVeld = null;
-  if (hoogstKar === "gG") {
-    const ggLookupV = ggIaVoorTijd(hoogstAmpere, maxAfschakeltijd);
-    if (ggLookupV) zMaxVeld = Math.round((230/ggLookupV.ia)*100)/100;
-  } else if (karFactorV[hoogstKar] && toNum(hoogstAmpere)>0) {
-    zMaxVeld = Math.round((230/(karFactorV[hoogstKar]*toNum(hoogstAmpere)))*100)/100;
-  }
+  const maxAfschakeltijd = maxAfschakeltijdVoor(data.kastType, stelsel);
+  // Alleen nog als terugval, voor oude projecten waarvan de eindgroepen geen
+  // karakteristiek of stroom dragen.
+  const zMaxSectieA = zMaxVoorBeveiliging(hoogstKar, hoogstAmpere, maxAfschakeltijd);
 
   const sv = (agId, k, v) => {
     const u = { ...veld, [`${agId}_${k}`]: v };
@@ -2988,10 +2989,17 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
   };
   const gv = (agId, k) => veld[`${agId}_${k}`] || "";
 
-  // Fysica-check: de veldmeting zit vérder van de bron dan de kastmeting, dus de
-  // impedantie kan daar nooit LAGER zijn. Lager gemeten = meetfout of verwisselde
-  // waarden → rode vlag. Kleine meettolerantie van 5% om terechte twijfel te scheiden
-  // van instrumentruis.
+  // Plausibiliteitscheck: ligt de veldmeting op hetzelfde circuit als de meting in
+  // de kast, dan kan hij daar niet LAGER uitvallen — verder van de bron betekent
+  // meer impedantie. Lager gemeten is dan een meetfout of een verwisseling.
+  //
+  // MAAR HET IS GEEN NORMOORDEEL, en sinds 02-10-2026 kleurt het de meting dan ook
+  // niet meer rood. Sectie A wordt gemeten op het meest ongunstige punt van de
+  // installatie — dat is vaak een ander circuit dan de buitengroep die je hier
+  // meet, en dan is lager volkomen normaal. Twijfel over wat je gemeten hebt is
+  // iets anders dan een waarde die niet aan de norm voldoet, en alleen dat laatste
+  // hoort als afwijking in het rapport van de klant.
+  // Meettolerantie van 5% om terechte twijfel te scheiden van instrumentruis.
   const kastZ = { zln: toNum(instM.zln), zlpe: toNum(instM.zlpe) };
   const veldLagerDanKast = (agId, k) => {
     const veldW = toNum(gv(agId, k));
@@ -3035,11 +3043,40 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
               // in sectie A. Default afgeleid uit het RCD-type van de aardlekgroep.
               const rcdVeldRaw = veld[`${ag.id}_rcd`];
               const rcdVeld = rcdVeldRaw === undefined ? (ag.rcdType !== "geen") : (rcdVeldRaw === true || rcdVeldRaw === "1");
+              // WELKE GROEP METEN WE. De installateur kiest hem; zonder keuze de
+              // zwaarste van dit cluster — dezelfde vuistregel als bij de RCD-test,
+              // en binnen het cluster de strengste norm, dus nooit een meting die
+              // ten onrechte wordt goedgekeurd.
+              const eindgroepen = ag.eindgroepen || [];
+              const bev = veldBeveiliging(ag, veld[`${ag.id}_eind`]);
+              const zMaxVeld = bev ? zMaxVoorBeveiliging(bev.kar, bev.ampere, maxAfschakeltijd) : zMaxSectieA;
+              const normBron = bev
+                ? `${bev.kar}${bev.ampere}A${bev.naam ? ` — ${bev.naam}` : ""}`
+                : `${hoogstKar}${hoogstAmpere}A, sectie A`;
               const zlpeVeldOk = v => rcdVeld ? toNum(v) <= 166 : (zMaxVeld ? toNum(v) <= zMaxVeld : true);
               const zlpeVeldToetsbaar = rcdVeld ? true : !!zMaxVeld;
               return (
                 <div key={ag.id} style={S.card}>
                   <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>{ag.naam}</div>
+
+                  {/* De gemeten groep bepaalt de norm. Voorgevuld, dus de stap wordt
+                      er niet langer van — maar wie een andere groep heeft gemeten,
+                      zet hem hier recht in plaats van een verkeerde afkeur te zien. */}
+                  {eindgroepen.length > 0 && (
+                    <>
+                      <label style={S.label}>Gemeten groep (bepaalt de norm)</label>
+                      <select
+                        style={{ ...S.select, marginBottom:12 }}
+                        value={bev ? String(bev.id) : ""}
+                        onChange={e=>sv(ag.id,"eind",e.target.value)}>
+                        {eindgroepen.map(e=>(
+                          <option key={e.id} value={String(e.id)}>
+                            {e.naam || "naamloze groep"}{e.kar && e.ampere ? ` · ${e.kar}${String(e.ampere).replace("A","")}A` : " · nog geen beveiliging"}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
 
                   <label style={S.label}>Kabeldikte (doorsnede)</label>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
@@ -3052,7 +3089,7 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                   <label style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:12,cursor:"pointer",padding:"8px 10px",background:K.surface,borderRadius:8}}>
                     <input type="checkbox" checked={rcdVeld} onChange={e=>sv(ag.id,"rcd",e.target.checked ? true : "0")} style={{marginTop:2}}/>
                     <span style={{fontSize:11,color:K.muted,lineHeight:1.5}}>
-                      <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> — voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan ≤166Ω (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVeld?` (Z_max ≤${zMaxVeld.toFixed(2).replace(".",",")}Ω)`:" (Z_max obv sectie A)"} geldt.
+                      <strong style={{color:K.text}}>Aardlekschakelaar aanwezig</strong> — voor <strong style={{color:K.text}}>Z L-PE</strong> geldt dan ≤166Ω (aanraakspanning). Uitgevinkt: de foutstroom-norm{zMaxVeld?` (Z_max ≤${zMaxVeld.toFixed(2).replace(".",",")}Ω)`:" (Z_max van de gemeten groep)"} geldt.
                     </span>
                   </label>
 
@@ -3062,10 +3099,10 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <MiniInput value={gv(ag.id,"zln")} onChange={v=>sv(ag.id,"zln",v)} unit="Ω" width={96} placeholder="1,2"/>
                         {gv(ag.id,"zln") && zMaxVeld && (
-                          <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld && !veldLagerDanKast(ag.id,"zln") ?"ok":"red"}/>
+                          <StatusTag level={toNum(gv(ag.id,"zln"))<=zMaxVeld ?"ok":"red"}/>
                         )}
                         {veldLagerDanKast(ag.id,"zln") && (
-                          <div style={{flexBasis:"100%",fontSize:11,color:K.red,marginTop:2}}>🚩 Lager dan de kastmeting ({kastZ.zln} Ω) — fysiek onmogelijk op grotere afstand van de bron. Controleer de meting of de ingevoerde waarden.</div>
+                          <div style={{flexBasis:"100%",fontSize:11,color:K.orange,marginTop:2}}>⚠ Lager dan de meting in de kast ({String(kastZ.zln).replace(".",",")} Ω). Op hetzelfde circuit kan dat niet — verder van de bron geeft meer impedantie. Mat je in sectie A een ander (zwaarder) circuit, dan klopt het wel. Loop het na.</div>
                         )}
                       </div>
                       {lengteZln && (
@@ -3077,10 +3114,10 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                       <div style={{display:"flex",gap:6,alignItems:"center"}}>
                         <MiniInput value={gv(ag.id,"zlpe")} onChange={v=>sv(ag.id,"zlpe",v)} unit="Ω" width={96} placeholder="1,3"/>
                         {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
-                          <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe")) && !veldLagerDanKast(ag.id,"zlpe") ?"ok":"red"}/>
+                          <StatusTag level={zlpeVeldOk(gv(ag.id,"zlpe")) ?"ok":"red"}/>
                         )}
                         {veldLagerDanKast(ag.id,"zlpe") && (
-                          <div style={{flexBasis:"100%",fontSize:11,color:K.red,marginTop:2}}>🚩 Lager dan de kastmeting ({kastZ.zlpe} Ω) — fysiek onmogelijk op grotere afstand van de bron. Controleer de meting of de ingevoerde waarden.</div>
+                          <div style={{flexBasis:"100%",fontSize:11,color:K.orange,marginTop:2}}>⚠ Lager dan de meting in de kast ({String(kastZ.zlpe).replace(".",",")} Ω). Op hetzelfde circuit kan dat niet — verder van de bron geeft meer impedantie. Mat je in sectie A een ander (zwaarder) circuit, dan klopt het wel. Loop het na.</div>
                         )}
                       </div>
                       {gv(ag.id,"zlpe") && zlpeVeldToetsbaar && (
@@ -3092,10 +3129,13 @@ function GK_StapVeldmeting({ data, onChange, onNext, onBack }) {
                     </div>
                   </div>
                   {zMaxVeld && (
-                    <div style={{fontSize:10,color:K.muted,marginBottom:8}}>Norm Z L-N: ≤ {zMaxVeld.toFixed(2).replace(".",",")}Ω (obv {hoogstKar}{hoogstAmpere}A, {String(maxAfschakeltijd).replace(".",",")}s — zelfde als sectie A){rcdVeld?" · Z L-PE ≤166Ω achter aardlek":""}</div>
+                    <div style={{fontSize:10,color:K.muted,marginBottom:8}}>
+                      Norm Z L-N: ≤ {zMaxVeld.toFixed(2).replace(".",",")}Ω — de beveiliging van de gemeten groep ({normBron}) bij {String(maxAfschakeltijd).replace(".",",")}s{rcdVeld?" · Z L-PE ≤166Ω achter aardlek":""}
+                      {!bev && " · deze groep draagt nog geen karakteristiek en stroom, dus is de voorzekering van sectie A gebruikt — vul ze in stap 6 aan voor de juiste norm."}
+                    </div>
                   )}
                   {!zMaxVeld && (
-                    <div style={{fontSize:10,color:K.orange,marginBottom:8}}>⚠ Vul ampère + karakteristiek in bij sectie A (stap 7) om Z L-N{rcdVeld?"":" en Z L-PE"} automatisch te toetsen.</div>
+                    <div style={{fontSize:10,color:K.orange,marginBottom:8}}>⚠ Vul karakteristiek + ampère van deze groep in bij stap 6, of de voorzekering bij sectie A (stap 7), om Z L-N{rcdVeld?"":" en Z L-PE"} automatisch te toetsen.</div>
                   )}
 
                   <div style={{fontSize:10,color:K.muted,lineHeight:1.4}}>
@@ -4582,12 +4622,21 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
             // Z L-PE-norm per groep: achter aardlek ≤166Ω, anders foutstroom-norm (Z_max).
             const rcdRaw = veld[`${ag.id}_rcd`];
             const rcdVeldRap = rcdRaw === undefined ? (ag.rcdType !== "geen") : (rcdRaw === true || rcdRaw === "1");
-            const zlpeChkRap = v => rcdVeldRap ? toNum(v)<=166 : (zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true);
-            const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVoorzekRap?`≤${zMaxVoorzekRap.toFixed(2).replace(".",",")}Ω`:"—");
+            // ⚓ Dezelfde norm als in de app: die van de GEMETEN groep. Liep dit uiteen,
+            // dan zou het rapport een meting afkeuren die het scherm goedkeurde.
+            const bevRap = veldBeveiliging(ag, veld[`${ag.id}_eind`]);
+            const zMaxVeldRap = bevRap
+              ? zMaxVoorBeveiliging(bevRap.kar, bevRap.ampere, maxAfschakeltijdRap)
+              : zMaxVoorzekRap;
+            const normBronRap = bevRap
+              ? `${bevRap.kar}${bevRap.ampere}A${bevRap.naam ? " — " + bevRap.naam : ""}`
+              : `${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A, sectie A`;
+            const zlpeChkRap = v => rcdVeldRap ? toNum(v)<=166 : (zMaxVeldRap?toNum(v)<=zMaxVeldRap:true);
+            const peNorm = rcdVeldRap ? "≤166Ω" : (zMaxVeldRap?`≤${zMaxVeldRap.toFixed(2).replace(".",",")}Ω`:"—");
             return `<tr>
-              <td><strong>${esc(ag.naam)}</strong></td>
+              <td><strong>${esc(ag.naam)}</strong><br><span style="font-size:7px;color:#666">norm ${esc(normBronRap)}${zMaxVeldRap?` · Z L-N ≤${zMaxVeldRap.toFixed(2).replace(".",",")}Ω`:""}</span></td>
               <td>${dikte} mm²</td>
-              <td ${statusGK(zlnV, v=>zMaxVoorzekRap?toNum(v)<=zMaxVoorzekRap:true)}>${zlnV||"—"} Ω</td>
+              <td ${statusGK(zlnV, v=>zMaxVeldRap?toNum(v)<=zMaxVeldRap:true)}>${zlnV||"—"} Ω</td>
               <td>${lenZln}m</td>
               <td ${statusGK(zlpeV, zlpeChkRap)}>${zlpeV||"—"} Ω<br><span style="font-size:7px;color:#666">${rcdVeldRap?"achter aardlek":"foutstroom"} ${peNorm}</span></td>
               <td>${lenZlpe}m</td>
@@ -4596,7 +4645,7 @@ function StapVersturen({ data, onChange, discipline, onSend, onBack }) {
           return `
           <h2>Veldmeting — verste/buitengroep</h2>
           <p style="font-size:8px;color:#666;margin-bottom:4px">
-            Z L-N gemeten op de verste wandcontactdoos, getoetst aan de norm van sectie A (Z_max=${zMaxVoorzekRap?zMaxVoorzekRap.toFixed(2).replace(".",",")+"Ω":"—"} obv ${instMet.hoogstKar||"—"}${instMet.hoogstAmpere||"—"}A). Z L-PE: achter een aardlekschakelaar geldt ≤166Ω (aanraakspanning), anders de foutstroom-norm. Indicatieve kabellengte via L = Z × A ÷ (2 × ρ), ρ = 0,023 Ω·mm²/m — een indicatie, geen exacte meting.
+            Z L-N gemeten op de verste wandcontactdoos, getoetst aan de beveiliging van de gemeten groep zelf (per rij vermeld) — niet aan de voorzekering van de installatie, want deze groep hangt achter zijn eigen automaat. Z L-PE: achter een aardlekschakelaar geldt ≤166Ω (aanraakspanning), anders de foutstroom-norm. Indicatieve kabellengte via L = Z × A ÷ (2 × ρ), ρ = 0,023 Ω·mm²/m — een indicatie, geen exacte meting.
           </p>
           <table>
             <tr>
