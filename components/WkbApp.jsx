@@ -329,7 +329,7 @@ import {
   // Het kastbeeld: een gescand paspoort terug naar groepen (K4), en de vormtaal
   // waarmee Kastscan een kast tekent.
   positiesUitPaspoort, aardlekgroepenUitPosities, paspoortDraagtKast,
-  strookUitAardlekgroepen, MODULE_PX, isGroepsoort,
+  strookUitAardlekgroepen, MODULE_PX, isGroepsoort, materiaalUitPosities,
   // Een kast lezen uit een foto (K5): dezelfde keten als in Kastscan.
   positiesUitAnalyse, ONBRUIKBAAR_ADVIES, ONBRUIKBAAR_STANDAARD,
 } from "yourwkb-core";
@@ -369,7 +369,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-B";
+const APP_VERSIE = "2026-10-02-C";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -1713,6 +1713,13 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
   const [automaten,setAut] = useState(data.automaten||[]);
   const [fabAnders,setFabAnders] = useState(data.fabAnders||"");
   const series = fab && fab!=="Anders" ? Object.keys(GK_FABRIKANTEN[fab]||{}) : [];
+  // Hoeveel regels niet door de installateur zelf zijn aangetikt, en waar ze
+  // vandaan komen. Zodra hij er zelf een bijzet blijft de herkomst van de
+  // andere regels gewoon staan — dat is geen fout: de herkomst van een GEGEVEN
+  // verandert niet doordat er iets naast komt te staan.
+  const ingelezen = automaten.filter(a=>a.bron).length;
+  const uitFotoMat = automaten.some(a=>a.bron==="foto");
+  const zonderMerk = (data.kastbeeld||{}).zonderMerk || 0;
   const types  = serie ? GK_FABRIKANTEN[fab]?.[serie]||[] : [];
   const addAut = (type) => {
     const merkNaam = fab==="Anders" ? (fabAnders||"Anders") : fab;
@@ -1766,6 +1773,25 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
         </div>
 
         <div style={{...S.sTitle,marginTop:8}}>Automaten</div>
+
+        {/* WAAR DIT VANDAAN KOMT. Een lijst die er al staat roept de vraag op of
+            je hem zelf hebt ingevuld — en of je hem mag vertrouwen. Een regel uit
+            een paspoort is door een vakman bevestigd, een regel uit een foto is
+            een aflezing. Dat verschil hoort zichtbaar te zijn vóór je gaat
+            aanvullen. */}
+        {ingelezen > 0 && (
+          <div style={{border:`1px solid ${K.yellow}55`,background:K.yellowDim,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+            <div style={{fontWeight:700,fontSize:14,color:K.yellow,marginBottom:4}}>
+              {uitFotoMat ? "📷" : "📥"} {ingelezen} soort{ingelezen===1?"":"en"} materiaal {uitFotoMat ? "uit de foto van de kast" : "uit het meterkastpaspoort"}
+            </div>
+            <div style={{fontSize:12,color:K.muted,lineHeight:1.5}}>
+              Merk en typeaanduiding kwamen {uitFotoMat ? "van de modules op de foto" : "uit de materiaallijst op de sticker"}.
+              <strong style={{color:K.text}}> Loop ze na</strong> en voeg toe wat je bij deze klus hebt gebruikt.
+              {zonderMerk > 0 && ` Van ${zonderMerk} toestel${zonderMerk===1?"":"len"} kon geen merk worden gelezen — die staan er niet bij.`}
+            </div>
+          </div>
+        )}
+
         <div style={S.card}>
           <label style={S.label}>Fabrikant</label>
           <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
@@ -1794,7 +1820,16 @@ function GK_StapMateriaal({ data, onChange, onNext, onBack }) {
           {automaten.map((a,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${K.border}`}}>
               <div style={{width:34,height:34,borderRadius:8,background:K.yellowDim,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:12,color:K.yellow}}>{a.aantal}×</div>
-              <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{a.fab} {a.type!=="handmatig"?a.type:""}</div><div style={{fontSize:11,color:K.muted}}>{a.serie}</div></div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:600,fontSize:13,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  {a.fab} {a.type!=="handmatig"?a.type:""}
+                  {a.bron && (
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:20,
+                                  background:K.yellowDim,color:K.yellow}}>uit {a.bron}</span>
+                  )}
+                </div>
+                <div style={{fontSize:11,color:K.muted}}>{a.serie}</div>
+              </div>
               <button onClick={()=>remAut(i)} style={{background:"transparent",border:"none",color:K.muted,cursor:"pointer",fontSize:18}}>×</button>
             </div>
           ))}
@@ -2386,16 +2421,31 @@ function KastLezer({ data, onChange, onFoto }) {
         setFout({ titel: "Niets gelezen", tekst: "Op deze foto zijn geen modules herkend. " + ONBRUIKBAAR_STANDAARD });
         return;
       }
+      const materiaal = materiaalUitPosities(posities);
       onChange("kastbeeld", {
         posities,
         promptversie: json.promptversie || "",
         gelezenOp: new Date().toISOString(),
+        // Of de groepen hiermee gevuld zijn wordt hier vastgelegd en niet achteraf
+        // uit `data` afgeleid: zodra ze erin staan, zou de melding zichzelf
+        // tegenspreken en zeggen dat de kast al ingevuld stond.
+        vulde: !heeftKast,
+        zonderMerk: materiaal.zonderMerk,
       });
       // De groepen alleen invullen als er nog niets staat. Wat de installateur
       // zelf heeft ingetikt of uit een paspoort heeft gescand is bevestigd; dat
       // overschrijven met een voorstel uit een foto is precies verkeerd om.
       if (!heeftKast) {
         onChange("aardlekgroepen", aardlekgroepenUitPosities(posities, { bron: "foto" }));
+      }
+      // ⚓ EEN GELEZEN KAST IS ÓÓK EEN MATERIAALLIJST. Merk en typeaanduiding
+      // staan al op de modules — "3× Hager MCN116" hoeft dus niet in stap 5
+      // opnieuw bij elkaar geklikt te worden. Alleen als daar nog niets staat:
+      // wat de installateur zelf koos is een keuze, geen aflezing.
+      if (!(data.automaten || []).length && materiaal.lijst.length) {
+        onChange("automaten", materiaal.lijst.map(r => ({
+          fab: r.fabrikant || "Onbekend", serie: "", type: r.type, aantal: r.aantal, bron: "foto",
+        })));
       }
     } catch (err) {
       setFout({ titel: "Lezen lukte niet", tekst: err.message || "Onbekende fout" });
@@ -2405,6 +2455,13 @@ function KastLezer({ data, onChange, onFoto }) {
   };
 
   const groepen = gelezen ? (gelezen.posities || []).filter(p => isGroepsoort(p.soort)).length : 0;
+  const materiaalRegels = gelezen ? materiaalUitPosities(gelezen.posities || []).lijst.length : 0;
+
+  // DE KAST KAN AL BEKEND ZIJN. Is er een paspoort gescand met een
+  // materiaallijst erin, dan staan materiaal én indeling er al — dan is een foto
+  // overbodig werk, en dat hoort de app te zeggen in plaats van er een knop voor
+  // te tonen alsof er nog iets moet.
+  const uitPaspoort = data.mkpImport && paspoortDraagtKast(data.mkpImport);
 
   return (
     <div style={{ ...S.card, border:`1px solid ${K.yellow}55`, background:K.yellowDim, marginBottom:14 }}>
@@ -2427,7 +2484,7 @@ function KastLezer({ data, onChange, onFoto }) {
       {gelezen && !bezig && (
         <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
           <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
-            ✓ {groepen} groep{groepen===1?"":"en"} gelezen
+            ✓ {groepen} groep{groepen===1?"":"en"} en {materiaalRegels} soort{materiaalRegels===1?"":"en"} materiaal gelezen
           </div>
           <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
             {gelezen.vulde === false
@@ -2455,12 +2512,23 @@ function KastLezer({ data, onChange, onFoto }) {
         </div>
       )}
 
+      {uitPaspoort && !gelezen && (
+        <div style={{ background:K.surface, borderRadius:10, padding:"10px 12px", marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:K.green, marginBottom:2 }}>
+            ✓ De kast staat al in het gescande paspoort
+          </div>
+          <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
+            Het materiaal en de indeling kwamen van de sticker en staan in stap 5 en 6. Een foto hoeft
+            alleen als de kast sinds de vorige klus is veranderd — dan leest hij hem opnieuw in.
+          </div>
+        </div>
+      )}
       {!bezig && (
         <div style={{ display:"flex", gap:8, marginBottom:10 }}>
           <button onClick={()=>bestandRef.current?.click()}
             style={{ flex:1, padding:"12px", borderRadius:10, border:"none", background:K.yellow, color:"#000",
                      fontFamily:"'IBM Plex Sans',sans-serif", fontWeight:700, fontSize:13, cursor:"pointer" }}>
-            📷 {gelezen ? "Opnieuw lezen" : "Foto maken en lezen"}
+            📷 {gelezen ? "Opnieuw lezen" : uitPaspoort ? "Kast opnieuw inlezen" : "Foto maken en lezen"}
           </button>
           <button onClick={()=>galerijRef.current?.click()}
             style={{ flex:"0 0 auto", padding:"12px 14px", borderRadius:10, border:`1px solid ${K.border}`,
@@ -7116,6 +7184,15 @@ export default function App() {
       // staat niet in het paspoort en valt terug op A; dat vraagt bevestiging.
       aardlekgroepen: paspoortDraagtKast(p)
         ? aardlekgroepenUitPosities(positiesUitPaspoort(p), { bron: "paspoort" })
+        : undefined,
+      // ⚓ EN DAARMEE IS OOK HET MATERIAAL BEKEND. `mat[]` draagt per toestel het
+      // merk en de typeaanduiding; dat is precies de materiaalstaat van stap 5.
+      // Wie een sticker scant hoeft dus noch te fotograferen noch te tikken —
+      // alleen nog aan te vullen wat er bij deze klus bij komt.
+      automaten: paspoortDraagtKast(p)
+        ? materiaalUitPosities(positiesUitPaspoort(p)).lijst.map(r => ({
+            fab: r.fabrikant || "Onbekend", serie: "", type: r.type, aantal: r.aantal, bron: "paspoort",
+          }))
         : undefined,
       mkp: {
         bj: p.bj || "", ean: p.ean || "", ean2: p.ean2 || "",
