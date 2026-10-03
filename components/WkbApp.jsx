@@ -1,5 +1,41 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-10-03-A (K6 — de foto kijkt ook naar wat er níét klopt):
+//   • Vraag Martin: bij de fotoscan in stap 4 ook gelijk een check op fouten in de
+//     bekabeling en de rest, zoals geleerd op de foute kasten van Herman, en dat
+//     koppelen aan de leermodule in de motor.
+//   • DEZELFDE FOTO, TWEEDE VRAAG. Het lezen vult stap 5 en 6 voor; de check kijkt
+//     met de ogen van een inspecteur. Twee taken, twee prompts, twee verzoeken —
+//     met opzet. Regel 6 van de leesprompt zegt zelf: "Beoordeel de installatie
+//     niet. Dat is een andere taak met een andere prompt." Die prompt is
+//     gekalibreerd op het vóórvullen van een formulier; er een tweede taak bij
+//     proppen verandert hoe hij leest, en dat risico nemen we niet.
+//   • De zoeklijst komt letterlijk uit de kalibratie op de kasten van Herman:
+//     verbindingen en afmontage, verbindingsmiddel-versus-geleider (daar komen de
+//     meeste echte vondsten vandaan — massief in een soepel-verbinder),
+//     beschermingsleidingen, opbouw, warmte, materiaalstaat, beveiliging, en
+//     privacy omdat de foto in een rapport meegaat. Er is niets bij verzonnen.
+//   • DRIE UITKOMSTTYPEN, GEEN OORDEEL: constatering, onderbouwd vermoeden mét
+//     controleactie, en niet-beoordeelbaar. ⚓ Een vermoeden zónder controleactie
+//     vervalt — dat gebeurt in de motor, niet alleen in de prompt. Een vermoeden
+//     zonder "ga dit meten" is een beschuldiging zonder uitweg.
+//   • ⚓ DIT KEURT NIETS EN HET GAAT HET RAPPORT NIET IN. De zuiverheidsregel:
+//     wij verifiëren niets, wij maken controleerbaar.
+//   • GEKOPPELD AAN DE LEERLUS (K6). Per punt zegt de installateur "klopt",
+//     "klopt niet" of "niet gezien". De eerste twee gaan als correctie de leerlus
+//     in — dezelfde `maakCorrectie`/`correctieStatistiek` als voor het kastbeeld,
+//     dus `overtuigdFout` meet nu ook de check. ⚓ "Niet gezien" levert met opzet
+//     NIETS op: wie niets aanklikt heeft niets gemeld, en dat mag nooit als
+//     bevestiging tellen (dezelfde les als EXPERT_WEGING in de leerlus).
+//   • Een bevestigde constatering wordt gestript lesmateriaal voor de
+//     leeromgeving — zonder adres, plek of foto. Het blijft op het toestel staan;
+//     versturen is een aparte stap die een besluit vraagt.
+//   • Mislukt de check, dan blijft de gelezen kast gewoon staan: het is een
+//     melding in het checkblok, geen storing over het lezen.
+//   • Motor v0.10.0 (`bevindingen.js`, `INSTRUCTIE_BEOORDELING`, derde modus in de
+//     analyseroute). ⚠️ De beoordelingsprompt is NIEUW en valt onder de
+//     vrijgaveregel: hij vraagt een ronde over de referentieset vóór je erop
+//     vertrouwt. Kosten: een scan wordt ongeveer twee keer zo duur (±€0,20).
 // 2026-10-02-G (de fotoroute gaf 500 op elke scan):
 //   • Melding Martin, vlak na de release: "foto lezen geeft 500 fout bij het lezen".
 //     In de Vercel-logs: `TypeError: s is not a constructor`, bij élke POST naar
@@ -349,6 +385,11 @@ import {
   vergelijkKastbeelden,
   // Een kast lezen uit een foto (K5): dezelfde keten als in Kastscan.
   positiesUitAnalyse, ONBRUIKBAAR_ADVIES, ONBRUIKBAAR_STANDAARD,
+  // Dezelfde foto, andere taak (K6): wat is er aan deze kast te zien dat niet
+  // klopt. De zoeklijst komt uit de kalibratie op de kasten van Herman, en het
+  // oordeel van de installateur gaat terug de leerlus in.
+  normaliseerBeoordeling, OORDELEN, OORDEEL_LABEL,
+  correctiesUitBeoordeling, leerpuntenUitBeoordeling,
 } from "yourwkb-core";
 // De browserkant van het versturen van een kastfoto — welke resolutie waarheen
 // gaat, en waarom dat uitmaakt. Staat in de motor omdat beide apps hem delen.
@@ -386,7 +427,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-02-G";
+const APP_VERSIE = "2026-10-03-A";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -2610,6 +2651,140 @@ function GK_StapGroepen({ data, onChange, onNext, onBack }) {
 // is bevroren, en wat de foto niet zag blijft leeg in plaats van geraden. De
 // installateur loopt het na — dat is de regel uit de featurespec en de reden dat
 // de melding "controleer" zegt en niet "overgenomen".
+// ─── WAT DE APP OP DE FOTO ZAG ───────────────────────────────────────────────
+//
+// Dezelfde opname waaruit de kast gelezen wordt, gaat langs een tweede prompt die
+// kijkt zoals een inspecteur kijkt. De zoeklijst komt uit de kalibratie op de
+// kasten van Herman: verbindingen, verbindingsmiddel-versus-geleider,
+// beschermingsleidingen, opbouw, warmte, materiaalstaat, beveiliging — en
+// privacy, want de foto gaat mee in een rapport.
+//
+// ⚓ DIT KEURT NIETS EN HET GAAT HET RAPPORT NIET IN. Drie uitkomsttypen, geen
+// eindoordeel, en de tekst zegt dat ook. De zuiverheidsregel van dit project is
+// niet onderhandelbaar: wij verifiëren niets, wij maken controleerbaar. Wat de
+// installateur ermee doet is aan hem, en hij blijft verantwoordelijk.
+//
+// ⚓ HET OORDEEL VAN DE INSTALLATEUR IS HET LEERSIGNAAL. Klopt het / klopt het niet
+// gaat als correctie de leerlus in (dezelfde als voor het kastbeeld), en een
+// bevestigde constatering wordt lesmateriaal voor de leeromgeving. "Niet gezien"
+// levert met opzet niets op: wie niets aanklikt heeft niets gemeld, en dat mag
+// nooit als bevestiging tellen.
+function Kastcheck({ data, onChange }) {
+  const check = data.kastcheck;
+  if (!check) return null;
+
+  const oordelen = check.oordelen || {};
+  const bevindingen = check.bevindingen || [];
+
+  const zetOordeel = (id, oordeel) => {
+    const nieuw = { ...oordelen };
+    if (nieuw[id] === oordeel) delete nieuw[id]; else nieuw[id] = oordeel;
+    onChange("kastcheck", { ...check, oordelen: nieuw });
+    // De leerlus bijwerken als geheel, niet aanvullen: zo kan iemand zijn oordeel
+    // terugnemen zonder dat er een spoor van blijft staan dat niet meer klopt.
+    const context = { bevindingen, oordelen: nieuw, projectId: data.projectId || "",
+                      promptversie: check.promptversie || "", tijdstip: new Date().toISOString() };
+    onChange("leerlog", {
+      ...(data.leerlog || {}),
+      kastcheck: correctiesUitBeoordeling(context),
+      // Gestript lesmateriaal: geen adres, geen plek, geen foto. Het blijft op dit
+      // toestel staan — er gaat hiervandaan niets naar buiten. Dat is een aparte
+      // stap die een besluit vraagt, geen bijwerking van een vinkje.
+      leerpunten: leerpuntenUitBeoordeling(context),
+    });
+  };
+
+  if (check.mislukt) {
+    return (
+      <div style={{ ...S.card, border:`1px solid ${K.orange55}`, background:K.orangeDim, marginBottom:14 }}>
+        <div style={{ fontWeight:700, fontSize:15, color:K.orange, marginBottom:4 }}>
+          De kast is niet nagekeken
+        </div>
+        <div style={{ fontSize:13, color:K.textSoft, lineHeight:1.5 }}>
+          {check.mislukt} De kast zelf is wél gelezen — die staat in stap 5 en 6.
+          Lees de foto opnieuw uit om het nakijken nog een keer te proberen.
+        </div>
+      </div>
+    );
+  }
+
+  const beoordeeld = bevindingen.filter(b => oordelen[b.id]).length;
+
+  return (
+    <div style={{ ...S.card, border:`1px solid ${K.border}`, marginBottom:14 }}>
+      <div style={{ fontWeight:700, fontSize:15, color:K.text, marginBottom:4 }}>
+        🔎 Wat de app op de foto zag
+      </div>
+      <div style={{ fontSize:12, color:K.muted, lineHeight:1.5, marginBottom:12 }}>
+        Dit is geen keuring en geen goedkeuring: het zijn aanwijzingen uit één foto,
+        zodat je ze zelf kunt nakijken. Niets hiervan komt in het rapport.
+        {bevindingen.length > 0 && " Zeg per punt of het klopt — daar wordt de check beter van."}
+      </div>
+
+      {bevindingen.length === 0 && (
+        <div style={{ fontSize:13, color:K.textSoft, lineHeight:1.5 }}>
+          Geen punten gevonden. Dat betekent niet dat er niets is — het betekent dat er
+          op déze foto niets te zien was. Wat achter een module zit of op de foto niet
+          scherp staat, kan de app niet beoordelen.
+        </div>
+      )}
+
+      {bevindingen.map(b => {
+        const kleur = b.categorie === "privacy" ? K.purple
+                    : b.soort === "constatering" ? K.orange
+                    : b.soort === "vermoeden" ? K.blue : K.muted;
+        const soortLabel = b.soort === "constatering" ? "Gezien op de foto"
+                         : b.soort === "vermoeden" ? "Vermoeden" : "Niet te beoordelen";
+        const gekozen = oordelen[b.id];
+        return (
+          <div key={b.id} style={{ borderTop:`1px solid ${K.border}`, paddingTop:12, marginTop:12 }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:6 }}>
+              <span style={{ ...S.tag, background:K.surface, borderColor:kleur, color:kleur }}>
+                {soortLabel}
+              </span>
+              <span style={{ fontSize:12, color:K.muted }}>{b.categorieLabel}</span>
+              {b.plek && <span style={{ fontSize:12, color:K.muted }}>· {b.plek}</span>}
+            </div>
+            <div style={{ fontSize:14, color:K.text, lineHeight:1.5 }}>{b.waarneming}</div>
+            {b.gevolgtrekking && (
+              <div style={{ fontSize:13, color:K.textSoft, lineHeight:1.5, marginTop:4 }}>
+                {b.gevolgtrekking}
+              </div>
+            )}
+            {b.controleactie && (
+              <div style={{ fontSize:13, color:K.accent, lineHeight:1.5, marginTop:6 }}>
+                <strong>Na te kijken:</strong> {b.controleactie}
+              </div>
+            )}
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:6, marginTop:10 }}>
+              {OORDELEN.map(o => (
+                <button key={o} onClick={()=>zetOordeel(b.id, o)}
+                  style={{ minHeight:40, borderRadius:K.radiusSm, cursor:"pointer",
+                           fontFamily:"'IBM Plex Sans',sans-serif", fontSize:12, fontWeight:600,
+                           padding:"0 6px", lineHeight:1.2,
+                           border:`1px solid ${gekozen===o ? K.accent : K.borderStrong}`,
+                           background: gekozen===o ? K.yellowDim : K.surface,
+                           color: gekozen===o ? K.accent : K.textSoft }}>
+                  {OORDEEL_LABEL[o]}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {bevindingen.length > 0 && (
+        <div style={{ fontSize:11, color:K.muted, marginTop:12, lineHeight:1.5 }}>
+          {beoordeeld} van {bevindingen.length} beoordeeld.
+          {check.aantallen && check.aantallen.geweigerd > 0 &&
+            ` ${check.aantallen.geweigerd} punt(en) zijn weggelaten omdat er geen controleactie bij stond.`}
+          {" "}Wat je hier aangeeft blijft op dit toestel; er gaat niets naar buiten.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null }) {
   const vergelijken = modus === "vergelijken";
   const [bezig, setBezig] = useState("");
@@ -2707,10 +2882,54 @@ function KastLezer({ data, onChange, onFoto, modus = "vullen", referentie = null
           fab: r.fabrikant || "Onbekend", serie: "", type: r.type, aantal: r.aantal, bron: "foto",
         })));
       }
+
+      // ── DEZELFDE FOTO, TWEEDE VRAAG. Het lezen vult het formulier voor; dit
+      //    kijkt met de ogen van een inspecteur naar dezelfde opname. Twee
+      //    taken, twee prompts — de leesprompt zegt in regel 6 zelf dat
+      //    beoordelen er niet bij hoort, en die is gekalibreerd.
+      //
+      //    Het gebeurt NA het lezen en in een eigen verzoek: elke aanvraag
+      //    krijgt zo zijn eigen minuut, en als het nakijken mislukt staat de
+      //    kast er nog steeds. Een mislukte check is een melding, geen storing.
+      await nakijken(blob);
     } catch (err) {
       setFout({ titel: "Lezen lukte niet", tekst: err.message || "Onbekende fout" });
     } finally {
       setBezig("");
+    }
+  };
+
+  /**
+   * De kast nakijken op dezelfde foto. Zacht falen: wat er misgaat komt in het
+   * blok te staan, maar het gelezen kastbeeld blijft staan.
+   */
+  const nakijken = async (blob) => {
+    try {
+      setBezig("De kast wordt nagekeken… nog een halve minuut.");
+      const form = new FormData();
+      form.append("modus", "beoordeling");
+      form.append("open", blob, "open.jpg");
+      const antwoord = await fetch("/api/kastbeeld", { method: "POST", body: form });
+      let json;
+      try { json = await antwoord.json(); }
+      catch { throw new Error(`De server antwoordde onverwacht (${antwoord.status}).`); }
+      if (!antwoord.ok) throw new Error(json.error || "Het nakijken lukte niet");
+
+      const uitkomst = normaliseerBeoordeling(json);
+      onChange("kastcheck", {
+        ...uitkomst,
+        promptversie: json.promptversie || "",
+        gelezenOp: new Date().toISOString(),
+        // De oordelen van de installateur komen hier later bij te staan; ze
+        // beginnen leeg, want niemand heeft nog iets gezegd.
+        oordelen: {},
+        mislukt: "",
+      });
+    } catch (err) {
+      // GEEN setFout: dat blok zegt "het lezen lukte niet", en dat is onwaar —
+      // de kast staat er. Dit hoort in het checkblok zelf thuis.
+      onChange("kastcheck", { mislukt: err.message || "Het nakijken lukte niet",
+                              bevindingen: [], aantallen: null, oordelen: {} });
     }
   };
 
@@ -2982,11 +3201,16 @@ function StapFotos({ data, onChange, onNext, onBack, checkpoints, kastLezer }) {
           {/* De uitlezing hoort bij de NIEUWE kast: die wordt gemeten, en dus is
               die het die stap 5 en 6 moet vullen. */}
           {kastLezer === "vullen" && cp.id === "na_open" && (
-            <KastLezer data={data} onChange={onChange} modus="vullen"
-              onFoto={(dataUrl)=>{
-                verkleinIndienNodig(dataUrl, 900).then(klein=>
-                  onChange("fotos", { ...(data.fotos||{}), na_open: klein }));
-              }}/>
+            <>
+              <KastLezer data={data} onChange={onChange} modus="vullen"
+                onFoto={(dataUrl)=>{
+                  verkleinIndienNodig(dataUrl, 900).then(klein=>
+                    onChange("fotos", { ...(data.fotos||{}), na_open: klein }));
+                }}/>
+              {/* Wat dezelfde foto nog meer liet zien. Staat hier en niet in stap 9:
+                  je kijkt ernaar terwijl je nog vóór de kast staat. */}
+              <Kastcheck data={data} onChange={onChange}/>
+            </>
           )}
           <div style={{...S.card,border:`1px solid ${fotos[cp.id]?K.green66:K.border}`}}>
             <div style={{display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}

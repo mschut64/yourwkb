@@ -66,6 +66,36 @@ if (kastbeeld) {
 }
 if (email) eq(typeof email.POST, "function", "3.2 de mailroute heeft geen eigen tijdmuur nodig");
 
+console.log("▶ CATEGORIE 4: wat de app uit de motor haalt, bestaat daar ook");
+{
+  // Dezelfde familie als de ontbrekende SDK: de app hangt aan een TAG van de motor,
+  // en een tag die iets niet (meer) heeft breekt pas bij gebruik. Deze test leest de
+  // importregel uit WkbApp.jsx zelf, dus hij kan niet verouderen.
+  const { readFileSync } = await import("node:fs");
+  const bron = readFileSync(new URL("../components/WkbApp.jsx", import.meta.url), "utf8");
+  const motor = await import("yourwkb-core");
+
+  // Let op het ontbreken van } in de klasse: een gretige match zou bij de eerste
+  // import van het bestand beginnen en alle namen daartussen meenemen.
+  const blok = bron.match(/import \{([^}]*)\} from "yourwkb-core";/);
+  eq(Boolean(blok), true, "4.1 WkbApp.jsx haalt iets uit de motor");
+  const namen = (blok ? blok[1] : "")
+    .split(",")
+    .map((n) => n.replace(/\/\/[^\n]*/g, "").trim())
+    .filter((n) => /^[A-Za-z_$][\w$]*$/.test(n));
+  eq(namen.length > 20, true, `4.2 en dat zijn er ${namen.length}`);
+  const ontbreekt = namen.filter((n) => motor[n] === undefined);
+  eq(ontbreekt, [], "4.3 élke naam bestaat in de motor die nu geïnstalleerd is");
+
+  // De nieuwe taak van vandaag, met naam genoemd: als een tag-bump deze laat vallen,
+  // valt de fotocheck stil zonder dat iemand het merkt.
+  for (const n of ["normaliseerBeoordeling", "OORDELEN", "OORDEEL_LABEL",
+                   "correctiesUitBeoordeling", "leerpuntenUitBeoordeling"]) {
+    eq(typeof motor[n] !== "undefined", true, `4.4 de motor levert ${n}`);
+  }
+  eq(motor.CATEGORIE_IDS.length, 8, "4.5 met de acht categorieën van de zoeklijst");
+}
+
 console.log("\n═══════════════════════════════════════════════");
 console.log(`RESULTAAT: ${passed} geslaagd · ${failed} mislukt · ${passed + failed} totaal`);
 console.log("═══════════════════════════════════════════════");
