@@ -1,5 +1,28 @@
 'use client'
 // YourWkb WkbApp.jsx — versie: zie de constante APP_VERSIE hieronder.
+// 2026-10-03-B (het papier dat bij de kast hoort):
+//   • Vraag Martin: het groepenoverzicht, de labels, A4 printen en het schema —
+//     die Kastscan al had — ook in YourWkb, optioneel aanvinkbaar.
+//   • Nieuw blok "Documenten voor de meterkast" in stap 10 (Paspoort), dichtgeklapt.
+//     Drie vinkjes: groepenoverzicht voor op de kastdeur, labelvel om uit te
+//     knippen, installatieschema. Alle drie op A4, gemaakt door de browser zelf —
+//     geen server, geen opslag. ⚓ De flow wordt er niet langer van: wie niets
+//     aanvinkt ziet één regel en loopt door.
+//   • De vier modules staan sinds motor v0.11.0 in de motor, niet in deze app:
+//     labels, render, schema en documenten. Ze worden pas GELADEN als iemand ze
+//     wil (dynamische import) — samen zijn ze groter dan de rest van het scherm,
+//     en een app die in een meterkast moet starten heeft daar niets aan.
+//   • ⚓ Werkt ook voor een kast die MET DE HAND is ingevuld. Die kent geen modules
+//     op een rail; `positiesUitAardlekgroepen` in de motor maakt die vertaling,
+//     zonder merk of plaats te verzinnen. Is er wél uit een foto of paspoort
+//     gelezen, dan worden die posities gebruikt — die dragen merk, type en plaats.
+//   • ⚓ Geen normoordeel op de kastdeur. Het groepenoverzicht kán een lijst
+//     aandachtspunten dragen; die blijft hier bewust leeg. Normafwijkingen horen
+//     in het rapport, waar ze uitgelegd worden, en niet als losse regel op een
+//     document in de meterkast van de klant.
+//   • Past een naam niet op een label, dan wordt de letter NIET verkleind — dan
+//     staat er hoeveel tekens te veel, met de vraag hem in stap 6 in te korten.
+//     (Labelspec §2/§3: wat niet past is een invoerfout, geen opmaakprobleem.)
 // 2026-10-03-A (K6 — de foto kijkt ook naar wat er níét klopt):
 //   • Vraag Martin: bij de fotoscan in stap 4 ook gelijk een check op fouten in de
 //     bekabeling en de rest, zoals geleerd op de foute kasten van Herman, en dat
@@ -381,6 +404,9 @@ import {
   // Het kastbeeld: een gescand paspoort terug naar groepen (K4), en de vormtaal
   // waarmee Kastscan een kast tekent.
   positiesUitPaspoort, aardlekgroepenUitPosities, paspoortDraagtKast,
+  // De weg terug: een met de hand ingevulde kast terug naar modules op een rail,
+  // zodat ook die een sticker, een overzicht en een schema oplevert.
+  positiesUitAardlekgroepen,
   strookUitAardlekgroepen, MODULE_PX, isGroepsoort, materiaalUitPosities,
   vergelijkKastbeelden,
   // Een kast lezen uit een foto (K5): dezelfde keten als in Kastscan.
@@ -427,7 +453,7 @@ import { esc, saneerImport, anonimiseerJob } from "./wkb/veilig";
 // Formaat vJJJJ-MM-DD-<letter>, letter loopt op binnen één dag. Wordt getoond in
 // de kop van het beginscherm, zodat een veldtester bij een melding meteen kan
 // zeggen welke versie hij in handen heeft.
-const APP_VERSIE = "2026-10-03-A";
+const APP_VERSIE = "2026-10-03-B";
 
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -4544,6 +4570,173 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 }
 
 // ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
+// ─── DE PAPIEREN KANT VAN DE KAST ────────────────────────────────────────────
+//
+// Drie documenten die Kastscan al maakte en die sinds 03-10-2026 in de motor
+// staan, dus ook hier: het groepenoverzicht voor op de kastdeur, een labelvel om
+// uit te knippen, en het installatieschema. Alle drie op A4, gemaakt door de
+// browser zelf — geen server, geen opslag.
+//
+// ⚓ OPTIONEEL, EN DE FLOW WORDT ER NIET LANGER VAN. Niemand hoeft hier iets aan
+// te vinken om verder te kunnen; wie niets kiest ziet alleen een dichtgeklapt
+// blok. Dat is de flow-regel: elke toevoeging is automatisch, optioneel, of
+// vervangt handwerk.
+//
+// ⚓ DE MOTOR VELT GEEN OORDEEL OP PAPIER. Het groepenoverzicht kán een lijst
+// aandachtspunten dragen (Kastscan zet daar zijn eigen signalen in). Hier gaan ze
+// er bewust NIET in: dit document hangt in de meterkast van de klant, en
+// normafwijkingen horen in het rapport te staan waar ze uitgelegd worden — niet
+// als losse regel op een sticker.
+function KastDocumenten({ data, discipline }) {
+  const [open, setOpen] = useState(false);
+  const [keuze, setKeuze] = useState({ overzicht: true, labels: false, schema: false });
+  const [bezig, setBezig] = useState("");
+  const [fout, setFout] = useState("");
+  const [overloop, setOverloop] = useState(null);
+
+  const aardlekgroepen = data.aardlekgroepen || [];
+  const groepen = aardlekgroepen.reduce((n, a) => n + ((a.eindgroepen || []).length), 0);
+
+  // De kast in de vorm waarin de documenten getekend zijn: modules op een rail.
+  // Is er uit een foto of een paspoort gelezen, dan zijn die posities er al — met
+  // merk, type en plaats. Anders bouwen we ze uit de groepen, zonder iets te
+  // verzinnen.
+  const bouwKast = () => {
+    const uitFoto = ((data.kastbeeld || {}).posities) || [];
+    const posities = uitFoto.length ? uitFoto : positiesUitAardlekgroepen(aardlekgroepen);
+    const ha = { f: (data.mkp || {}).fasen === "1" ? 1 : 3, a: toNum((data.mkp || {}).hoofdzekering) || null };
+    return {
+      adres: { postcode: data.postcode || "", huisnummer: data.huisnummer || "",
+               toevoeging: data.toevoeging || "" },
+      verdelers: [{
+        id: "v1", posities,
+        hoofd: { hoofdzekering: ha.a, fasen: ha.f, stelsel: (data.instMet || {}).stelsel || "" },
+      }],
+    };
+  };
+
+  const maak = async () => {
+    setBezig("Documenten worden gemaakt…"); setFout(""); setOverloop(null);
+    try {
+      // Pas laden als iemand ze echt wil: samen zijn deze drie modules groter dan
+      // de rest van het scherm, en een app die in een meterkast moet starten heeft
+      // daar niets aan.
+      const [doc, lab] = await Promise.all([
+        import("yourwkb-core/documenten.js"),
+        import("yourwkb-core/labels.js"),
+      ]);
+      const kast = bouwKast();
+      const verdeler = kast.verdelers[0];
+
+      if (keuze.overzicht) {
+        doc.printHtml(doc.groepenoverzichtHtml(kast, {
+          datum: new Date().toLocaleDateString("nl-NL", { day:"numeric", month:"long", year:"numeric" }),
+          qrDataUrl: data.mkpQr || "",
+        }), `Groepenoverzicht ${data.projectnummer || ""}`.trim());
+      }
+      if (keuze.labels) {
+        const labels = lab.labelSelectie(verdeler, {
+          datum: new Date().toLocaleDateString("nl-NL"),
+        });
+        // Wat niet past is een INVOERFOUT met een telling, geen reden om de letter
+        // te verkleinen (labelspec §2/§3). Dat hoort de installateur te zien vóór
+        // hij plakt, niet erna.
+        const teLang = labels.flatMap(l => lab.controleerPassend(l).map(f => ({
+          sleutel: l.sleutel, tekst: f.tekst, teveel: f.tekensTeveel,
+        })));
+        if (teLang.length) setOverloop(teLang);
+        doc.printHtml(doc.labelvelHtml(labels, {}), `Labelvel ${data.projectnummer || ""}`.trim());
+      }
+      if (keuze.schema) {
+        doc.printHtml(doc.schemaHtml(kast, {}), `Installatieschema ${data.projectnummer || ""}`.trim());
+      }
+    } catch (e) {
+      setFout(e.message || "Het maken van de documenten lukte niet");
+    } finally { setBezig(""); }
+  };
+
+  const niets = !keuze.overzicht && !keuze.labels && !keuze.schema;
+
+  return (
+    <div style={{ ...S.card, marginTop:14 }}>
+      <div onClick={()=>setOpen(!open)} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontWeight:700, fontSize:15 }}>🖨️ Documenten voor de meterkast</div>
+          <div style={{ fontSize:12, color:K.muted, marginTop:2 }}>
+            Groepenoverzicht, labelvel en installatieschema — optioneel, op A4
+          </div>
+        </div>
+        <div style={{ fontSize:18, color:K.muted }}>{open ? "−" : "+"}</div>
+      </div>
+
+      {open && (
+        <div style={{ marginTop:14 }}>
+          {groepen === 0 ? (
+            <div style={{ fontSize:13, color:K.textSoft, lineHeight:1.5 }}>
+              Er staan nog geen groepen in stap 6. Zonder groepen valt er niets te
+              drukken — vul ze in of lees ze uit de foto.
+            </div>
+          ) : (
+            <>
+              {[
+                ["overzicht", "Groepenoverzicht", "Voor op de kastdeur: alle groepen, de aardlekken en de verdeling over de fasen. Met de paspoort-QR als die er al is."],
+                ["labels", "Labelvel om uit te knippen", "Een sticker per groep en per aardlekschakelaar, op ware grootte. Nooit geschaald — wat niet past wordt gemeld."],
+                ["schema", "Installatieschema", "Het eendraadschema van deze kast: één lijn per groep, met de beveiligingen als symbool."],
+              ].map(([id, titel, uitleg]) => (
+                <label key={id} style={{ display:"flex", gap:10, alignItems:"flex-start",
+                                         padding:"10px 0", borderTop:`1px solid ${K.border}`, cursor:"pointer" }}>
+                  <input type="checkbox" checked={keuze[id]}
+                    onChange={e=>setKeuze({ ...keuze, [id]: e.target.checked })}
+                    style={{ width:22, height:22, marginTop:2, accentColor:K.yellow, flexShrink:0 }}/>
+                  <span>
+                    <span style={{ fontSize:15, fontWeight:600 }}>{titel}</span>
+                    <span style={{ display:"block", fontSize:12, color:K.muted, lineHeight:1.5, marginTop:2 }}>
+                      {uitleg}
+                    </span>
+                  </span>
+                </label>
+              ))}
+
+              <button onClick={maak} disabled={niets || Boolean(bezig)}
+                style={{ ...S.btnGhost, marginTop:12, opacity: niets ? 0.5 : 1 }}>
+                {bezig || "Maak de gekozen documenten"}
+              </button>
+
+              <div style={{ fontSize:11, color:K.muted, lineHeight:1.5 }}>
+                Elk document opent in een eigen tabblad met een printknop. Er gaat niets
+                naar een server; de browser maakt ze zelf. Blokkeert de browser het
+                tabblad, sta dan pop-ups toe voor deze pagina.
+              </div>
+
+              {overloop && (
+                <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`, marginTop:12 }}>
+                  <div style={{ fontWeight:700, fontSize:14, color:K.orange, marginBottom:6 }}>
+                    {overloop.length} naam{overloop.length === 1 ? "" : "en"} past niet op het label
+                  </div>
+                  <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
+                    De letter wordt niet verkleind — dat zou het label onleesbaar maken op
+                    de kastdeur. Kort de naam in stap 6 in:
+                    <ul style={{ margin:"6px 0 0 16px", padding:0 }}>
+                      {overloop.map((o,i)=>(
+                        <li key={i}>"{o.tekst}" — {o.teveel} teken{o.teveel === 1 ? "" : "s"} te veel</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {fout && (
+                <div style={{ ...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginTop:12,
+                              fontSize:13, color:K.red }}>{fout}</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   const m = data.mkp || {};
   const zet = (k,v) => onChange("mkp", { ...m, [k]: v });
@@ -4920,9 +5113,13 @@ function StapMkp({ data, onChange, onNext, onBack, discipline }) {
         )}
       </div>
 
-      {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginBottom:12, fontSize:12}}>{fout}</div>}
+      {/* Het papier dat bij de kast hoort. Dichtgeklapt, dus wie het niet nodig
+          heeft ziet één regel en loopt door — de flow wordt er niet langer van. */}
+      <KastDocumenten data={data} discipline={discipline}/>
 
-      <div style={{display:"flex", gap:10}}>
+      {fout && <div style={{...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginBottom:12, fontSize:12, marginTop:12}}>{fout}</div>}
+
+      <div style={{display:"flex", gap:10, marginTop:14}}>
         <button style={S.btnGhost} onClick={onBack}>← Terug</button>
         <button style={{...S.btn, flex:1, background:K.yellow, color:"#000"}} disabled={bezig} onClick={volgende}>
           {bezig ? "QR genereren…" : "Paspoort-QR maken & verder →"}
