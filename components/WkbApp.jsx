@@ -4599,7 +4599,7 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 // ⚓ NOOIT SCHALEN. De labels worden gerasterd op exact 240 × 400 dots (30 × 50 mm
 // bij 203 dpi) en daarna als geheel gedraaid. Draaien verwisselt dots; het schaalt
 // niets — en schalen is precies wat de symbolen op een label onleesbaar maakte.
-function Labelprinter({ labelsVan }) {
+function Labelprinter({ labelsVan, aantal }) {
   const [status, setStatus] = useState(null);
   const [printer, setPrinter] = useState(null);
   const [voortgang, setVoortgang] = useState("");
@@ -4609,15 +4609,17 @@ function Labelprinter({ labelsVan }) {
   // de B1 over de 50 mm-zijde print, en dichtheid 3.
   const [rotatie, setRotatie] = useState(1);
   const [dichtheid, setDichtheid] = useState(3);
-  const [aantalLabels, setAantalLabels] = useState(null);
 
+  // Pas vragen of bluetooth kan als het blok in beeld komt: de controle raakt
+  // navigator en hoort niet op de server te draaien. Eén keer, bij het monteren —
+  // het aantal labels komt als prop mee, zodat een vinkje hierboven deze controle
+  // niet elke keer opnieuw laat lopen.
   useEffect(() => {
     let weg = false;
     import("yourwkb-core/printers").then(p => { if (!weg) setStatus(p.webBluetoothStatus()); })
       .catch(() => { if (!weg) setStatus({ ok:false, melding:"De printerlaag kon niet geladen worden." }); });
-    labelsVan().then(l => { if (!weg) setAantalLabels(l.length); }).catch(() => {});
     return () => { weg = true; };
-  }, [labelsVan]);
+  }, []);
 
   if (!status) return null;
 
@@ -4705,10 +4707,10 @@ function Labelprinter({ labelsVan }) {
             op de kastdeur. Kalibreer hem één keer op déze rol met de Niimbot-app; daarna werkt het.
           </div>
 
-          {aantalLabels > 3 && !printer && (
+          {aantal > 3 && !printer && (
             <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`,
                           fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
-              <strong style={{ color:K.orange }}>{aantalLabels} labels.</strong> Print er eerst één
+              <strong style={{ color:K.orange }}>{aantal} labels.</strong> Print er eerst één
               om te zien of de maat en de draairichting kloppen — een rol is zo op.
             </div>
           )}
@@ -4802,7 +4804,18 @@ function KastDocumenten({ data, discipline }) {
   const [keuze, setKeuze] = useState({ overzicht: true, labels: false, schema: false });
   const [bezig, setBezig] = useState("");
   const [fout, setFout] = useState("");
-  const [overloop, setOverloop] = useState(null);
+  // Wat niet past is een INVOERFOUT met een telling, geen reden om de letter te
+  // verkleinen (labelspec §2/§3) — en de installateur hoort het te zien vóór hij
+  // drukt, niet erna. De controle loopt daarom mee met de voorbeelden: `fouten`
+  // is de uitslag per sticker, één keer gerekend waar de module toch al geladen is.
+  const [fouten, setFouten] = useState({});
+  // De stickers zelf, met een voorbeeld en een vinkje per stuk — dezelfde keuze
+  // als in Kastscan. ⚓ ALLES STAAT AAN: bij een nieuwe kast wil je elke sticker en
+  // hoort er niets aangetikt te worden, en bij een uitbreiding zet je ze uit op de
+  // twee die erbij komen in plaats van een hele rol te verspelen.
+  const [labels, setLabels] = useState(null);
+  const [gekozen, setGekozen] = useState(null);
+  const [svgs, setSvgs] = useState({});
 
   const aardlekgroepen = data.aardlekgroepen || [];
   const groepen = aardlekgroepen.reduce((n, a) => n + ((a.eindgroepen || []).length), 0);
@@ -4825,16 +4838,56 @@ function KastDocumenten({ data, discipline }) {
     };
   };
 
+  // Pas rekenen en pas tekenen als het vinkje omgaat: `render.js` is de grootste
+  // module van de drie en een app die in een meterkast moet starten heeft er
+  // niets aan zolang niemand labels wil.
+  useEffect(() => {
+    if (!keuze.labels || labels || groepen === 0) return;
+    let weg = false;
+    (async () => {
+      const [lab, ren] = await Promise.all([
+        import("yourwkb-core/labels.js"), import("yourwkb-core/render.js"),
+      ]);
+      // ⚓ NIET toLocaleDateString: die laat de voorloopnul weg ("3-10-2026") en dan
+      // kort de motor het jaartal op het smalle label niet in, waarna de datum één
+      // teken over de rand loopt. `labelDatum` is de vorm waar het label op rekent.
+      const l = lab.labelSelectie(bouwKast().verdelers[0], { datum: lab.labelDatum() });
+      if (weg) return;
+      setLabels(l);
+      setGekozen(new Set(l.map(x => x.sleutel)));
+      // Het voorbeeld is dezelfde SVG die op het A4-vel komt, zonder de maat in
+      // millimeters zodat hij in de tegel past. De tekst erin is ontsmet door de
+      // motor zelf (render.js › esc), dus dit is geen gat in de audit.
+      setSvgs(Object.fromEntries(l.map(x => [x.sleutel, ren.svgLabel(x, { zonderMaat:true })])));
+      setFouten(Object.fromEntries(l.map(x => [x.sleutel, lab.controleerPassend(x)])));
+    })().catch(e => { if (!weg) setFout(e.message || "De labels konden niet gemaakt worden"); });
+    return () => { weg = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keuze.labels, groepen]);
+
+  const selectie = labels ? labels.filter(l => gekozen && gekozen.has(l.sleutel)) : null;
+  // Alleen over wat ook echt gedrukt wordt: een naam die niet past op een sticker
+  // die je niet kiest, is geen probleem van vandaag.
+  const overloop = (selectie || []).flatMap(l => (fouten[l.sleutel] || []).map(f => ({
+    sleutel: l.sleutel, tekst: f.tekst, teveel: f.tekensTeveel,
+  })));
+
   // De labels voor de printer: dezelfde stapel als op het vel, uit dezelfde kast
   // en met dezelfde datum. Eén functie, zodat er geen tweede berekening naast
   // ontstaat die andere stickers oplevert voor dezelfde kast.
   const labelsNu = async () => {
+    if (selectie) return selectie;
     const lab = await import("yourwkb-core/labels.js");
-    return lab.labelSelectie(bouwKast().verdelers[0], { datum: new Date().toLocaleDateString("nl-NL") });
+    return lab.labelSelectie(bouwKast().verdelers[0], { datum: lab.labelDatum() });
   };
+  const wissel = (sleutel) => setGekozen(g => {
+    const n = new Set(g);
+    if (n.has(sleutel)) n.delete(sleutel); else n.add(sleutel);
+    return n;
+  });
 
   const maak = async () => {
-    setBezig("Documenten worden gemaakt…"); setFout(""); setOverloop(null);
+    setBezig("Documenten worden gemaakt…"); setFout("");
     try {
       // Pas laden als iemand ze echt wil: samen zijn deze drie modules groter dan
       // de rest van het scherm, en een app die in een meterkast moet starten heeft
@@ -4853,17 +4906,11 @@ function KastDocumenten({ data, discipline }) {
         }), `Groepenoverzicht ${data.projectnummer || ""}`.trim());
       }
       if (keuze.labels) {
-        const labels = lab.labelSelectie(verdeler, {
-          datum: new Date().toLocaleDateString("nl-NL"),
-        });
-        // Wat niet past is een INVOERFOUT met een telling, geen reden om de letter
-        // te verkleinen (labelspec §2/§3). Dat hoort de installateur te zien vóór
-        // hij plakt, niet erna.
-        const teLang = labels.flatMap(l => lab.controleerPassend(l).map(f => ({
-          sleutel: l.sleutel, tekst: f.tekst, teveel: f.tekensTeveel,
-        })));
-        if (teLang.length) setOverloop(teLang);
-        doc.printHtml(doc.labelvelHtml(labels, {}), `Labelvel ${data.projectnummer || ""}`.trim());
+        // Hetzelfde stapeltje als op het scherm en bij de printer, dus één keer
+        // gekozen geldt voor beide wegen. Staat de lijst er nog niet, dan rekent
+        // hij hem hier uit.
+        const stapel = selectie || lab.labelSelectie(verdeler, { datum: lab.labelDatum() });
+        doc.printHtml(doc.labelvelHtml(stapel, {}), `Labelvel ${data.projectnummer || ""}`.trim());
       }
       if (keuze.schema) {
         doc.printHtml(doc.schemaHtml(kast, {}), `Installatieschema ${data.projectnummer || ""}`.trim());
@@ -4874,6 +4921,9 @@ function KastDocumenten({ data, discipline }) {
   };
 
   const niets = !keuze.overzicht && !keuze.labels && !keuze.schema;
+  // Labels gekozen maar geen enkele sticker aangetikt is geen opdracht: dan zou er
+  // een leeg vel uit komen.
+  const leegVel = keuze.labels && selectie && !selectie.length && !keuze.overzicht && !keuze.schema;
 
   return (
     <div style={{ ...S.card, marginTop:14 }}>
@@ -4915,8 +4965,66 @@ function KastDocumenten({ data, discipline }) {
                 </label>
               ))}
 
-              <button onClick={maak} disabled={niets || Boolean(bezig)}
-                style={{ ...S.btnGhost, marginTop:12, opacity: niets ? 0.5 : 1 }}>
+              {keuze.labels && labels && (
+                <div style={{ borderTop:`1px solid ${K.border}`, paddingTop:12, marginTop:2 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                    <div style={{ ...S.sTitle, flex:1, margin:0 }}>
+                      Op ware grootte — {selectie.length} van {labels.length}
+                    </div>
+                    <button onClick={()=>setGekozen(
+                        selectie.length === labels.length ? new Set() : new Set(labels.map(l=>l.sleutel)))}
+                      style={{ background:"none", border:"none", color:K.accent, fontSize:13,
+                               fontWeight:700, cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+                      {selectie.length === labels.length ? "Niets" : "Alles"}
+                    </button>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(104px,1fr))", gap:10 }}>
+                    {labels.map(l => {
+                      const aan = gekozen.has(l.sleutel);
+                      return (
+                        <button key={l.sleutel} onClick={()=>wissel(l.sleutel)} style={{
+                          padding:6, borderRadius:10, cursor:"pointer", fontFamily:"inherit",
+                          border:`2px solid ${aan ? K.yellow : K.border}`,
+                          background: aan ? K.yellowDim : K.card,
+                          display:"flex", flexDirection:"column", gap:6, alignItems:"center" }}>
+                          {/* Het label staat altijd op wit: een sticker is wit, ook in het
+                              donkere thema, en een voorbeeld dat meekleurt liegt over de afdruk. */}
+                          <div style={{ width:"100%", background:"#fff", borderRadius:4,
+                                        overflow:"hidden", lineHeight:0 }}
+                            dangerouslySetInnerHTML={{ __html: (svgs[l.sleutel] || "").replace(
+                              "<svg", '<svg style="width:100%;height:auto;display:block"') }}/>
+                          <span style={{ fontSize:10, color:K.muted, fontWeight:600 }}>
+                            {l.soort} · {l.breedteMm} mm
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize:12, color:K.muted, lineHeight:1.5, marginTop:8 }}>
+                    Tik een sticker aan of uit. Bij een uitbreiding print je alleen de nieuwe —
+                    de rest hangt er al.
+                  </div>
+                  {overloop.length > 0 && (
+                    <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`, marginTop:10 }}>
+                      <div style={{ fontWeight:700, fontSize:14, color:K.orange, marginBottom:6 }}>
+                        {overloop.length} {overloop.length === 1 ? "naam past" : "namen passen"} niet op het label
+                      </div>
+                      <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
+                        De letter wordt niet verkleind — dat zou het label onleesbaar maken op
+                        de kastdeur. Kort de naam in stap 6 in:
+                        <ul style={{ margin:"6px 0 0 16px", padding:0 }}>
+                          {overloop.map((o,i)=>(
+                            <li key={i}>"{o.tekst}" — {o.teveel} teken{o.teveel === 1 ? "" : "s"} te veel</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={maak} disabled={niets || leegVel || Boolean(bezig)}
+                style={{ ...S.btnGhost, marginTop:12, opacity: (niets || leegVel) ? 0.5 : 1 }}>
                 {bezig || "Maak de gekozen documenten"}
               </button>
 
@@ -4926,23 +5034,6 @@ function KastDocumenten({ data, discipline }) {
                 tabblad, sta dan pop-ups toe voor deze pagina.
               </div>
 
-              {overloop && (
-                <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`, marginTop:12 }}>
-                  <div style={{ fontWeight:700, fontSize:14, color:K.orange, marginBottom:6 }}>
-                    {overloop.length} naam{overloop.length === 1 ? "" : "en"} past niet op het label
-                  </div>
-                  <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
-                    De letter wordt niet verkleind — dat zou het label onleesbaar maken op
-                    de kastdeur. Kort de naam in stap 6 in:
-                    <ul style={{ margin:"6px 0 0 16px", padding:0 }}>
-                      {overloop.map((o,i)=>(
-                        <li key={i}>"{o.tekst}" — {o.teveel} teken{o.teveel === 1 ? "" : "s"} te veel</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-
               {fout && (
                 <div style={{ ...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginTop:12,
                               fontSize:13, color:K.red }}>{fout}</div>
@@ -4950,7 +5041,7 @@ function KastDocumenten({ data, discipline }) {
 
               {/* Dezelfde stickers, maar dan rechtstreeks naar een labelprinter.
                   Staat ONDER het labelvel, want dat pad is het betrouwbare. */}
-              <Labelprinter labelsVan={labelsNu}/>
+              <Labelprinter labelsVan={labelsNu} aantal={selectie ? selectie.length : null}/>
             </>
           )}
         </div>
