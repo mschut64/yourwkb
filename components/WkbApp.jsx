@@ -20,6 +20,14 @@
 //     aandachtspunten dragen; die blijft hier bewust leeg. Normafwijkingen horen
 //     in het rapport, waar ze uitgelegd worden, en niet als losse regel op een
 //     document in de meterkast van de klant.
+//   • Rechtstreeks naar een LABELPRINTER kan ook, met dezelfde driverlaag als
+//     Kastscan (motor v0.11.0, `yourwkb-core/printers`). ⚠️ Als PROEFONDERDEEL, en
+//     dat staat er ook bij: verbinden en aansturen werken, maar de afdruk stopt na
+//     ±10 mm van een label van 30 — op 01-09-2026 nagelopen, alles aan onze kant
+//     uitgesloten, het wijst op de labeldetectie van de printer. Eerste stap is de
+//     printer één keer kalibreren met de Niimbot-app. Op iPhone en iPad bestaat
+//     Web Bluetooth niet; daar zegt het blok dat, en wijst het naar het A4-vel.
+//     Het labelvel staat daarom bovenaan en de printer eronder.
 //   • Past een naam niet op een label, dan wordt de letter NIET verkleind — dan
 //     staat er hoeveel tekens te veel, met de vraag hem in stap 6 in te korten.
 //     (Labelspec §2/§3: wat niet past is een invoerfout, geen opmaakprobleem.)
@@ -4587,6 +4595,151 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 // er bewust NIET in: dit document hangt in de meterkast van de klant, en
 // normafwijkingen horen in het rapport te staan waar ze uitgelegd worden — niet
 // als losse regel op een sticker.
+// ─── RECHTSTREEKS NAAR DE LABELPRINTER ───────────────────────────────────────
+//
+// Dezelfde driverlaag als in Kastscan, sinds motor v0.11.0 gedeeld. De labels
+// worden gerasterd op exact de dot-afstand van de printer — nooit geschaald, want
+// schalen is precies wat de symbolen op een label onleesbaar maakt.
+//
+// ⚠️ DIT IS EEN PROEFONDERDEEL, EN DAT STAAT ER OOK BIJ. Verbinden werkt en
+// aansturen werkt, maar de afdruk stopt na ongeveer 80 regels — zo'n 10 mm van een
+// label van 30. Dat is op 01-09-2026 systematisch nagelopen: alles aan onze kant
+// van de lijn is uitgesloten, en wat overblijft is de labeldetectie van de printer
+// zelf. Het A4-labelvel hierboven is wél volledig nagemeten, en staat daarom
+// voorop. Een knop die iets belooft wat half uitkomt, is erger dan geen knop.
+function Labelprinter({ labelsVan }) {
+  const [status, setStatus] = useState(null);
+  const [printer, setPrinter] = useState(null);
+  const [voortgang, setVoortgang] = useState("");
+  const [melding, setMelding] = useState(null);
+  const [rotatie, setRotatie] = useState(1);
+  const [dichtheid, setDichtheid] = useState(3);
+
+  // Pas vragen of bluetooth kan als het blok in beeld komt: de controle raakt
+  // navigator en hoort niet op de server te draaien.
+  useEffect(() => {
+    let weg = false;
+    import("yourwkb-core/printers").then(p => { if (!weg) setStatus(p.webBluetoothStatus()); })
+      .catch(() => { if (!weg) setStatus({ ok:false, melding:"De printerlaag kon niet geladen worden." }); });
+    return () => { weg = true; };
+  }, []);
+
+  if (!status) return null;
+
+  const verbind = async () => {
+    setMelding(null);
+    try {
+      const { niimbotB1 } = await import("yourwkb-core/printers");
+      const info = await niimbotB1.verbind({});
+      setPrinter(info.naam);
+      setMelding({ niveau:"ok", tekst:`Verbonden met ${info.naam}.` });
+    } catch (e) {
+      setMelding({ niveau:"fout", tekst: e.message || "Verbinden lukte niet." });
+    }
+  };
+
+  const print = async () => {
+    setMelding(null); setVoortgang("Lettertype laden…");
+    try {
+      const [Render, { niimbotB1 }, Labels] = await Promise.all([
+        import("yourwkb-core/render.js"),
+        import("yourwkb-core/printers"),
+        import("yourwkb-core/labels.js"),
+      ]);
+      const geladen = await Render.wachtOpLettertype();
+      if (!geladen) setMelding({ niveau:"let-op",
+        tekst:"Barlow Condensed is niet geladen; de labels komen dan met een ander lettertype uit de printer. Controleer de eerste sticker voor je de rest print." });
+
+      // Twee smalle stickers gaan op één label met een kniplijn ertussen —
+      // anders kost elke sticker van één module een heel label.
+      const eenheden = Labels.combineerSmalleLabels(await labelsVan());
+      const bitmaps = [];
+      for (const [i, l] of eenheden.entries()) {
+        setVoortgang(`Label ${i+1} van ${eenheden.length} rasteren…`);
+        const raster = Render.rasterLabel(l, { dpi: niimbotB1.dpi });
+        const mono = Render.naarMonochroom(raster.canvas);
+        const dekking = Render.controleerDekking(mono);
+        if (!dekking.ok) setMelding({ niveau:"let-op", tekst:`${l.sleutel}: ${dekking.melding}` });
+        // Pas ná de drempel draaien: dat is een exacte verwisseling van dots, dus
+        // er gaat niets verloren en er komt niets bij.
+        bitmaps.push(Render.roteerMonochroom(mono, rotatie));
+      }
+      await niimbotB1.printBitmaps(bitmaps, { dichtheid, aantal:1,
+        opVoortgang: ({ nu, totaal, pct }) => setVoortgang(
+          pct == null ? `Label ${nu} van ${totaal} printen…` : `Label ${nu} van ${totaal} — ${pct}%`) });
+      setMelding({ niveau:"ok", tekst:`${bitmaps.length} label(s) naar de printer gestuurd.` });
+    } catch (e) {
+      setMelding({ niveau:"fout", tekst: e.message || "Printen lukte niet." });
+    } finally { setVoortgang(""); }
+  };
+
+  const meldKleur = { ok:K.green, "let-op":K.orange, fout:K.red };
+
+  return (
+    <div style={{ borderTop:`1px solid ${K.border}`, marginTop:14, paddingTop:14 }}>
+      <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>
+        🏷️ Rechtstreeks naar een labelprinter <span style={{ ...S.tag, borderColor:K.orange, color:K.orange, marginLeft:6 }}>proef</span>
+      </div>
+
+      {!status.ok ? (
+        <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
+          {status.melding || "Deze browser kan geen bluetooth-printer aansturen."}
+          {" "}Het labelvel hierboven werkt wél — dat print je op een gewone printer.
+        </div>
+      ) : (
+        <>
+          <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`,
+                        fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
+            <strong style={{ color:K.orange }}>Dit werkt nog niet helemaal.</strong> Verbinden en
+            aansturen gaan goed, maar de afdruk stopt na ongeveer 10 mm van een label van 30.
+            Dat ligt niet aan de app: het wijst op de labeldetectie van de printer.
+            <strong> Kalibreer de printer één keer op deze labelrol met de Niimbot-app</strong> —
+            daarna werkt het mogelijk wel. Lukt het niet, gebruik dan het labelvel hierboven.
+          </div>
+
+          <button onClick={verbind} style={{ ...S.btnGhost, marginBottom:10 }}>
+            {printer ? `Verbonden: ${printer}` : "Verbind met labelprinter"}
+          </button>
+
+          {printer && (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                <div>
+                  <label style={{ ...S.label }}>Kwartslagen</label>
+                  <select value={rotatie} onChange={e=>setRotatie(Number(e.target.value))} style={S.select}>
+                    {[0,1,2,3].map(n=><option key={n} value={n}>{n} × 90°</option>)}
+                  </select>
+                  <div style={{ fontSize:11, color:K.muted, marginTop:4, lineHeight:1.4 }}>
+                    Komt de tekst op zijn kop, zet hem dan op de andere waarde.
+                  </div>
+                </div>
+                <div>
+                  <label style={{ ...S.label }}>Dichtheid</label>
+                  <select value={dichtheid} onChange={e=>setDichtheid(Number(e.target.value))} style={S.select}>
+                    {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <div style={{ fontSize:11, color:K.muted, marginTop:4, lineHeight:1.4 }}>
+                    Te laag geeft een bleke afdruk, te hoog laat hem uitvloeien.
+                  </div>
+                </div>
+              </div>
+              <button onClick={print} disabled={Boolean(voortgang)} style={S.btnGhost}>
+                {voortgang || "Print de labels"}
+              </button>
+            </>
+          )}
+
+          {melding && (
+            <div style={{ fontSize:12, lineHeight:1.5, color: meldKleur[melding.niveau] || K.textSoft }}>
+              {melding.tekst}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function KastDocumenten({ data, discipline }) {
   const [open, setOpen] = useState(false);
   const [keuze, setKeuze] = useState({ overzicht: true, labels: false, schema: false });
@@ -4613,6 +4766,14 @@ function KastDocumenten({ data, discipline }) {
         hoofd: { hoofdzekering: ha.a, fasen: ha.f, stelsel: (data.instMet || {}).stelsel || "" },
       }],
     };
+  };
+
+  // De labels voor de printer: dezelfde stapel als op het vel, uit dezelfde kast
+  // en met dezelfde datum. Eén functie, zodat er geen tweede berekening naast
+  // ontstaat die andere stickers oplevert voor dezelfde kast.
+  const labelsNu = async () => {
+    const lab = await import("yourwkb-core/labels.js");
+    return lab.labelSelectie(bouwKast().verdelers[0], { datum: new Date().toLocaleDateString("nl-NL") });
   };
 
   const maak = async () => {
@@ -4729,6 +4890,10 @@ function KastDocumenten({ data, discipline }) {
                 <div style={{ ...S.card, background:K.redDim, border:`1px solid ${K.red66}`, marginTop:12,
                               fontSize:13, color:K.red }}>{fout}</div>
               )}
+
+              {/* Dezelfde stickers, maar dan rechtstreeks naar een labelprinter.
+                  Staat ONDER het labelvel, want dat pad is het betrouwbare. */}
+              <Labelprinter labelsVan={labelsNu}/>
             </>
           )}
         </div>
