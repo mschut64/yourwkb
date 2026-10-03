@@ -13,7 +13,7 @@
 // Dat is op 30-09-2026 gebeurd: de naam stond sinds 13-08 op v7 terwijl de app
 // er zeven releases overheen kreeg. Wie de app in die periode één keer had
 // geopend, hield een schil van weken oud.
-const CACHE = "yourwkb-v20";
+const CACHE = "yourwkb-v21";
 const APP_PAGINAS = ["/app"];
 
 // Cruciaal voor offline app-start: een respons die via een redirect binnenkwam
