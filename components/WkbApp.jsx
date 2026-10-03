@@ -21,13 +21,13 @@
 //     in het rapport, waar ze uitgelegd worden, en niet als losse regel op een
 //     document in de meterkast van de klant.
 //   • Rechtstreeks naar een LABELPRINTER kan ook, met dezelfde driverlaag als
-//     Kastscan (motor v0.11.0, `yourwkb-core/printers`). ⚠️ Als PROEFONDERDEEL, en
-//     dat staat er ook bij: verbinden en aansturen werken, maar de afdruk stopt na
-//     ±10 mm van een label van 30 — op 01-09-2026 nagelopen, alles aan onze kant
-//     uitgesloten, het wijst op de labeldetectie van de printer. Eerste stap is de
-//     printer één keer kalibreren met de Niimbot-app. Op iPhone en iPad bestaat
-//     Web Bluetooth niet; daar zegt het blok dat, en wijst het naar het A4-vel.
-//     Het labelvel staat daarom bovenaan en de printer eronder.
+//     Kastscan (motor v0.11.0, `yourwkb-core/printers`). ⚓ Mét één voorwaarde die
+//     vóór de knop staat: kalibreer de printer één keer op de labelrol met de
+//     Niimbot-app. Zonder dat stopt de afdruk na ±10 mm — precies wat deze driver
+//     maanden "onaf" hield, en wat op 03-10-2026 door Martin is opgelost en
+//     bevestigd op een B1 met labels van 30 × 50 mm. Op iPhone en iPad bestaat Web
+//     Bluetooth niet; daar toont het blok geen knop maar de reden, met de
+//     verwijzing naar het A4-labelvel.
 //   • Past een naam niet op een label, dan wordt de letter NIET verkleind — dan
 //     staat er hoeveel tekens te veel, met de vraag hem in stap 6 in te korten.
 //     (Labelspec §2/§3: wat niet past is een invoerfout, geen opmaakprobleem.)
@@ -4601,12 +4601,12 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 // worden gerasterd op exact de dot-afstand van de printer — nooit geschaald, want
 // schalen is precies wat de symbolen op een label onleesbaar maakt.
 //
-// ⚠️ DIT IS EEN PROEFONDERDEEL, EN DAT STAAT ER OOK BIJ. Verbinden werkt en
-// aansturen werkt, maar de afdruk stopt na ongeveer 80 regels — zo'n 10 mm van een
-// label van 30. Dat is op 01-09-2026 systematisch nagelopen: alles aan onze kant
-// van de lijn is uitgesloten, en wat overblijft is de labeldetectie van de printer
-// zelf. Het A4-labelvel hierboven is wél volledig nagemeten, en staat daarom
-// voorop. Een knop die iets belooft wat half uitkomt, is erger dan geen knop.
+// ⚓ KALIBREREN IS EEN VOORWAARDE, GEEN TIP. Een printer die deze labelrol nog niet
+// kent, stopt na ongeveer 10 mm van een label van 30 — dan plak je een halve
+// sticker op een kastdeur en lijkt het een fout in de app. Eén kalibratie met de
+// Niimbot-app lost het op; dat is precies wat deze driver maanden "onaf" hield en
+// wat Martin op 03-10-2026 heeft bevestigd op een B1 met labels van 30 × 50 mm.
+// Daarom staat die regel vóór de knop en niet eronder.
 function Labelprinter({ labelsVan }) {
   const [status, setStatus] = useState(null);
   const [printer, setPrinter] = useState(null);
@@ -4678,7 +4678,7 @@ function Labelprinter({ labelsVan }) {
   return (
     <div style={{ borderTop:`1px solid ${K.border}`, marginTop:14, paddingTop:14 }}>
       <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>
-        🏷️ Rechtstreeks naar een labelprinter <span style={{ ...S.tag, borderColor:K.orange, color:K.orange, marginLeft:6 }}>proef</span>
+        🏷️ Rechtstreeks naar een labelprinter
       </div>
 
       {!status.ok ? (
@@ -4688,13 +4688,12 @@ function Labelprinter({ labelsVan }) {
         </div>
       ) : (
         <>
-          <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`,
+          <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow55}`,
                         fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
-            <strong style={{ color:K.orange }}>Dit werkt nog niet helemaal.</strong> Verbinden en
-            aansturen gaan goed, maar de afdruk stopt na ongeveer 10 mm van een label van 30.
-            Dat ligt niet aan de app: het wijst op de labeldetectie van de printer.
-            <strong> Kalibreer de printer één keer op deze labelrol met de Niimbot-app</strong> —
-            daarna werkt het mogelijk wel. Lukt het niet, gebruik dan het labelvel hierboven.
+            <strong style={{ color:K.accent }}>Eerst één keer kalibreren.</strong> Een printer die
+            deze labelrol nog niet kent, stopt halverwege het label — dan plak je een halve sticker
+            op de kastdeur. Kalibreer hem één keer op déze rol met de Niimbot-app; daarna werkt
+            het. Beproefd op een Niimbot B1 met labels van 30 × 50 mm.
           </div>
 
           <button onClick={verbind} style={{ ...S.btnGhost, marginBottom:10 }}>
