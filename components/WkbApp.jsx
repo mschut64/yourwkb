@@ -25,9 +25,15 @@
 //     vóór de knop staat: kalibreer de printer één keer op de labelrol met de
 //     Niimbot-app. Zonder dat stopt de afdruk na ±10 mm — precies wat deze driver
 //     maanden "onaf" hield, en wat op 03-10-2026 door Martin is opgelost en
-//     bevestigd op een B1 met labels van 30 × 50 mm. Op iPhone en iPad bestaat Web
-//     Bluetooth niet; daar toont het blok geen knop maar de reden, met de
-//     verwijzing naar het A4-labelvel.
+//     bevestigd op een B1 met labels van 30 × 50 mm, óók op Apple.
+//   • De INSTELLINGEN zijn exact die van Kastscan: draairichting als keuzelijst
+//     (kwartslag met de klok mee als standaard, want de B1 print over de 50 mm-
+//     zijde), dichtheid als schuif van 1 tot 5 met 3 als standaard, "alle
+//     bluetooth-apparaten tonen" als de printer zich onder een onbekende naam
+//     meldt, en een noodstop die ook loskoppelt. Twee apps die dezelfde printer
+//     aansturen met andere standaardwaarden leveren verschillende stickers.
+//   • Kan een browser geen Web Bluetooth (Safari), dan toont het blok geen knop
+//     maar de reden, met de verwijzing naar het A4-labelvel.
 //   • Past een naam niet op een label, dan wordt de letter NIET verkleind — dan
 //     staat er hoeveel tekens te veel, met de vraag hem in stap 6 in te korten.
 //     (Labelspec §2/§3: wat niet past is een invoerfout, geen opmaakprobleem.)
@@ -4577,7 +4583,203 @@ function MkpViewer({ p, onNieuw, onSluit }) {
   );
 }
 
-// ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
+// ─── RECHTSTREEKS NAAR DE LABELPRINTER ───────────────────────────────────────
+//
+// Dezelfde driverlaag als Kastscan, sinds motor v0.11.0 gedeeld — en met exact
+// dezelfde instellingen als daar. Dat is geen kopieerwerk maar een eis: twee apps
+// die dezelfde printer aansturen met andere standaardwaarden leveren verschillende
+// stickers, en dan is niet meer te zeggen welke kast welke sticker droeg.
+//
+// ⚓ KALIBREREN IS EEN VOORWAARDE, GEEN TIP. Een printer die deze labelrol nog niet
+// kent, stopt na ongeveer 10 mm van een label van 30 — dan plak je een halve
+// sticker op een kastdeur en lijkt het een fout in de app. Eén kalibratie met de
+// Niimbot-app lost het op; dat is wat deze driver maanden "onaf" hield en wat
+// Martin op 03-10-2026 heeft opgelost op een B1 met labels van 30 × 50 mm.
+//
+// ⚓ NOOIT SCHALEN. De labels worden gerasterd op exact 240 × 400 dots (30 × 50 mm
+// bij 203 dpi) en daarna als geheel gedraaid. Draaien verwisselt dots; het schaalt
+// niets — en schalen is precies wat de symbolen op een label onleesbaar maakte.
+function Labelprinter({ labelsVan }) {
+  const [status, setStatus] = useState(null);
+  const [printer, setPrinter] = useState(null);
+  const [voortgang, setVoortgang] = useState("");
+  const [melding, setMelding] = useState(null);
+  const [zoekBreder, setZoekBreder] = useState(false);
+  // Dezelfde standaardwaarden als Kastscan: een kwartslag met de klok mee, omdat
+  // de B1 over de 50 mm-zijde print, en dichtheid 3.
+  const [rotatie, setRotatie] = useState(1);
+  const [dichtheid, setDichtheid] = useState(3);
+  const [aantalLabels, setAantalLabels] = useState(null);
+
+  useEffect(() => {
+    let weg = false;
+    import("yourwkb-core/printers").then(p => { if (!weg) setStatus(p.webBluetoothStatus()); })
+      .catch(() => { if (!weg) setStatus({ ok:false, melding:"De printerlaag kon niet geladen worden." }); });
+    labelsVan().then(l => { if (!weg) setAantalLabels(l.length); }).catch(() => {});
+    return () => { weg = true; };
+  }, [labelsVan]);
+
+  if (!status) return null;
+
+  const verbind = async (alleApparaten) => {
+    setMelding(null);
+    try {
+      const { niimbotB1 } = await import("yourwkb-core/printers");
+      const info = await niimbotB1.verbind({ alleApparaten });
+      setPrinter(info.naam);
+      setMelding({ niveau:"ok", tekst:`Verbonden met ${info.naam}.` });
+    } catch (e) {
+      // Niet gevonden is vaak een naam die we nog niet kennen; dan hoort de
+      // bredere zoekknop vanzelf te verschijnen.
+      setZoekBreder(true);
+      setMelding({ niveau:"fout", tekst: e.message || "Verbinden lukte niet." });
+    }
+  };
+
+  const noodstop = async () => {
+    try {
+      const { niimbotB1 } = await import("yourwkb-core/printers");
+      await niimbotB1.stop();
+      setPrinter(null); setVoortgang("");
+      setMelding({ niveau:"let-op",
+        tekst:"Gestopt en losgekoppeld. Zet de printer ook even uit en weer aan — dan is zijn buffer ook leeg." });
+    } catch (e) {
+      setMelding({ niveau:"fout", tekst: e.message || "Stoppen lukte niet." });
+    }
+  };
+
+  const print = async () => {
+    setMelding(null); setVoortgang("Lettertype laden…");
+    try {
+      const [Render, { niimbotB1 }, Labels] = await Promise.all([
+        import("yourwkb-core/render.js"),
+        import("yourwkb-core/printers"),
+        import("yourwkb-core/labels.js"),
+      ]);
+      const geladen = await Render.wachtOpLettertype();
+      if (!geladen) setMelding({ niveau:"let-op",
+        tekst:"Barlow Condensed is niet geladen; de labels komen dan met een ander lettertype uit de printer. Controleer de eerste sticker voor je de rest print." });
+
+      // Twee smalle stickers gaan op één label met een kniplijn ertussen — anders
+      // kost elke sticker van één module een heel label.
+      const eenheden = Labels.combineerSmalleLabels(await labelsVan());
+      const bitmaps = [];
+      for (const [i, l] of eenheden.entries()) {
+        setVoortgang(`Label ${i+1} van ${eenheden.length} rasteren…`);
+        const raster = Render.rasterLabel(l, { dpi: niimbotB1.dpi });
+        const mono = Render.naarMonochroom(raster.canvas);
+        const dekking = Render.controleerDekking(mono);
+        if (!dekking.ok) setMelding({ niveau:"let-op", tekst:`${l.sleutel}: ${dekking.melding}` });
+        // Pas ná de drempel draaien: een exacte verwisseling van dots, dus er gaat
+        // niets verloren en er komt niets bij.
+        bitmaps.push(Render.roteerMonochroom(mono, rotatie));
+      }
+      await niimbotB1.printBitmaps(bitmaps, { dichtheid, aantal:1,
+        opVoortgang: ({ nu, totaal, pct }) => setVoortgang(
+          pct == null ? `Label ${nu} van ${totaal} printen…` : `Label ${nu} van ${totaal} — ${pct}%`) });
+      setMelding({ niveau:"ok", tekst:`${bitmaps.length} label(s) geprint.` });
+    } catch (e) {
+      setMelding({ niveau:"fout", tekst: e.message || "Printen lukte niet." });
+    } finally { setVoortgang(""); }
+  };
+
+  const meldKleur = { ok:K.green, "let-op":K.orange, fout:K.red };
+
+  return (
+    <div style={{ borderTop:`1px solid ${K.border}`, marginTop:14, paddingTop:14 }}>
+      <div style={{ fontWeight:700, fontSize:14, marginBottom:8 }}>
+        🏷️ Rechtstreeks naar een labelprinter
+      </div>
+
+      {!status.ok ? (
+        <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
+          {status.melding || "Deze browser kan geen bluetooth-printer aansturen."}
+          {" "}Het labelvel hierboven werkt wél — dat print je op een gewone printer.
+        </div>
+      ) : (
+        <>
+          <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow55}`,
+                        fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
+            <strong style={{ color:K.accent }}>Eerst één keer kalibreren.</strong> Een printer die
+            deze labelrol nog niet kent, stopt halverwege het label — dan plak je een halve sticker
+            op de kastdeur. Kalibreer hem één keer op déze rol met de Niimbot-app; daarna werkt het.
+          </div>
+
+          {aantalLabels > 3 && !printer && (
+            <div style={{ ...S.card, background:K.orangeDim, border:`1px solid ${K.orange55}`,
+                          fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
+              <strong style={{ color:K.orange }}>{aantalLabels} labels.</strong> Print er eerst één
+              om te zien of de maat en de draairichting kloppen — een rol is zo op.
+            </div>
+          )}
+
+          <button onClick={()=>printer ? print() : verbind(false)} disabled={Boolean(voortgang)}
+                  style={S.btnGhost}>
+            {voortgang || (printer ? `Print op ${printer}` : "Verbind met labelprinter")}
+          </button>
+
+          {printer && (
+            <button onClick={noodstop}
+              style={{ ...S.btn, background:K.redDim, color:K.red, border:`1px solid ${K.red}`,
+                       minHeight:K.tap, fontSize:16 }}>
+              ■ Stoppen en loskoppelen
+            </button>
+          )}
+
+          {zoekBreder && !printer && (
+            <>
+              <button style={S.btnGhost} onClick={()=>verbind(true)} disabled={Boolean(voortgang)}>
+                Alle bluetooth-apparaten tonen
+              </button>
+              <div style={{ fontSize:12, color:K.muted, lineHeight:1.5, marginBottom:10 }}>
+                Stond de printer niet in de lijst? Dan meldt hij zich onder een naam die we nog
+                niet kennen. Kies hem hier handmatig — en geef door onder welke naam hij stond,
+                dan kan die naam erbij.
+              </div>
+            </>
+          )}
+
+          {printer && (
+            <div style={{ ...S.card, background:K.surface, padding:12, marginTop:10 }}>
+              <div style={{ ...S.sTitle, marginBottom:8 }}>Printerinstelling</div>
+              <label style={S.label} htmlFor="ywkb-rot">Draairichting</label>
+              <select id="ywkb-rot" style={{ ...S.select, marginBottom:12 }} value={rotatie}
+                      onChange={e=>setRotatie(Number(e.target.value))}>
+                <option value={1}>Kwartslag met de klok mee</option>
+                <option value={3}>Kwartslag tegen de klok in</option>
+                <option value={0}>Niet draaien</option>
+                <option value={2}>Halve slag</option>
+              </select>
+              <div style={{ fontSize:12, color:K.muted, lineHeight:1.5, marginBottom:12 }}>
+                De B1 print over de 50 mm-zijde, dus het staande ontwerp gaat een kwartslag
+                gedraaid de deur uit. Komt de tekst op zijn kop, kies dan de andere richting.
+              </div>
+              <label style={S.label} htmlFor="ywkb-dicht">Dichtheid — {dichtheid}</label>
+              <input id="ywkb-dicht" type="range" min="1" max="5" step="1" value={dichtheid}
+                     onChange={e=>setDichtheid(Number(e.target.value))}
+                     style={{ width:"100%", accentColor:K.yellow }}/>
+              <div style={{ fontSize:12, color:K.muted, lineHeight:1.5 }}>
+                Te laag geeft een bleke of halve afdruk, te hoog laat het label uitvloeien.
+              </div>
+            </div>
+          )}
+
+          {melding && (
+            <div style={{ fontSize:12, lineHeight:1.5, marginTop:8,
+                          color: meldKleur[melding.niveau] || K.textSoft }}>{melding.tekst}</div>
+          )}
+
+          <div style={{ fontSize:11, color:K.muted, lineHeight:1.5, marginTop:8 }}>
+            Rechtstreeks printen op een Niimbot B1 (203 dpi). De labels worden op exact
+            240 × 400 dots gerasterd, dan als geheel een kwartslag gedraaid, en ongeschaald
+            verstuurd. Draaien verwisselt dots; het schaalt niets.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── DE PAPIEREN KANT VAN DE KAST ────────────────────────────────────────────
 //
 // Drie documenten die Kastscan al maakte en die sinds 03-10-2026 in de motor
@@ -4595,150 +4797,6 @@ function MkpViewer({ p, onNieuw, onSluit }) {
 // er bewust NIET in: dit document hangt in de meterkast van de klant, en
 // normafwijkingen horen in het rapport te staan waar ze uitgelegd worden — niet
 // als losse regel op een sticker.
-// ─── RECHTSTREEKS NAAR DE LABELPRINTER ───────────────────────────────────────
-//
-// Dezelfde driverlaag als in Kastscan, sinds motor v0.11.0 gedeeld. De labels
-// worden gerasterd op exact de dot-afstand van de printer — nooit geschaald, want
-// schalen is precies wat de symbolen op een label onleesbaar maakt.
-//
-// ⚓ KALIBREREN IS EEN VOORWAARDE, GEEN TIP. Een printer die deze labelrol nog niet
-// kent, stopt na ongeveer 10 mm van een label van 30 — dan plak je een halve
-// sticker op een kastdeur en lijkt het een fout in de app. Eén kalibratie met de
-// Niimbot-app lost het op; dat is precies wat deze driver maanden "onaf" hield en
-// wat Martin op 03-10-2026 heeft bevestigd op een B1 met labels van 30 × 50 mm.
-// Daarom staat die regel vóór de knop en niet eronder.
-function Labelprinter({ labelsVan }) {
-  const [status, setStatus] = useState(null);
-  const [printer, setPrinter] = useState(null);
-  const [voortgang, setVoortgang] = useState("");
-  const [melding, setMelding] = useState(null);
-  const [rotatie, setRotatie] = useState(1);
-  const [dichtheid, setDichtheid] = useState(3);
-
-  // Pas vragen of bluetooth kan als het blok in beeld komt: de controle raakt
-  // navigator en hoort niet op de server te draaien.
-  useEffect(() => {
-    let weg = false;
-    import("yourwkb-core/printers").then(p => { if (!weg) setStatus(p.webBluetoothStatus()); })
-      .catch(() => { if (!weg) setStatus({ ok:false, melding:"De printerlaag kon niet geladen worden." }); });
-    return () => { weg = true; };
-  }, []);
-
-  if (!status) return null;
-
-  const verbind = async () => {
-    setMelding(null);
-    try {
-      const { niimbotB1 } = await import("yourwkb-core/printers");
-      const info = await niimbotB1.verbind({});
-      setPrinter(info.naam);
-      setMelding({ niveau:"ok", tekst:`Verbonden met ${info.naam}.` });
-    } catch (e) {
-      setMelding({ niveau:"fout", tekst: e.message || "Verbinden lukte niet." });
-    }
-  };
-
-  const print = async () => {
-    setMelding(null); setVoortgang("Lettertype laden…");
-    try {
-      const [Render, { niimbotB1 }, Labels] = await Promise.all([
-        import("yourwkb-core/render.js"),
-        import("yourwkb-core/printers"),
-        import("yourwkb-core/labels.js"),
-      ]);
-      const geladen = await Render.wachtOpLettertype();
-      if (!geladen) setMelding({ niveau:"let-op",
-        tekst:"Barlow Condensed is niet geladen; de labels komen dan met een ander lettertype uit de printer. Controleer de eerste sticker voor je de rest print." });
-
-      // Twee smalle stickers gaan op één label met een kniplijn ertussen —
-      // anders kost elke sticker van één module een heel label.
-      const eenheden = Labels.combineerSmalleLabels(await labelsVan());
-      const bitmaps = [];
-      for (const [i, l] of eenheden.entries()) {
-        setVoortgang(`Label ${i+1} van ${eenheden.length} rasteren…`);
-        const raster = Render.rasterLabel(l, { dpi: niimbotB1.dpi });
-        const mono = Render.naarMonochroom(raster.canvas);
-        const dekking = Render.controleerDekking(mono);
-        if (!dekking.ok) setMelding({ niveau:"let-op", tekst:`${l.sleutel}: ${dekking.melding}` });
-        // Pas ná de drempel draaien: dat is een exacte verwisseling van dots, dus
-        // er gaat niets verloren en er komt niets bij.
-        bitmaps.push(Render.roteerMonochroom(mono, rotatie));
-      }
-      await niimbotB1.printBitmaps(bitmaps, { dichtheid, aantal:1,
-        opVoortgang: ({ nu, totaal, pct }) => setVoortgang(
-          pct == null ? `Label ${nu} van ${totaal} printen…` : `Label ${nu} van ${totaal} — ${pct}%`) });
-      setMelding({ niveau:"ok", tekst:`${bitmaps.length} label(s) naar de printer gestuurd.` });
-    } catch (e) {
-      setMelding({ niveau:"fout", tekst: e.message || "Printen lukte niet." });
-    } finally { setVoortgang(""); }
-  };
-
-  const meldKleur = { ok:K.green, "let-op":K.orange, fout:K.red };
-
-  return (
-    <div style={{ borderTop:`1px solid ${K.border}`, marginTop:14, paddingTop:14 }}>
-      <div style={{ fontWeight:700, fontSize:14, marginBottom:4 }}>
-        🏷️ Rechtstreeks naar een labelprinter
-      </div>
-
-      {!status.ok ? (
-        <div style={{ fontSize:12, color:K.textSoft, lineHeight:1.5 }}>
-          {status.melding || "Deze browser kan geen bluetooth-printer aansturen."}
-          {" "}Het labelvel hierboven werkt wél — dat print je op een gewone printer.
-        </div>
-      ) : (
-        <>
-          <div style={{ ...S.card, background:K.yellowDim, border:`1px solid ${K.yellow55}`,
-                        fontSize:12, color:K.textSoft, lineHeight:1.5, marginBottom:10 }}>
-            <strong style={{ color:K.accent }}>Eerst één keer kalibreren.</strong> Een printer die
-            deze labelrol nog niet kent, stopt halverwege het label — dan plak je een halve sticker
-            op de kastdeur. Kalibreer hem één keer op déze rol met de Niimbot-app; daarna werkt
-            het. Beproefd op een Niimbot B1 met labels van 30 × 50 mm.
-          </div>
-
-          <button onClick={verbind} style={{ ...S.btnGhost, marginBottom:10 }}>
-            {printer ? `Verbonden: ${printer}` : "Verbind met labelprinter"}
-          </button>
-
-          {printer && (
-            <>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
-                <div>
-                  <label style={{ ...S.label }}>Kwartslagen</label>
-                  <select value={rotatie} onChange={e=>setRotatie(Number(e.target.value))} style={S.select}>
-                    {[0,1,2,3].map(n=><option key={n} value={n}>{n} × 90°</option>)}
-                  </select>
-                  <div style={{ fontSize:11, color:K.muted, marginTop:4, lineHeight:1.4 }}>
-                    Komt de tekst op zijn kop, zet hem dan op de andere waarde.
-                  </div>
-                </div>
-                <div>
-                  <label style={{ ...S.label }}>Dichtheid</label>
-                  <select value={dichtheid} onChange={e=>setDichtheid(Number(e.target.value))} style={S.select}>
-                    {[1,2,3,4,5].map(n=><option key={n} value={n}>{n}</option>)}
-                  </select>
-                  <div style={{ fontSize:11, color:K.muted, marginTop:4, lineHeight:1.4 }}>
-                    Te laag geeft een bleke afdruk, te hoog laat hem uitvloeien.
-                  </div>
-                </div>
-              </div>
-              <button onClick={print} disabled={Boolean(voortgang)} style={S.btnGhost}>
-                {voortgang || "Print de labels"}
-              </button>
-            </>
-          )}
-
-          {melding && (
-            <div style={{ fontSize:12, lineHeight:1.5, color: meldKleur[melding.niveau] || K.textSoft }}>
-              {melding.tekst}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function KastDocumenten({ data, discipline }) {
   const [open, setOpen] = useState(false);
   const [keuze, setKeuze] = useState({ overzicht: true, labels: false, schema: false });
@@ -4901,6 +4959,7 @@ function KastDocumenten({ data, discipline }) {
   );
 }
 
+// ─── STAP: METERKASTPASPOORT ─────────────────────────────────────────────────
 function StapMkp({ data, onChange, onNext, onBack, discipline }) {
   const m = data.mkp || {};
   const zet = (k,v) => onChange("mkp", { ...m, [k]: v });
